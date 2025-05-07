@@ -1,0 +1,52 @@
+package com.jcmateus.kalisfit.ui.navigation
+
+
+import androidx.compose.runtime.Composable
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import com.jcmateus.kalisfit.ui.screens.HomeScreen
+import com.jcmateus.kalisfit.ui.screens.LoginScreen
+import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
+import com.jcmateus.kalisfit.ui.screens.ProfileScreen
+import com.jcmateus.kalisfit.ui.screens.RegisterScreen
+import com.jcmateus.kalisfit.ui.screens.SplashScreen
+
+
+
+
+@Composable
+fun KalisNavGraph(navController: NavHostController) {
+    NavHost(navController = navController, startDestination = Routes.SPLASH) {
+        composable(Routes.SPLASH) {
+            SplashScreen(navController)
+        }
+        composable(Routes.LOGIN) {
+            LoginScreen(
+                onLoginSuccess = { navController.navigate(Routes.HOME) },
+                onNavigateToRegister = { navController.navigate(Routes.REGISTER) }
+            )
+        }
+        composable(Routes.REGISTER) {
+            RegisterScreen(
+                onRegisterSuccess = { navController.navigate(Routes.HOME) },
+                onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
+            )
+        }
+        composable(Routes.PROFILE) {
+            ProfileScreen()
+        }
+
+        composable(Routes.HOME) {
+            HomeScreen(navController)
+        }
+
+        composable(Routes.ONBOARDING) {
+            OnboardingScreen(onFinish = {
+                navController.navigate(Routes.HOME) {
+                    popUpTo(Routes.ONBOARDING) { inclusive = true }
+                }
+            })
+        }
+    }
+}
