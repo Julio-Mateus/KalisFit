@@ -3,7 +3,6 @@ package com.jcmateus.kalisfit.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.text.SimpleDateFormat
@@ -19,10 +18,9 @@ data class UserProfile(
     val objetivos: List<String> = emptyList()
 )
 
-@HiltViewModel
-class UserProfileViewModel @Inject constructor(
-    private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+class UserProfileViewModel(
+    private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) : ViewModel() {
 
     private val _user = MutableStateFlow<UserProfile?>(null)
@@ -34,11 +32,11 @@ class UserProfileViewModel @Inject constructor(
             .addOnSuccessListener { doc ->
                 val nombre = doc.getString("nombre") ?: ""
                 val email = doc.getString("email") ?: ""
+                val nivel = doc.getString("nivel") ?: ""
+                val objetivos = doc.get("objetivos") as? List<String> ?: emptyList()
                 val fechaMillis = doc.getLong("fechaRegistro") ?: 0L
                 val fechaFormateada = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
                     .format(Date(fechaMillis))
-                val nivel = doc.getString("nivel") ?: ""
-                val objetivos = doc.get("objetivos") as? List<String> ?: emptyList()
                 _user.value = UserProfile(nombre, email, fechaFormateada, nivel, objetivos)
             }
     }

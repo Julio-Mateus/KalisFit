@@ -2,9 +2,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
-    alias(libs.plugins.hilt)
+    //alias(libs.plugins.hilt)
     alias(libs.plugins.google.services) // Firebase
-    kotlin("kapt") // Para el compiler de Hilt
+    //kotlin("kapt") // Para el compiler de Hilt
 }
 
 android {
@@ -53,9 +53,11 @@ dependencies {
     implementation(libs.navigation.compose)
 
     // Hilt
+    /*
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+     */
 
     // Coil
     implementation(libs.coil.compose)
@@ -74,6 +76,9 @@ dependencies {
             because("Force this version to avoid runtime errors")
         }
     }
+
+    implementation(libs.lottie.compose)
+
 
 
 }

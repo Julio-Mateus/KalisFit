@@ -13,19 +13,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.ui.viewmodel.AuthViewModel
 
 @Composable
 fun LoginScreen(
-    viewModel: AuthViewModel = hiltViewModel(),
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
+    val viewModel = remember { AuthViewModel() }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }

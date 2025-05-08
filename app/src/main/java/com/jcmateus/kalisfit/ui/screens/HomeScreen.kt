@@ -12,20 +12,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.jcmateus.kalisfit.ui.navigation.Routes
 import com.jcmateus.kalisfit.ui.viewmodel.UserProfile
 import com.jcmateus.kalisfit.ui.viewmodel.UserProfileViewModel
 
 @Composable
-fun HomeScreen(
-    navController: NavController,
-    viewModel: UserProfileViewModel = hiltViewModel()
-) {
+fun HomeScreen(navController: NavController) {
+    val viewModel = remember { UserProfileViewModel() }
     val user: UserProfile? = viewModel.user.collectAsState().value
 
     LaunchedEffect(Unit) {
@@ -44,10 +42,12 @@ fun HomeScreen(
             style = MaterialTheme.typography.displayLarge
         )
 
-        Text("Nivel: ${user?.nivel}", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text("Objetivos: ${user?.objetivos?.joinToString(", ")}", style = MaterialTheme.typography.bodyLarge)
+        if (user != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Nivel: ${user.nivel}", style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Objetivos: ${user.objetivos.joinToString(", ")}", style = MaterialTheme.typography.bodyLarge)
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -58,3 +58,4 @@ fun HomeScreen(
         }
     }
 }
+

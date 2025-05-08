@@ -25,14 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.jcmateus.kalisfit.ui.viewmodel.AuthViewModel
 
 @Composable
 fun OnboardingScreen(
-    viewModel: AuthViewModel = hiltViewModel(),
     onFinish: () -> Unit
 ) {
+    val viewModel = remember { AuthViewModel() }
     var nivel by remember { mutableStateOf("") }
     val niveles = listOf("Principiante", "Intermedio", "Avanzado")
 

@@ -9,8 +9,8 @@ lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.10.1"
 composeBom = "2025.04.01"
 firebase-bom = "32.7.3"
-hilt = "2.51"
-hilt-ext = "1.2.0"
+#hilt = "2.48"
+#hilt-ext = "1.1.0"
 coil = "2.5.0"
 nav-compose = "2.7.7"
 compose-compiler = "2.0.0"
@@ -39,9 +39,9 @@ firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 
 # Hilt
-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
-hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hilt-ext" }
+#hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+#hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+#hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hilt-ext" }
 
 # Navigation Compose
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "nav-compose" }
@@ -49,12 +49,14 @@ navigation-compose = { group = "androidx.navigation", name = "navigation-compose
 # Coil para imágenes
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version = "6.1.0" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.compose", version.ref = "compose-compiler" }
-hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+#hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 google-services = { id = "com.google.gms.google-services", version = "4.4.1" }
 
 

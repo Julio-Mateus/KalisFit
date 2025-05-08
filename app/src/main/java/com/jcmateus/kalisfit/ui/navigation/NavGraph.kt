@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
+import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
@@ -29,7 +30,7 @@ fun KalisNavGraph(navController: NavHostController) {
         }
         composable(Routes.REGISTER) {
             RegisterScreen(
-                onRegisterSuccess = { navController.navigate(Routes.HOME) },
+                onRegisterSuccess = { navController.navigate(Routes.ONBOARDING) },
                 onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
             )
         }
@@ -47,6 +48,16 @@ fun KalisNavGraph(navController: NavHostController) {
                     popUpTo(Routes.ONBOARDING) { inclusive = true }
                 }
             })
+        }
+
+        composable(Routes.ONBOARDING_SUCCESS) {
+            OnboardingSuccessScreen(
+                onContinue = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }
