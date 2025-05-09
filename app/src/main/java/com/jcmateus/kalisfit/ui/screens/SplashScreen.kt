@@ -68,10 +68,10 @@ fun SplashScreen(navController: NavController) {
 
     // Mostrar el texto con un pequeño retardo
     LaunchedEffect(Unit) {
-        delay(1000) // espera antes de mostrar el texto
+        delay(2000) // espera antes de mostrar el texto
         showText = true
 
-        delay(2000) // espera total hasta navegar
+        delay(4000) // espera total hasta navegar
         navController.navigate(Routes.LOGIN) {
             popUpTo(Routes.SPLASH) { inclusive = true }
         }
@@ -88,14 +88,6 @@ fun SplashScreen(navController: NavController) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(32.dp)
         ) {
-            LottieAnimation(
-                composition = composition,
-                progress = { progress },
-                modifier = Modifier
-                    .size(220.dp)
-                    .padding(bottom = 24.dp)
-            )
-
             AnimatedVisibility(
                 visible = showText,
                 enter = fadeIn(animationSpec = tween(800)) + scaleIn(initialScale = 0.8f)
@@ -113,6 +105,14 @@ fun SplashScreen(navController: NavController) {
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            LottieAnimation(
+                composition = composition,
+                progress = { progress },
+                modifier = Modifier
+                    .size(220.dp)
+                    .padding(bottom = 24.dp)
+            )
         }
     }
 }

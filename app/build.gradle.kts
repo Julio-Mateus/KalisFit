@@ -78,7 +78,6 @@ dependencies {
     }
 
     implementation(libs.lottie.compose)
-
-
-
+    implementation(libs.play.services.auth)
+    implementation(libs.material.icons.extended)
 }

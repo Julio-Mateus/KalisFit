@@ -5,12 +5,15 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
+import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
 
 
@@ -24,8 +27,13 @@ fun KalisNavGraph(navController: NavHostController) {
         }
         composable(Routes.LOGIN) {
             LoginScreen(
-                onLoginSuccess = { navController.navigate(Routes.HOME) },
-                onNavigateToRegister = { navController.navigate(Routes.REGISTER) }
+                onLoginSuccess = {
+                    navController.navigate("main") {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                },
+                onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
+                onNavigateToForgot = { navController.navigate(Routes.FORGOT_PASSWORD) }
             )
         }
         composable(Routes.REGISTER) {
@@ -35,7 +43,7 @@ fun KalisNavGraph(navController: NavHostController) {
             )
         }
         composable(Routes.PROFILE) {
-            ProfileScreen()
+            ProfileScreen(onLogout = { navController.navigate(Routes.LOGIN) })
         }
 
         composable(Routes.HOME) {
@@ -59,5 +67,28 @@ fun KalisNavGraph(navController: NavHostController) {
                 }
             )
         }
+
+        composable(Routes.FORGOT_PASSWORD) {
+            ForgotPasswordScreen(onBackToLogin = {
+                navController.popBackStack(Routes.LOGIN, inclusive = false)
+            })
+        }
+
+        composable("main") {
+            KalisMainScreen()
+        }
+
+        composable(Routes.ROUTINE) {
+            RoutineScreen(
+                navController = navController,
+                onRoutineComplete = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.ROUTINE) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+
     }
 }

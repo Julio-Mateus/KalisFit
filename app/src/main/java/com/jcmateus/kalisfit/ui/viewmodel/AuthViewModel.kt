@@ -47,6 +47,25 @@ class AuthViewModel(
                 }
             }
     }
+    fun saveUserIfNew(nombre: String, email: String, onFinish: () -> Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val docRef = FirebaseFirestore.getInstance().collection("users").document(uid)
+
+        docRef.get().addOnSuccessListener {
+            if (!it.exists()) {
+                val userData = mapOf(
+                    "uid" to uid,
+                    "nombre" to nombre,
+                    "email" to email,
+                    "fechaRegistro" to System.currentTimeMillis()
+                )
+                docRef.set(userData).addOnSuccessListener { onFinish() }
+            } else {
+                onFinish()
+            }
+        }
+    }
+
 
     fun updateProfileAfterRegister(
         nivel: String,

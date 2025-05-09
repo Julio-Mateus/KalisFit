@@ -8,5 +8,6 @@ object Routes {
     const val PROFILE = "profile"
     const val ONBOARDING = "onboarding"
     const val ONBOARDING_SUCCESS = "onboarding_success"
-
+    const val FORGOT_PASSWORD = "forgot_password"
+    const val ROUTINE = "routine"
 }
