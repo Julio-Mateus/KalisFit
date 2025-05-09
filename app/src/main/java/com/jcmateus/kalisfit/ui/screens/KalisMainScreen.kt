@@ -52,6 +52,23 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
                     popUpTo(0) { inclusive = true }
                 }
             }) }
+            composable("routine") {
+                RoutineScreen(
+                    navController = navController,
+                    onRoutineComplete = {
+                        navController.navigate(BottomNavItem.Home.route) {
+                            popUpTo("routine") { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable("routine_success") {
+                RoutineSuccessScreen(onFinish = {
+                    navController.navigate(BottomNavItem.Home.route) {
+                        popUpTo("routine_success") { inclusive = true }
+                    }
+                })
+            }
         }
     }
 }

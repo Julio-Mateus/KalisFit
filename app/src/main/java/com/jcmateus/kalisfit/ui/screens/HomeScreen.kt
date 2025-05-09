@@ -81,7 +81,7 @@ fun HomeScreen(navController: NavController) {
                 Spacer(modifier = Modifier.weight(1f))
 
                 Button(
-                    onClick = {  navController.navigate(Routes.ROUTINE)  },
+                    onClick = {  navController.navigate("routine")  },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.FitnessCenter, contentDescription = null)

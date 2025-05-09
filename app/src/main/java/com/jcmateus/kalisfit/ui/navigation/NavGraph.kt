@@ -88,7 +88,16 @@ fun KalisNavGraph(navController: NavHostController) {
                 }
             )
         }
-
+        composable("routine") {
+            RoutineScreen(
+                navController = navController,
+                onRoutineComplete = {
+                    navController.navigate(BottomNavItem.Home.route) {
+                        popUpTo("routine") { inclusive = true }
+                    }
+                }
+            )
+        }
 
     }
 }
