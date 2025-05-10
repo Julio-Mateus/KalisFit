@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -33,8 +32,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.jcmateus.kalisfit.R
-import com.jcmateus.kalisfit.ui.navigation.Routes
-import com.jcmateus.kalisfit.ui.viewmodel.AuthViewModel
+import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
 
 @Composable

@@ -80,4 +80,5 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.play.services.auth)
     implementation(libs.material.icons.extended)
+    implementation("androidx.core:core-ktx:1.12.0")
 }

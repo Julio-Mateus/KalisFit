@@ -1,5 +1,7 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -14,15 +16,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
-import com.jcmateus.kalisfit.ui.navigation.BottomNavItem
-import com.jcmateus.kalisfit.ui.navigation.Routes
+import com.jcmateus.kalisfit.navigation.BottomNavItem
+import com.jcmateus.kalisfit.navigation.Routes
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun KalisMainScreen(navController: NavHostController = rememberNavController()) {
     val items = listOf(
         BottomNavItem.Home,
         BottomNavItem.Tips,
-        BottomNavItem.Profile
+        BottomNavItem.Profile,
+        BottomNavItem.History
     )
     Scaffold(
         bottomBar = {
@@ -68,6 +72,9 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
                         popUpTo("routine_success") { inclusive = true }
                     }
                 })
+            }
+            composable(BottomNavItem.History.route) {
+                HistorialScreen()
             }
         }
     }

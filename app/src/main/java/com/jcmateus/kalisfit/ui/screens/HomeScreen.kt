@@ -1,7 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -10,14 +9,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.jcmateus.kalisfit.ui.viewmodel.UserProfileViewModel
-import com.jcmateus.kalisfit.ui.viewmodel.UserProfile
-import androidx.compose.ui.text.style.TextAlign
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.navigation.NavController
-import com.jcmateus.kalisfit.ui.navigation.Routes
 
 @Composable
 fun HomeScreen(navController: NavController) {

@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.di
+package com.jcmateus.kalisfit.model
 
 data class Ejercicio(
     val nombre: String,

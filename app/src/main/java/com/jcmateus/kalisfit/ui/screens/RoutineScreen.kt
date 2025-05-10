@@ -2,6 +2,9 @@ package com.jcmateus.kalisfit.ui.screens
 
 import android.content.Context
 import android.media.MediaPlayer
+import android.os.Build
+import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +26,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,11 +33,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.R
-import com.jcmateus.kalisfit.ui.di.Ejercicio
-import com.jcmateus.kalisfit.ui.viewmodel.UserProfileViewModel
+import com.jcmateus.kalisfit.data.guardarProgresoRutina
+import com.jcmateus.kalisfit.model.Ejercicio
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlinx.coroutines.delay
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun RoutineScreen(
     navController: NavController,
@@ -184,9 +189,30 @@ fun RoutineScreen(
                             Text("Siguiente")
                         }
                     } else {
-                        Button(onClick = { navController.navigate("routine_success") }) {
+                        Button(onClick = {
+                            val userId = FirebaseAuth.getInstance().currentUser?.uid
+                            if (userId != null && user != null) {
+                                guardarProgresoRutina(
+                                    userId = userId,
+                                    nivel = user!!.nivel,
+                                    objetivos = user!!.objetivos,
+                                    rutina = rutina,
+                                    onSuccess = {
+                                        navController.navigate("routine_success")
+                                    },
+                                    onError = { msg ->
+                                        Toast.makeText(context, "Error al guardar progreso: $msg", Toast.LENGTH_LONG).show()
+                                        navController.navigate("routine_success")
+                                    }
+                                )
+                            } else {
+                                Toast.makeText(context, "No se pudo guardar el progreso", Toast.LENGTH_LONG).show()
+                                navController.navigate("routine_success")
+                            }
+                        }) {
                             Text("Finalizar rutina")
                         }
+
                     }
                 }
             }

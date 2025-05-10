@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.navigation
+package com.jcmateus.kalisfit.navigation
 
 
 import androidx.compose.runtime.Composable

@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.viewmodel
+package com.jcmateus.kalisfit.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -47,6 +47,7 @@ class AuthViewModel(
                 }
             }
     }
+
     fun saveUserIfNew(nombre: String, email: String, onFinish: () -> Unit) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val docRef = FirebaseFirestore.getInstance().collection("users").document(uid)
@@ -66,15 +67,31 @@ class AuthViewModel(
         }
     }
 
-
     fun updateProfileAfterRegister(
         nivel: String,
         objetivos: List<String>,
+        peso: Float,
+        altura: Float,
+        edad: Int,
+        sexo: String,
+        frecuenciaSemanal: Int,
+        lugarEntrenamiento: String,
         onResult: (Boolean, String?) -> Unit
     ) {
         val uid = firebaseAuth.currentUser?.uid ?: return
         firestore.collection("users").document(uid)
-            .update(mapOf("nivel" to nivel, "objetivos" to objetivos))
+            .update(
+                mapOf(
+                    "nivel" to nivel,
+                    "objetivos" to objetivos,
+                    "peso" to peso,
+                    "altura" to altura,
+                    "edad" to edad,
+                    "sexo" to sexo,
+                    "frecuenciaSemanal" to frecuenciaSemanal,
+                    "lugarEntrenamiento" to lugarEntrenamiento
+                )
+            )
             .addOnSuccessListener { onResult(true, null) }
             .addOnFailureListener { e -> onResult(false, e.message) }
     }

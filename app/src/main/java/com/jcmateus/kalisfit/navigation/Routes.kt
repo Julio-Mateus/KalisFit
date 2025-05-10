@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.navigation
+package com.jcmateus.kalisfit.navigation
 
 object Routes {
     const val SPLASH = "splash"
