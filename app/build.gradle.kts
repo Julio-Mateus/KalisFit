@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -81,4 +82,5 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.material.icons.extended)
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation(libs.compose.charts)
 }

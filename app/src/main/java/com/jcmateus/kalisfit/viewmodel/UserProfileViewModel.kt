@@ -21,7 +21,11 @@ data class UserProfile(
     val edad: Int = 0,
     val sexo: String = "",           // Masculino / Femenino / Otro
     val frecuenciaSemanal: Int = 3,   // días por semana
-    val lugarEntrenamiento: String = "" // Casa / Gimnasio / Exterior
+    val lugarEntrenamiento: List<String> = emptyList(), // Lista de Casa / Gimnasio / Exterior
+    val insignias: List<String> = emptyList(), // Insignias ganadas por logros
+    val rutinasCompletadas: Int = 0,  // Para evaluar si sube de nivel
+    val progresoActual: String = "",  // Texto descriptivo del avance
+    val fotoUrl: String = ""
 )
 
 class UserProfileViewModel(
@@ -49,6 +53,9 @@ class UserProfileViewModel(
                 val sexo = doc.getString("sexo") ?: ""
                 val frecuenciaSemanal = doc.getLong("frecuenciaSemanal")?.toInt() ?: 3
                 val lugarEntrenamiento = doc.getString("lugarEntrenamiento") ?: ""
+                val insignias = doc.get("insignias") as? List<String> ?: emptyList()
+                val rutinasCompletadas = doc.getLong("rutinasCompletadas")?.toInt() ?: 0
+                val progresoActual = doc.getString("progresoActual") ?: ""
 
                 _user.value = UserProfile(
                     uid = uid,
@@ -62,7 +69,10 @@ class UserProfileViewModel(
                     edad = edad,
                     sexo = sexo,
                     frecuenciaSemanal = frecuenciaSemanal,
-                    lugarEntrenamiento = lugarEntrenamiento
+                    lugarEntrenamiento = listOf(lugarEntrenamiento),
+                    insignias = emptyList(),
+                    rutinasCompletadas = 0,
+                    progresoActual = ""
                 )
             }
     }

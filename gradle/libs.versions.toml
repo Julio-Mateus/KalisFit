@@ -1,5 +1,6 @@
 [versions]
 agp = "8.9.2"
+composeCharts = "0.2.1"
 kotlin = "2.0.21"
 coreKtx = "1.16.0"
 junit = "4.13.2"
@@ -14,10 +15,13 @@ firebase-bom = "32.7.3"
 coil = "2.5.0"
 nav-compose = "2.7.7"
 compose-compiler = "2.0.0"
+rechartsCompose = "1.0.0-beta01"
+viewsCharts = "0.3.0"
 
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+compose-charts = { module = "io.github.bytebeats:compose-charts", version.ref = "composeCharts" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -54,6 +58,8 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version = "6.1.0" }
 
+recharts-compose = { group = "io.github.bytebeats", name = "recharts-compose", version.ref = "rechartsCompose" }
+views-charts = { group = "me.bytebeats", name = "views-charts", version.ref = "viewsCharts" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

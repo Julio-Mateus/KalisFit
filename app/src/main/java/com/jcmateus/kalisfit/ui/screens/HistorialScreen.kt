@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +42,9 @@ import com.jcmateus.kalisfit.data.obtenerHistorialProgreso
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.core.content.FileProvider
 import com.jcmateus.kalisfit.data.captureComposableAsImage
 
@@ -48,10 +53,11 @@ import com.jcmateus.kalisfit.data.captureComposableAsImage
 @Composable
 fun HistorialScreen() {
     val context = LocalContext.current
-    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
     val historial = remember { mutableStateListOf<ProgresoRutina>() }
     var resumen by remember { mutableStateOf<ResumenSemanal?>(null) }
     var cargando by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     LaunchedEffect(userId) {
         if (userId != null) {
@@ -79,7 +85,7 @@ fun HistorialScreen() {
     }
 
     Column(modifier = Modifier.padding(16.dp)) {
-        resumen?.let {
+        resumen?.let { resumenSemanal ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -87,43 +93,76 @@ fun HistorialScreen() {
                 elevation = CardDefaults.cardElevation()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("📅 Resumen semanal", style = MaterialTheme.typography.titleMedium)
+                    Text("📊 Resumen semanal", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("🏋️ Rutinas completadas: ${it.rutinas}")
-                    Text("⏱ Tiempo total: ${it.tiempoTotal} segundos")
-                    if (it.objetivosRecurrentes.isNotEmpty()) {
-                        Text("🎯 Objetivos más frecuentes: ${it.objetivosRecurrentes.joinToString(", ")}")
+                    Text("🏋️ Rutinas completadas: ${resumenSemanal.rutinas}")
+                    Text("⏱ Tiempo total: ${resumenSemanal.tiempoTotal} segundos")
+                    if (resumenSemanal.objetivosRecurrentes.isNotEmpty()) {
+                        Text(
+                            "🎯 Objetivos más frecuentes: ${
+                                resumenSemanal.objetivosRecurrentes.joinToString(
+                                    ", "
+                                )
+                            }"
+                        )
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TabRow(selectedTabIndex = selectedTab) {
+                        Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
+                            Text("Rutinas por día", modifier = Modifier.padding(8.dp))
+                        }
+                        Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
+                            Text("Tiempo por día", modifier = Modifier.padding(8.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        tonalElevation = 2.dp,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        when (selectedTab) {
+                            0 -> RutinasBarChart(historial, modifier = Modifier.height(200.dp).padding(8.dp))
+                            1 -> TiempoBarChart(historial, modifier = Modifier.height(200.dp).padding(8.dp))
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = {
-                        val mensaje = buildString {
-                            append("💪 Esta semana entrené con KalisFit:\n")
-                            append("🏋️ Rutinas completadas: ${it.rutinas}\n")
-                            append("⏱ Tiempo total: ${it.tiempoTotal} segundos\n")
-                            if (it.objetivosRecurrentes.isNotEmpty()) {
-                                append("🎯 Objetivos más trabajados: ${it.objetivosRecurrentes.joinToString(", ")}\n")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            val mensaje = buildString {
+                                append("💪 Esta semana entrené con KalisFit:\n")
+                                append("🏋️ Rutinas completadas: ${resumenSemanal.rutinas}\n")
+                                append("⏱ Tiempo total: ${resumenSemanal.tiempoTotal} segundos\n")
+                                if (resumenSemanal.objetivosRecurrentes.isNotEmpty()) {
+                                    append(
+                                        "🎯 Objetivos más trabajados: ${
+                                            resumenSemanal.objetivosRecurrentes.joinToString(
+                                                ", "
+                                            )
+                                        }\n"
+                                    )
+                                }
+                                append("\nDescarga la app y únete tú también. 💥🔥")
                             }
-                            append("\nDescarga la app y únete tú también. 💥🔥")
+
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, mensaje)
+                                type = "text/plain"
+                            }
+
+                            val shareIntent =
+                                Intent.createChooser(sendIntent, "Compartir resumen con...")
+                            context.startActivity(shareIntent)
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Compartir")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Resumen")
                         }
 
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, mensaje)
-                            type = "text/plain"
-                        }
-
-                        val shareIntent = Intent.createChooser(sendIntent, "Compartir resumen con...")
-                        context.startActivity(shareIntent)
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Compartir")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Compartir resumen")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(onClick = {
-                        resumen?.let { resumenSemanal ->
+                        Button(onClick = {
                             captureComposableAsImage(context, {
                                 ResumenVisualCard(resumen = resumenSemanal)
                             }) { file ->
@@ -139,13 +178,18 @@ fun HistorialScreen() {
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
 
-                                context.startActivity(Intent.createChooser(intent, "Compartir imagen del resumen"))
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        intent,
+                                        "Compartir imagen del resumen"
+                                    )
+                                )
                             }
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Compartir imagen")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Como imagen")
                         }
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Compartir imagen")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Compartir como imagen")
                     }
                 }
             }
@@ -160,20 +204,31 @@ fun HistorialScreen() {
                     elevation = CardDefaults.cardElevation()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("📅 ${progreso.fecha.take(10)}", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "📅 ${progreso.fecha.take(10)}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                         Text("Nivel: ${progreso.nivel}", style = MaterialTheme.typography.bodyLarge)
-                        Text("Objetivos: ${progreso.objetivos.joinToString(", ")}", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Objetivos: ${progreso.objetivos.joinToString(", ")}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Ejercicios:", style = MaterialTheme.typography.labelLarge)
                         progreso.ejercicios.forEach {
-                            Text("• ${it.nombre} - ${it.duracion} seg", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "• ${it.nombre} - ${it.duracion} seg",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("⏱️ Tiempo total: ${progreso.tiempoTotal} seg", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "⏱️ Tiempo total: ${progreso.tiempoTotal} seg",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
         }
-
     }
 }

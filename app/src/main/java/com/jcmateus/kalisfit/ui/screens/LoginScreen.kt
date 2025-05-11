@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -141,8 +143,8 @@ fun LoginScreen(
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             val icon = if (passwordVisible)
-                                Icons.Default.Check
-                            else Icons.Default.Close
+                                Icons.Default.Visibility
+                            else Icons.Default.VisibilityOff
 
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(imageVector = icon, contentDescription = "Mostrar contraseña")

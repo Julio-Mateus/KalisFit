@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,12 +20,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
+import com.jcmateus.kalisfit.R
 
 @Composable
 fun ProfileScreen(
@@ -52,15 +58,21 @@ fun ProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
+                // Imagen de perfil
+                val painter = rememberAsyncImagePainter(
+                    model = it.fotoUrl.ifBlank { R.drawable.ic_default_avatar }
+                )
+                Image(
+                    painter = painter,
                     contentDescription = "Foto de perfil",
-                    modifier = Modifier.size(96.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
 
-                Text("${it.nombre}", style = MaterialTheme.typography.headlineMedium)
-                Text("${it.email}", style = MaterialTheme.typography.bodyMedium)
+                Text(it.nombre, style = MaterialTheme.typography.headlineMedium)
+                Text(it.email, style = MaterialTheme.typography.bodyMedium)
 
                 Divider(thickness = 1.dp)
 
@@ -75,7 +87,7 @@ fun ProfileScreen(
                     ProfileInfoRow(label = "Edad", value = "${it.edad} años")
                     ProfileInfoRow(label = "Sexo", value = it.sexo)
                     ProfileInfoRow(label = "Frecuencia semanal", value = "${it.frecuenciaSemanal} días")
-                    ProfileInfoRow(label = "Entrenamiento en", value = it.lugarEntrenamiento)
+                    ProfileInfoRow(label = "Entrenamiento en", value = it.lugarEntrenamiento.toString())
                     ProfileInfoRow(label = "Registrado el", value = it.fechaRegistro)
                 }
 
@@ -89,7 +101,9 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Editar perfil")
                 }
+
                 Spacer(modifier = Modifier.height(8.dp))
+
                 Button(
                     onClick = {
                         FirebaseAuth.getInstance().signOut()
@@ -108,16 +122,31 @@ fun ProfileScreen(
     }
 }
 
+
+@Composable
+fun ProfileSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        content()
+    }
+}
+
 @Composable
 fun ProfileInfoRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
     }
 }
+
 
 
 
