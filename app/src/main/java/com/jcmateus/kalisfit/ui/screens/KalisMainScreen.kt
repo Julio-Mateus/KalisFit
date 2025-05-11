@@ -9,6 +9,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -18,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.navigation.BottomNavItem
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -55,7 +58,7 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
                 navController.navigate(Routes.LOGIN) {
                     popUpTo(0) { inclusive = true }
                 }
-            }) }
+            }, onEditProfile = { navController.navigate("edit_profile") }) }
             composable("routine") {
                 RoutineScreen(
                     navController = navController,
@@ -76,6 +79,25 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
             composable(BottomNavItem.History.route) {
                 HistorialScreen()
             }
+
+            composable("edit_profile") {
+                val viewModel = remember { UserProfileViewModel() }
+                val user = viewModel.user.collectAsState().value
+
+                user?.let {
+                    EditProfileScreen(
+                        user = it,
+                        onProfileUpdated = {
+                            navController.popBackStack() // volver al perfil
+                            viewModel.loadUserProfile() // recargar datos
+                        },
+                        onCancel = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
+
         }
     }
 }

@@ -1,10 +1,15 @@
 package com.jcmateus.kalisfit.navigation
 
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
 import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
@@ -15,10 +20,10 @@ import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 
-
-
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun KalisNavGraph(navController: NavHostController) {
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
@@ -43,7 +48,10 @@ fun KalisNavGraph(navController: NavHostController) {
             )
         }
         composable(Routes.PROFILE) {
-            ProfileScreen(onLogout = { navController.navigate(Routes.LOGIN) })
+            ProfileScreen(
+                onLogout = { navController.navigate(Routes.LOGIN) },
+                onEditProfile = { navController.navigate("edit_profile") }
+            )
         }
 
         composable(Routes.HOME) {
@@ -97,6 +105,23 @@ fun KalisNavGraph(navController: NavHostController) {
                     }
                 }
             )
+        }
+        composable("edit_profile") {
+            val viewModel = remember { UserProfileViewModel() }
+            val user = viewModel.user.collectAsState().value
+
+            user?.let {
+                EditProfileScreen(
+                    user = it,
+                    onProfileUpdated = {
+                        navController.popBackStack() // volver al perfil
+                        viewModel.loadUserProfile() // recargar datos
+                    },
+                    onCancel = {
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
 
     }
