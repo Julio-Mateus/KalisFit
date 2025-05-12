@@ -7,8 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
@@ -19,52 +21,49 @@ import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
+import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun KalisNavGraph(navController: NavHostController) {
-    // 🔑 Flujo de inicio y autenticación
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
-        // SplashScreen → primera vista
         composable(Routes.SPLASH) {
             SplashScreen(navController)
         }
-        // Login, Registro, Recuperar contraseña
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {
-                navController.navigate("main") {
-                    popUpTo(Routes.LOGIN) { inclusive = true }
-                }
-            },
+                    // Navega a "main" que contiene la barra inferior
+                    navController.navigate("main") {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                },
                 onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
-                onNavigateToForgot = { navController.navigate(Routes.FORGOT_PASSWORD) })
+                onNavigateToForgot = { navController.navigate(Routes.FORGOT_PASSWORD) }
+            )
         }
         composable(Routes.REGISTER) {
             RegisterScreen(
                 onRegisterSuccess = { navController.navigate(Routes.ONBOARDING) },
-                onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) })
+                onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
+            )
         }
-        composable(Routes.PROFILE) {
-            ProfileScreen(
-                onLogout = { navController.navigate(Routes.LOGIN) },
-                onEditProfile = { navController.navigate("edit_profile") })
-        }
+        // REMOVER: composable(Routes.PROFILE) { ... } // Esta ruta ahora solo debe existir en el NavHost anidado
         composable(Routes.FORGOT_PASSWORD) {
             ForgotPasswordScreen(onBackToLogin = {
                 navController.popBackStack(Routes.LOGIN, inclusive = false)
             })
         }
-        composable(Routes.HOME) {
-            HomeScreen(navController)
-        }
+        // REMOVER: composable(Routes.HOME) { ... } // Esta ruta ahora solo debe existir en el NavHost anidado
 
         composable(Routes.ONBOARDING) {
             OnboardingScreen(onFinish = {
-                navController.navigate(Routes.HOME) {
+                // Después del onboarding, navega a "main"
+                navController.navigate("main") {
                     popUpTo(Routes.ONBOARDING) { inclusive = true }
                 }
             })
@@ -73,52 +72,45 @@ fun KalisNavGraph(navController: NavHostController) {
         composable(Routes.ONBOARDING_SUCCESS) {
             OnboardingSuccessScreen(
                 onContinue = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    // Después del éxito del onboarding, navega a "main"
+                    navController.navigate("main") {
+                        // Podrías ajustar el popUpTo según tu flujo deseado
+                        popUpTo(Routes.LOGIN) { inclusive = true } // Ejemplo: Limpia la pila hasta Login
                     }
                 })
         }
 
-
-
+        // Este es el destino que carga la pantalla con la barra inferior
         composable("main") {
-            KalisMainScreen()
+            KalisMainScreen(mainNavController = navController)
         }
 
-        composable(Routes.ROUTINE) {
-            RoutineScreen(
-                navController = navController, onRoutineComplete = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.ROUTINE) { inclusive = true }
-                    }
-                })
+        // Rutas de nivel superior que NO deben tener la barra inferior
+        // Estas rutas se navegan DESDE las pantallas dentro del NavHost anidado
+        composable(
+            route = "${Routes.ROUTINE}/{rutinaId}",
+            arguments = listOf(navArgument("rutinaId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val rutinaId = backStackEntry.arguments?.getString("rutinaId")
+            RoutineScreen(navController = navController, rutinaId = rutinaId)
         }
-        composable("routine") {
-            RoutineScreen(
-                navController = navController, onRoutineComplete = {
-                    navController.navigate(BottomNavItem.Home.route) {
-                        popUpTo("routine") { inclusive = true }
-                    }
-                })
-        }/*
-        composable("edit_profile") {
-                    val viewModel = remember { UserProfileViewModel() }
-                    val user = viewModel.user.collectAsState().value
-
-                    user?.let {
-                        EditProfileScreen(
-                            user = it,
-                            onProfileUpdated = {
-                                navController.popBackStack() // volver al perfil
-                                viewModel.loadUserProfile() // recargar datos
-                            },
-                            onCancel = {
-                                navController.popBackStack()
-                            }
-                        )
-                    }
-
+        composable(Routes.ROUTINE_SUCCESS) {
+            RoutineSuccessScreen(onFinish = {
+                // Al terminar la rutina, navega de vuelta a "main" (lo que te llevará a Home)
+                navController.navigate("main") {
+                    // Opcional: ajusta el popUpTo para eliminar las pantallas de rutina de la pila
+                    // popUpTo("${Routes.ROUTINE}/{rutinaId}") { inclusive = true } // Esto podría ser complicado con el argumento
+                    // Una opción más simple es popUpTo una ruta conocida antes de la rutina, si existe
+                    // O simplemente limpiar hasta "main" para empezar de nuevo en Home
+                    popUpTo("main") { inclusive = true }
                 }
-           */
+            })
+        }
+
+        // Asegúrate de tener la ruta 'edit_profile' definida aquí si se navega desde ProfileScreen
+        composable("edit_profile") {
+            // Tu composable EditProfileScreen
+            EditProfileScreen(navController = navController, user = UserProfile()) // Pasa navController si necesitas navegar desde aquí
+        }
     }
 }

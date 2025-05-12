@@ -45,46 +45,74 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.jcmateus.kalisfit.data.captureComposableAsImage
+import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun HistorialScreen() {
+fun HistorialScreen(navController: NavHostController) {
     val context = LocalContext.current
-    val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-    val historial = remember { mutableStateListOf<ProgresoRutina>() }
-    var resumen by remember { mutableStateOf<ResumenSemanal?>(null) }
-    var cargando by remember { mutableStateOf(true) }
-    var selectedTab by remember { mutableStateOf(0) }
 
-    LaunchedEffect(userId) {
-        if (userId != null) {
-            obtenerHistorialProgreso(
-                userId = userId,
-                onResult = {
-                    historial.clear()
-                    historial.addAll(it)
-                    resumen = calcularResumenSemanal(it)
-                    cargando = false
-                },
-                onError = {
-                    Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                    cargando = false
-                }
-            )
+    // Obtiene una instancia del ViewModel. Jetpack Compose gestionará su ciclo de vida.
+    val viewModel: HistoryViewModel = viewModel()
+
+    // Observar el estado de la UI expuesto por el ViewModel.
+    // Cada vez que el estado del ViewModel cambie, la UI que depende de 'historyState' se recompondrá.
+    val historyState by viewModel.historyState.collectAsState()
+
+    // Extraer datos y estado directamente del estado del ViewModel
+    val historial = historyState.historial
+    val resumen = historyState.resumen
+    val cargando = historyState.isLoading
+    val errorMessage = historyState.errorMessage
+
+    // Mostrar Toast si hay un mensaje de error del ViewModel
+    // Usamos LaunchedEffect con 'errorMessage' como key para reaccionar solo cuando el mensaje cambia
+    LaunchedEffect(errorMessage) {
+        if (errorMessage != null) {
+            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            // Si quisieras limpiar el mensaje de error después de mostrarlo,
+            // deberías añadir una función `clearErrorMessage()` en tu ViewModel
+            // y llamarla aquí: viewModel.clearErrorMessage()
         }
     }
 
+    // El estado de la pestaña seleccionada sigue siendo local de la UI
+    var selectedTab by remember { mutableStateOf(0) }
+
+    // **Mostrar indicador de carga si es necesario**
     if (cargando) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
-        return
+        return // Es importante salir de la composición si solo queremos mostrar el indicador
     }
 
+    // **Manejar el caso de error si no hay datos y hay un mensaje de error**
+    // Si no está cargando y hay un error, puedes mostrar un mensaje en la pantalla
+    if (errorMessage != null && !cargando && historial.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Error al cargar historial: $errorMessage")
+                Spacer(modifier = Modifier.height(8.dp))
+                // Botón para reintentar cargar los datos
+                Button(onClick = { viewModel.loadHistory() }) {
+                    Text("Reintentar")
+                }
+            }
+        }
+        return // Salir si hay un error que impide mostrar la UI principal
+    }
+
+    // **UI Principal que muestra los datos si no está cargando ni hay error fatal**
     Column(modifier = Modifier.padding(16.dp)) {
+        // Mostrar el resumen solo si existe
         resumen?.let { resumenSemanal ->
             Card(
                 modifier = Modifier
@@ -108,6 +136,7 @@ fun HistorialScreen() {
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    // TabRow para seleccionar entre Rutinas por día y Tiempo por día
                     TabRow(selectedTabIndex = selectedTab) {
                         Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
                             Text("Rutinas por día", modifier = Modifier.padding(8.dp))
@@ -118,17 +147,32 @@ fun HistorialScreen() {
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    // Superficie para mostrar los gráficos o mensajes si no hay historial
                     Surface(
                         tonalElevation = 2.dp,
                         shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        when (selectedTab) {
-                            0 -> RutinasBarChart(historial, modifier = Modifier.height(200.dp).padding(8.dp))
-                            1 -> TiempoBarChart(historial, modifier = Modifier.height(200.dp).padding(8.dp))
+                        if (historial.isNotEmpty()) {
+                            when (selectedTab) {
+                                // Asegúrate de que RutinasBarChart y TiempoBarChart acepten List<ProgresoRutina>
+                                0 -> RutinasBarChart(historial, modifier = Modifier
+                                    .height(200.dp)
+                                    .padding(8.dp))
+                                1 -> TiempoBarChart(historial, modifier = Modifier
+                                    .height(200.dp)
+                                    .padding(8.dp))
+                            }
+                        } else {
+                            // Mensaje si no hay historial para mostrar en los gráficos
+                            Box(modifier = Modifier.height(200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text("No hay datos de historial para mostrar gráficos.")
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    // Botones para compartir el resumen
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             val mensaje = buildString {
@@ -146,7 +190,6 @@ fun HistorialScreen() {
                                 }
                                 append("\nDescarga la app y únete tú también. 💥🔥")
                             }
-
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, mensaje)
@@ -163,21 +206,30 @@ fun HistorialScreen() {
                         }
 
                         Button(onClick = {
+                            // Lógica para compartir como imagen
                             captureComposableAsImage(context, {
-                                ResumenVisualCard(resumen = resumenSemanal)
+                                // Este composable 'ResumenVisualCard' debe estar definido
+                                // en alguna parte de tu proyecto. Asegúrate de que acepta
+                                // el objeto ResumenSemanal si es necesario para mostrar el resumen visualmente.
+                                // Aquí se usa 'resumenSemanal' directamente del ViewModel
+                                ResumenVisualCard(resumen = resumenSemanal) // Asegúrate de que ResumenVisualCard existe
                             }) { file ->
+                                // Una vez que la imagen se guarda en un archivo temporal,
+                                // obtén su URI para compartirla.
                                 val uri = FileProvider.getUriForFile(
                                     context,
-                                    "${context.packageName}.provider",
+                                    "${context.packageName}.provider", // Reemplaza con la autoridad de tu FileProvider
                                     file
                                 )
 
+                                // Crea un intent para compartir la imagen
                                 val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "image/png"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    type = "image/png" // Tipo MIME para una imagen PNG
+                                    putExtra(Intent.EXTRA_STREAM, uri) // Adjunta la URI de la imagen
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Concede permisos de lectura a la app que reciba el intent
                                 }
 
+                                // Inicia el selector de aplicaciones para compartir
                                 context.startActivity(
                                     Intent.createChooser(
                                         intent,
@@ -195,6 +247,7 @@ fun HistorialScreen() {
             }
         }
 
+        // Lista detallada del historial de rutinas
         LazyColumn {
             items(historial.toList()) { progreso ->
                 Card(
@@ -205,7 +258,7 @@ fun HistorialScreen() {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "📅 ${progreso.fecha.take(10)}",
+                            "📅 ${progreso.fecha.take(10)}", // Muestra solo la fecha (primeros 10 caracteres)
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text("Nivel: ${progreso.nivel}", style = MaterialTheme.typography.bodyLarge)
@@ -217,7 +270,7 @@ fun HistorialScreen() {
                         Text("Ejercicios:", style = MaterialTheme.typography.labelLarge)
                         progreso.ejercicios.forEach {
                             Text(
-                                "• ${it.nombre} - ${it.duracion} seg",
+                                "• ${it.nombre} - ${it.duracionSegundos} seg",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -232,3 +285,4 @@ fun HistorialScreen() {
         }
     }
 }
+

@@ -21,36 +21,6 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jcmateus.kalisfit.navigation.Routes
 import kotlinx.coroutines.delay
 import com.jcmateus.kalisfit.R
-/*
-@Composable
-fun SplashScreen(navController: NavController) {
-    LaunchedEffect(true) {
-        delay(2500)
-        navController.navigate(Routes.LOGIN) {
-            popUpTo(Routes.SPLASH) { inclusive = true }
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_logo), // Asegúrate de tener un logo en drawable
-                contentDescription = "Logo",
-                modifier = Modifier.size(120.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "KalisFit",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
- */
 
 @Composable
 fun SplashScreen(navController: NavController) {

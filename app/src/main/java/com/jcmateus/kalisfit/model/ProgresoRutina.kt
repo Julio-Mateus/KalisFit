@@ -11,7 +11,9 @@ data class ProgresoRutina(
 )
 
 data class EjercicioSimple(
+    val id: String = "",
     val nombre: String = "",
-    val duracion: Int = 0
+    val duracionSegundos: Int = 0,
+    val repeticiones: Int = 0
 )
 

@@ -38,23 +38,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.jcmateus.kalisfit.R
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 
 @Composable
 fun EditProfileScreen(
-    user: UserProfile,
-    onProfileUpdated: () -> Unit,
-    onCancel: () -> Unit
+    navController: NavHostController, // Añade NavController
+    user: UserProfile // Mantén el UserProfile si quieres pasarlo desde ProfileScreen
 ) {
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
     val storage = FirebaseStorage.getInstance()
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: run {
+        // Manejar caso sin usuario logueado, quizás navegando a login
+        navController.navigate(Routes.LOGIN) {
+            popUpTo(0) { inclusive = true }
+        }
+        return // Salir de la composición si no hay usuario
+    }
 
     var nombre by remember { mutableStateOf(user.nombre) }
     var peso by remember { mutableStateOf(user.peso.takeIf { it > 0f }?.toString() ?: "") }
@@ -125,7 +132,10 @@ fun EditProfileScreen(
 
         // Acciones
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+            OutlinedButton(onClick = {
+                // Usa el navController para navegar de vuelta al cancelar
+                navController.popBackStack()
+            }, modifier = Modifier.weight(1f)) {
                 Text("Cancelar")
             }
 
@@ -147,7 +157,7 @@ fun EditProfileScreen(
                             .update(actualizacion)
                             .addOnSuccessListener {
                                 Toast.makeText(context, "Perfil actualizado", Toast.LENGTH_SHORT).show()
-                                onProfileUpdated()
+                                navController.popBackStack()
                             }
                             .addOnFailureListener {
                                 Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()

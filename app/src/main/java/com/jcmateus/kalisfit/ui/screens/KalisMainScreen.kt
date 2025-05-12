@@ -17,6 +17,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,12 +27,13 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.navigation.BottomNavItem
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun KalisMainScreen(navController: NavHostController = rememberNavController()) {
-    // 🧭 Navegación inferior
+fun KalisMainScreen(mainNavController: NavHostController) {
+    val bottomNavController = rememberNavController()
     val items = listOf(
         BottomNavItem.Home,
         BottomNavItem.Tips,
@@ -40,11 +43,19 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
     Scaffold(
         bottomBar = {
             NavigationBar {
-                val currentDestination = navController.currentBackStackEntryAsState().value?.destination?.route
+                val currentRoute = bottomNavController.currentBackStackEntryAsState().value?.destination?.route
                 items.forEach { item ->
                     NavigationBarItem(
-                        selected = currentDestination == item.route,
-                        onClick = { navController.navigate(item.route) },
+                        selected = currentRoute == item.route,
+                        onClick = {
+                            bottomNavController.navigate(item.route) {
+                                popUpTo(bottomNavController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) }
                     )
@@ -53,69 +64,38 @@ fun KalisMainScreen(navController: NavHostController = rememberNavController()) 
         }
     ) { innerPadding ->
         NavHost(
-            navController = navController,
+            navController = bottomNavController, // Este sigue usando el controlador local para la barra inferior
             startDestination = BottomNavItem.Home.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            // 🏠 Pantalla de inicio
-            composable(BottomNavItem.Home.route) { HomeScreen(navController) }
-            // 🎯 Tips generales
-            composable(BottomNavItem.Tips.route) { TipsScreen() }
-            // 👤 Perfil del usuario
-            composable(BottomNavItem.Profile.route) { ProfileScreen(onLogout = {
-                FirebaseAuth.getInstance().signOut()
-                navController.navigate(Routes.LOGIN) {
-                    popUpTo(0) { inclusive = true }
-                }
-            }, onEditProfile = { navController.navigate("edit_profile") }) }
-            composable("edit_profile") {
-                val viewModel = remember { UserProfileViewModel() }
-                val userState = viewModel.user.collectAsState()
-                val user = userState.value
+            // ¡CORRECCIÓN! Pasa el mainNavController a HomeScreen
+            composable(BottomNavItem.Home.route) { HomeScreen(navController = mainNavController) }
 
-                LaunchedEffect(Unit) {
-                    viewModel.loadUserProfile()
-                }
+            composable(BottomNavItem.Tips.route) { TipsScreen() } // TipsScreen no necesita mainNavController si no navega fuera del NavHost anidado
 
-                if (user != null) {
-                    EditProfileScreen(
-                        user = user,
-                        onProfileUpdated = {
-                            navController.popBackStack()
-                            viewModel.loadUserProfile()
-                        },
-                        onCancel = {
-                            navController.popBackStack()
+            composable(BottomNavItem.Profile.route) {
+                ProfileScreen(
+                    onLogout = {
+                        FirebaseAuth.getInstance().signOut()
+                        // Usa el mainNavController para ir al Login de nivel superior
+                        mainNavController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
                         }
-                    )
-                } else {
-                    // Pantalla de carga mientras el perfil se recupera
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
-            // 🕓 Historial de rutinas
-            composable(BottomNavItem.History.route) {
-                HistorialScreen()
-            }
-            // 💪 Rutinas desde el Home
-            composable("routine") {
-                RoutineScreen(
-                    navController = navController,
-                    onRoutineComplete = {
-                        navController.navigate(BottomNavItem.Home.route) {
-                            popUpTo("routine") { inclusive = true }
-                        }
+                    },
+                    onEditProfile = {
+                        // Usa el mainNavController para ir a 'edit_profile' de nivel superior
+                        mainNavController.navigate("edit_profile")
                     }
                 )
             }
-            composable("routine_success") {
-                RoutineSuccessScreen(onFinish = {
-                    navController.navigate(BottomNavItem.Home.route) {
-                        popUpTo("routine_success") { inclusive = true }
-                    }
-                })
+
+            // Si EditProfileScreen se mantiene en el NavHost principal (como parece en KalisNavGraph):
+            // No definas 'edit_profile' aquí. Ya está en el NavHost principal.
+            // Si EditProfileScreen estuviera en este NavHost anidado, usaría bottomNavController.
+
+            composable(BottomNavItem.History.route) {
+                // HistorialScreen podría necesitar mainNavController si navega a la pantalla de Rutina
+                HistorialScreen(navController = mainNavController)
             }
         }
     }
