@@ -5,34 +5,43 @@ enum class LugarEntrenamiento {
     CASA, GIMNASIO, EXTERIOR, CALISTENIA
 }
 
-// Define los grupos musculares como un enum class (o una lista de Strings si prefieres más flexibilidad)
+// Define los grupos musculares, incluyendo los del JSON
 enum class GrupoMuscular {
-    PECHO, ESPALDA, PIERNAS, BRAZOS, ABDOMEN, HOMBROS, FULL_BODY
+    PECHO, ESPALDA, PIERNAS, BRAZOS, ABDOMEN, HOMBROS, FULL_BODY,
+    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS // Añadidos
 }
 
-// Estructura de datos para un ejercicio
+// Estructura de datos para un ejercicio (mapea documentos de la subcolección)
 data class Ejercicio(
-    val id: String = "", // Un ID único para el ejercicio
+    // Mapeará el campo 'id' que escribimos nosotros en el documento
+    val id: String = "",
     val nombre: String = "",
     val descripcion: String = "",
-    val imagenUrl: String? = null, // Usaremos URL para imágenes más flexibles (Firebase Storage, por ejemplo)
-    val videoUrl: String? = null, // URL a un video tutorial
-    val duracionSegundos: Int = 0, // Para ejercicios basados en tiempo
-    val repeticiones: Int = 0, // Para ejercicios basados en repeticiones (puedes usar uno u otro)
+    val imagenUrl: String? = null,
+    val videoUrl: String? = null,
+    val duracionSegundos: Int = 0,
+    val repeticiones: Int = 0,
     val series: Int = 0,
-    val grupoMuscular: List<GrupoMuscular> = emptyList(), // Un ejercicio puede trabajar múltiples grupos
-    val equipamientoNecesario: List<String> = emptyList(), // Ej: "mancuernas", "barra fija", "bandas de resistencia"
-    val lugarEntrenamiento: List<String> = emptyList(), // Dónde se puede realizar el ejercicio
+    // Mapeará la lista de strings a tu enum (asegúrate de que los nombres coincidan)
+    val grupoMuscular: List<GrupoMuscular> = emptyList(),
+    val equipamientoNecesario: List<String> = emptyList(),
+    val lugarEntrenamiento: List<String> = emptyList(),
     val orden: Int = 0
 )
 
-// Estructura de datos para una rutina
+// Estructura de datos para una rutina (mapea SOLO el documento principal)
 data class Rutina(
-    val id: String = "", // Un ID único para la rutina
+    // Mapeará el campo 'id' que escribimos nosotros en el documento
+    // Si quieres mapear el ID autogenerado de Firestore, usa @DocumentId
+    val id: String = "",
+    // ¡Añadir el campo slug!
+    val slug: String = "",
     val nombre: String = "",
     val descripcion: String = "",
-    val nivelRecomendado: List<String> = emptyList(), // "Principiante", "Intermedio", "Avanzado"
-    val objetivos: List<String> = emptyList(), // "Fuerza", "Resistencia", etc.
-    val ejercicios: List<Ejercicio> = emptyList(), // Lista de ejercicios en la rutina
-    val lugarEntrenamiento: List<String> = emptyList() // Lugares donde se puede hacer esta rutina
+    val nivelRecomendado: List<String> = emptyList(),
+    val objetivos: List<String> = emptyList(),
+    val lugarEntrenamiento: List<String> = emptyList(),
+    // ¡Añadir el campo imagenUrl si existe en el documento principal!
+    val imagenUrl: String? = null
+    // NO incluyas la lista de ejercicios aquí, se carga por separado de la subcolección.
 )
