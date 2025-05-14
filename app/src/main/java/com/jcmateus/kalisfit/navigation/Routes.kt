@@ -11,4 +11,6 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot_password"
     const val ROUTINE = "routine"
     const val ROUTINE_SUCCESS = "routine_success"
+    const val TIPS = "tips"
+
 }

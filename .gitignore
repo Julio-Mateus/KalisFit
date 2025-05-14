@@ -1,15 +1,19 @@
+# Archivos y carpetas de configuración
+.idea/
+.kotlin/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# Archivos de compilación
+/build/
+.gradle/
+.externalNativeBuild/
+.cxx/
+
+# Archivos del sistema
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+Thumbs.db
+
+# Otros
 local.properties
+captures/
+*.log

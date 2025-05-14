@@ -42,6 +42,7 @@ data class Rutina(
     val objetivos: List<String> = emptyList(),
     val lugarEntrenamiento: List<String> = emptyList(),
     // ¡Añadir el campo imagenUrl si existe en el documento principal!
-    val imagenUrl: String? = null
+    val imagenUrl: String? = null,
+    val ejercicios: List<Ejercicio> = emptyList()
     // NO incluyas la lista de ejercicios aquí, se carga por separado de la subcolección.
 )

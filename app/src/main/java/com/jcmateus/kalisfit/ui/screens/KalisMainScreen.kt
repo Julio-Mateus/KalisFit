@@ -36,7 +36,7 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val bottomNavController = rememberNavController()
     val items = listOf(
         BottomNavItem.Home,
-        BottomNavItem.Tips,
+        BottomNavItem.Routines,
         BottomNavItem.Profile,
         BottomNavItem.History
     )
@@ -71,7 +71,11 @@ fun KalisMainScreen(mainNavController: NavHostController) {
             // ¡CORRECCIÓN! Pasa el mainNavController a HomeScreen
             composable(BottomNavItem.Home.route) { HomeScreen(navController = mainNavController) }
 
-            composable(BottomNavItem.Tips.route) { TipsScreen() } // TipsScreen no necesita mainNavController si no navega fuera del NavHost anidado
+            composable(BottomNavItem.Routines.route) {
+                // Llama aquí al composable que muestra la lista de todas las rutinas
+                // Pasa mainNavController si desde aquí navegas a la pantalla de rutina individual
+                RoutineExplorerScreen(navController = mainNavController)
+            }
 
             composable(BottomNavItem.Profile.route) {
                 ProfileScreen(

@@ -19,12 +19,8 @@ import kotlinx.coroutines.tasks.await
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.sequences.ifEmpty
-import kotlin.text.get
 import kotlin.text.map
-import kotlin.text.mapNotNull
-import kotlin.text.set
 import kotlin.text.uppercase
-import kotlin.toString
 
 // Estructura de datos para un ejercicio TAL COMO SE GUARDARÁ EN FIRESTORE
 data class EjercicioFirestore(

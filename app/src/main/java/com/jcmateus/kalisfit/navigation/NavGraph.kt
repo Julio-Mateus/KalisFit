@@ -23,6 +23,7 @@ import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
+import com.jcmateus.kalisfit.ui.screens.TipsScreen
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
@@ -111,6 +112,10 @@ fun KalisNavGraph(navController: NavHostController) {
         composable("edit_profile") {
             // Tu composable EditProfileScreen
             EditProfileScreen(navController = navController, user = UserProfile()) // Pasa navController si necesitas navegar desde aquí
+        }
+
+        composable(Routes.TIPS) {
+            TipsScreen() // Pasa navController si TipsScreen necesita navegar
         }
     }
 }

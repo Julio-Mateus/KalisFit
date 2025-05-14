@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.viewmodel
 
+import androidx.compose.foundation.layout.size
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jcmateus.kalisfit.data.obtenerRutinas
@@ -10,11 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import android.util.Log
 
-class RoutineExplorerViewModel(
-    private val userProfileViewModel: UserProfileViewModel // Recibimos el ViewModel del perfil
-) : ViewModel() {
+class RoutineExplorerViewModel(private val userProfileViewModel: UserProfileViewModel) : ViewModel() {
 
+    private val TAG = "RoutineExplorerViewModel" // TAG para logging
+
+
+    // Estados que la UI observará
     private val _rutinas = MutableStateFlow<List<Rutina>>(emptyList())
     val rutinas: StateFlow<List<Rutina>> = _rutinas.asStateFlow()
 
@@ -24,57 +28,59 @@ class RoutineExplorerViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // Observamos el StateFlow 'user' del UserProfileViewModel
-    val userProfile: StateFlow<UserProfile?> = userProfileViewModel.user
-
     init {
-        // No necesitamos cargar el perfil aquí, ya lo hace UserProfileViewModel
-        // Nos suscribiremos a sus cambios para cargar las rutinas
-        viewModelScope.launch {
-            userProfileViewModel.user
-                .filterNotNull() // Solo reaccionar cuando el perfil no es nulo
-                .collect { profile ->
-                    // Cuando el perfil cambie (es decir, cuando se cargue), cargar las rutinas
-                    // Asegúrate de que profile.lugarEntrenamiento sea compatible con LugarEntrenamiento enum
-                    // Puede que necesites mapear String a LugarEntrenamiento si es necesario
-                    val primerLugar = profile.lugarEntrenamiento.firstOrNull()
-                    val lugarEnum = if (primerLugar != null) {
-                        try {
-                            LugarEntrenamiento.valueOf(primerLugar.uppercase()) // Convierte a enum
-                        } catch (e: IllegalArgumentException) {
-                            null // Manejar caso si el String no coincide con ningún enum
-                        }
-                    } else null
-
-                    loadRutinas(
-                        nivel = profile.nivel,
-                        objetivos = profile.objetivos,
-                        lugarEntrenamiento = lugarEnum
-                    )
-                }
-        }
+        // Iniciar la carga de rutinas cuando el ViewModel se crea
+        loadRutinas()
     }
 
-    fun loadRutinas(nivel: String?, objetivos: List<String>?, lugarEntrenamiento: LugarEntrenamiento?) {
-        _isLoading.value = true
-        _errorMessage.value = null
-
+    private fun loadRutinas() {
         viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null // Limpiar cualquier error previo
+
+            val userProfile = userProfileViewModel.user.value
+            val userLevel = userProfile?.nivel
+            val userGoals = userProfile?.objetivos
+
+            // --- COMIENZA LA CONVERSIÓN ---
+            // Obtiene el primer lugar de entrenamiento del usuario como String, si existe
+            val firstUserLocationString = userProfile?.lugarEntrenamiento?.firstOrNull()
+
+            // Intenta convertir ese String a un valor del enum LugarEntrenamiento
+            val userLocationEnum: LugarEntrenamiento? = try {
+                // Usa uppercase() porque tu enum probablemente usa mayúsculas (CASA, GIMNASIO, etc.)
+                firstUserLocationString?.let { LugarEntrenamiento.valueOf(it.uppercase()) }
+            } catch (e: IllegalArgumentException) {
+                // Si el String no coincide con ningún valor del enum, el resultado es null
+                Log.w(TAG, "Lugar de entrenamiento del usuario '$firstUserLocationString' no coincide con enum LugarEntrenamiento.")
+                null
+            }
+            // --- TERMINA LA CONVERSIÓN ---
+
+
+            // Usamos la función obtenerRutinas que ya tienes
             obtenerRutinas(
-                nivel = nivel,
-                objetivos = objetivos,
-                lugarEntrenamiento = lugarEntrenamiento,
-                onResult = { rutinasObtenidas ->
-                    _rutinas.value = rutinasObtenidas
+                nivel = userLevel,
+                objetivos = userGoals,
+                lugarEntrenamiento = userLocationEnum, // ¡Pasa el valor convertido del tipo correcto!
+                onResult = { rutinasList: List<Rutina> ->
+                    // Esto se ejecuta en el hilo principal gracias a addOnSuccessListener/addOnFailureListener
+                    _rutinas.value = rutinasList
                     _isLoading.value = false
+                    Log.d(TAG, "Rutinas cargadas exitosamente. Cantidad: ${rutinasList.size}")
                 },
-                onError = { msg ->
-                    _errorMessage.value = msg
+                onError = { errorMsg: String ->
+                    // Esto también se ejecuta en el hilo principal
+                    _errorMessage.value = errorMsg
                     _isLoading.value = false
+                    Log.e(TAG, "Error al cargar rutinas: $errorMsg")
                 }
             )
         }
     }
 
-    // No necesitamos loadUserProfile() en este ViewModel
+    // Opcional: Una función para recargar las rutinas si es necesario (ej. pull-to-refresh)
+    fun refreshRutinas() {
+        loadRutinas()
+    }
 }
