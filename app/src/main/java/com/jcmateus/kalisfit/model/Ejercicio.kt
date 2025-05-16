@@ -8,7 +8,7 @@ enum class LugarEntrenamiento {
 // Define los grupos musculares, incluyendo los del JSON
 enum class GrupoMuscular {
     PECHO, ESPALDA, PIERNAS, BRAZOS, ABDOMEN, HOMBROS, FULL_BODY,
-    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS // Añadidos
+    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS,BICEPS,CORE // Añadidos
 }
 
 // Estructura de datos para un ejercicio (mapea documentos de la subcolección)

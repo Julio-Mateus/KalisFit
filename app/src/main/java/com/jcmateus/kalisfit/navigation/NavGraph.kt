@@ -33,7 +33,18 @@ import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 fun KalisNavGraph(navController: NavHostController) {
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
         composable(Routes.SPLASH) {
-            SplashScreen(navController)
+            SplashScreen( // Ya no se pasa navController
+                onUserLoggedIn = {
+                    navController.navigate("main") { // "main" o tu ruta principal
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                },
+                onUserNotLoggedIn = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                }
+            )
         }
         composable(Routes.LOGIN) {
             LoginScreen(

@@ -115,98 +115,157 @@ fun calcularResumenSemanal(progreso: List<ProgresoRutina>): ResumenSemanal {
 
     val recientes = progreso.filter {
         try {
+            // Asegúrate de que ProgresoRutina.fecha es un String parseable a Instant
+            // Si es un Timestamp de Firestore, ya lo manejas bien en guardarProgresoRutina
+            // Si ya es un String ISO, está bien.
             val fecha = Instant.parse(it.fecha)
             fecha.isAfter(hace7Dias)
         } catch (e: Exception) {
+            Log.e(TAG, "Error al parsear fecha del progreso: ${it.fecha}", e)
             false
         }
     }
 
-    val totalRutinas = recientes.size
-    val totalTiempo = recientes.sumOf { it.tiempoTotal }
-    val objetivos = recientes.flatMap { it.objetivos }
+    if (recientes.isEmpty()) {
+        // Si no hay rutinas recientes, devuelve un resumen vacío o con ceros.
+        return ResumenSemanal() // Gracias a los valores por defecto en el data class
+    }
 
+    val totalRutinas = recientes.size
+    val tiempoTotalSegundos = recientes.sumOf { it.tiempoTotal } // Ya lo tenías como totalTiempo
+
+    val objetivos = recientes.flatMap { it.objetivos }
     val objetivosRepetidos = objetivos
         .groupingBy { it }
         .eachCount()
         .entries
         .sortedByDescending { it.value }
         .map { it.key }
+        .take(2) // Tomar los 2 más frecuentes
+
+    // --- NUEVA LÓGICA PARA CONTAR EJERCICIOS ---
+    var totalEjercicios = 0
+    var ejerciciosPorTiempo = 0
+    var ejerciciosPorRepeticiones = 0
+
+    recientes.forEach { rutinaProgreso ->
+        // Sumar la cantidad de ejercicios en esta rutina al total
+        totalEjercicios += rutinaProgreso.ejercicios.size
+
+        // Iterar sobre cada ejercicio simple en la rutina actual
+        rutinaProgreso.ejercicios.forEach { ejercicioSimple ->
+            if (ejercicioSimple.repeticiones > 0) {
+                ejerciciosPorRepeticiones++
+            } else if (ejercicioSimple.duracionSegundos > 0) {
+                // Considerar como "por tiempo" si tiene duración y no repeticiones (o repeticiones es 0)
+                ejerciciosPorTiempo++
+            }
+            // Puedes añadir un 'else' aquí si quieres manejar ejercicios
+            // que no tienen ni repeticiones ni duración (aunque no debería ocurrir
+            // con EjercicioSimple tal como está definido)
+        }
+    }
+    // --- FIN DE LA NUEVA LÓGICA ---
 
     return ResumenSemanal(
         rutinas = totalRutinas,
-        tiempoTotal = totalTiempo,
-        objetivosRecurrentes = objetivosRepetidos.take(2)
+        tiempoTotal = tiempoTotalSegundos,
+        objetivosRecurrentes = objetivosRepetidos,
+        // --- NUEVOS CAMPOS ---
+        totalEjercicios = totalEjercicios,
+        ejerciciosPorTiempo = ejerciciosPorTiempo,
+        ejerciciosPorRepeticiones = ejerciciosPorRepeticiones
     )
 }
+// En FirestoreUtils.kt - Asumiendo que el usuario puede seleccionar VARIOS lugares
 fun obtenerRutinas(
-    nivel: String? = null,
-    objetivos: List<String>? = null,
-    lugarEntrenamiento: LugarEntrenamiento? = null, // Usamos el enum del modelo
-    onResult: (List<Rutina>) -> Unit, // Devuelve List<Rutina> del modelo
+    nivel: String? = null, // Nivel del usuario (String)
+    objetivos: List<String>? = null, // Objetivos del usuario (List<String>)
+    lugaresEntrenamiento: List<LugarEntrenamiento>? = null, // Lista de Enum de lugares del usuario
+    onResult: (List<Rutina>) -> Unit,
     onError: (String) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
     var query: Query = db.collection("rutinas")
+    var filtroServidorAplicadoParaNivel = false
+    // var filtroServidorAplicadoParaLugar = false // Ya tienes filtroLugarEnServidor
+    // var filtroServidorAplicadoParaObjetivo = false
 
-    // Aplicar filtros si se proporcionan
+    // --- Filtrado en Servidor (Optimización) ---
     if (nivel != null) {
         query = query.whereArrayContains("nivelRecomendado", nivel)
+        filtroServidorAplicadoParaNivel = true
+        Log.d(TAG, "Filtrando en servidor por nivel: $nivel")
     }
 
-    if (objetivos != null && objetivos.isNotEmpty()) {
-        // Filtrar por el primer objetivo en el servidor
-        // Si necesitas filtrar por MÚLTIPLES objetivos estrictamente en el servidor,
-        // considera índices compuestos o ajusta la lógica aquí.
+    val nombresLugaresUsuario = lugaresEntrenamiento?.map { it.name } ?: emptyList()
+
+    // Solo podemos usar un 'array-contains' en la consulta.
+    // Prioridad: Nivel, luego Lugar, luego Objetivo para el filtro de servidor.
+    if (!filtroServidorAplicadoParaNivel && nombresLugaresUsuario.isNotEmpty()) {
+        query = query.whereArrayContains("lugarEntrenamiento", nombresLugaresUsuario.first())
+        // filtroServidorAplicadoParaLugar = true; // No necesitas esta variable si solo la usas aquí
+        Log.d(TAG, "Filtrando en servidor por el primer lugarEntrenamiento: ${nombresLugaresUsuario.first()}")
+    } else if (!filtroServidorAplicadoParaNivel && (objetivos != null && objetivos.isNotEmpty())) { // else if para asegurar solo un filtro de array
         query = query.whereArrayContains("objetivos", objetivos.first())
-    }
-
-    if (lugarEntrenamiento != null) {
-        // Para filtrar por un valor dentro de una lista (lugarEntrenamiento)
-        query = query.whereArrayContains("lugarEntrenamiento", lugarEntrenamiento.name) // Firestore almacena en String
+        // filtroServidorAplicadoParaObjetivo = true;
+        Log.d(TAG, "Filtrando en servidor por primer objetivo: ${objetivos.first()}")
     }
 
     query.get()
         .addOnSuccessListener { result ->
-            // Mapear los documentos a objetos Rutina (usando tu modelo)
-            // IMPORTANTE: toObject(Rutina::class.java) aquí solo mapeará los campos
-            // que existen en el documento principal de Firestore. NO CARGA la subcolección de ejercicios.
-            val rutinas = result.documents.mapNotNull { document ->
-                try {
-                    // Intenta mapear el documento principal a tu data class Rutina
-                    // Los campos como nivelRecomendado, objetivos, lugarEntrenamiento (si están como List<String> en Firestore)
-                    // y nombre, descripcion, id se mapearán automáticamente.
-                    // La lista 'ejercicios' en el objeto Rutina estará vacía porque no está en el documento principal.
-                    document.toObject(Rutina::class.java)?.copy(id = document.id)
-                } catch (e: Exception) {
-                    // Manejar errores de mapeo si es necesario
-                    Log.e(TAG, "Error al mapear documento de rutina (en obtenerRutinas): ${e.message}")
-                    null
-                }
+            val rutinasDesdeFirestore = result.documents.mapNotNull { document ->
+                document.toObject(RutinaFirestore::class.java)?.copy(id = document.id)
             }
 
-            // Si se filtró solo por un objetivo, hacer el filtrado adicional en cliente
-            val rutinasFiltradas = if (objetivos != null && objetivos.size > 1) {
-                rutinas.filter { rutina ->
-                    // Este filtro en cliente asume que 'objetivos' en tu objeto Rutina
-                    // ya contiene los datos correctos cargados (lo cual no sucede
-                    // si solo usas toObject en el documento principal).
-                    // Si quieres que este filtro funcione correctamente, deberías
-                    // haber cargado las rutinas de forma diferente, o filtrar
-                    // completamente en cliente después de obtener todos los documentos.
-                    objetivos.all { objetivo -> rutina.objetivos.contains(objetivo) }
-                }
-            } else {
-                rutinas
+            val rutinasFiltradasFinal = rutinasDesdeFirestore.filter { rutinaFirestore ->
+                // --- Filtrado en Cliente (Lógica Final y Correcta) ---
+
+                // Nivel: La rutina debe incluir el nivel del usuario (si se especifica)
+                val pasaFiltroNivel = nivel == null ||
+                        rutinaFirestore.nivelRecomendado.any { rn -> rn.equals(nivel, ignoreCase = true) }
+
+                // Lugar: La rutina debe ser compatible con al menos uno de los lugares del usuario (si se especifica)
+                val pasaFiltroLugar = nombresLugaresUsuario.isEmpty() ||
+                        rutinaFirestore.lugarEntrenamiento.any { lugarRutina ->
+                            nombresLugaresUsuario.any { lugarUsuario ->
+                                lugarUsuario.equals(lugarRutina, ignoreCase = true)
+                            }
+                        }
+
+                // Objetivos: La rutina debe abordar al menos uno de los objetivos del usuario (si se especifican)
+                val pasaFiltroObjetivos = objetivos == null || objetivos.isEmpty() ||
+                        rutinaFirestore.objetivos.any { objetivoRutina ->
+                            objetivos.any { objetivoUsuario ->
+                                objetivoUsuario.equals(objetivoRutina, ignoreCase = true)
+                            }
+                        }
+
+                Log.d(TAG, "Evaluando rutina: ${rutinaFirestore.nombre} (ID: ${rutinaFirestore.id})")
+                Log.d(TAG, "    Nivel Rutina: ${rutinaFirestore.nivelRecomendado}, Filtro Nivel Usuario: $nivel, Pasa Nivel: $pasaFiltroNivel")
+                Log.d(TAG, "    Lugar Rutina: ${rutinaFirestore.lugarEntrenamiento}, Filtro Lugar Usuario: $nombresLugaresUsuario, Pasa Lugar: $pasaFiltroLugar")
+                Log.d(TAG, "    Objetivos Rutina: ${rutinaFirestore.objetivos}, Filtro Objetivos Usuario: $objetivos, Pasa Objetivos: $pasaFiltroObjetivos")
+
+                pasaFiltroNivel && pasaFiltroLugar && pasaFiltroObjetivos
             }
 
-            // NOTA: Las rutinas devueltas aquí NO tendrán la lista de ejercicios cargada.
-            // Si necesitas los ejercicios, debes obtener cada rutina individualmente
-            // con getRutinaByIdFromFirestore después de obtener esta lista, o reestructurar
-            // esta función para cargar los ejercicios.
-            onResult(rutinasFiltradas)
+            Log.d(TAG, "Rutinas obtenidas desde Firestore: ${rutinasDesdeFirestore.size}, Rutinas filtradas final en cliente: ${rutinasFiltradasFinal.size}")
+
+            val rutinasModeloFinal = rutinasFiltradasFinal.map { rf ->
+                Rutina(
+                    id = rf.id,
+                    nombre = rf.nombre,
+                    descripcion = rf.descripcion,
+                    nivelRecomendado = rf.nivelRecomendado,
+                    objetivos = rf.objetivos,
+                    lugarEntrenamiento = rf.lugarEntrenamiento,
+                    ejercicios = emptyList()
+                )
+            }
+            onResult(rutinasModeloFinal)
         }
         .addOnFailureListener {
+            Log.e(TAG, "Error al obtener rutinas Firestore: ${it.message}", it)
             onError(it.message ?: "Error al obtener rutinas filtradas")
         }
 }
@@ -287,97 +346,13 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
     }
 }
 
-// Función para obtener una rutina específica por su ID desde Firestore
-suspend fun addRutinaToFirestore(rutina: Rutina): Result<Unit> {
-    val db = FirebaseFirestore.getInstance()
-    val rutinaRef = db.collection("rutinas").document(rutina.id) // Usar el ID de la rutina como ID del documento
-
-    return try {
-        // 1. Crear el objeto RutinaFirestore para guardar en el documento principal
-        // Mapeamos los campos relevantes de tu Rutina de modelo a RutinaFirestore
-        val rutinaFirestoreData = RutinaFirestore(
-            id = rutina.id,
-            nombre = rutina.nombre,
-            descripcion = rutina.descripcion,
-            nivelRecomendado = rutina.nivelRecomendado,
-            objetivos = rutina.objetivos,
-            // ¡CAMBIO AQUI!: Asigna List<String> (Modelo Rutina) a List<String> (RutinaFirestore)
-            lugarEntrenamiento = rutina.lugarEntrenamiento
-        )
-
-        // Guardar el documento principal de la rutina. SetOptions.merge() es útil si
-        // el documento ya existe y solo quieres añadir o actualizar campos.
-        rutinaRef.set(rutinaFirestoreData, SetOptions.merge()).await()
-
-        // 2. Guardar cada ejercicio en la subcolección "ejercicios"
-        val ejerciciosSubcollectionRef = rutinaRef.collection("ejercicios")
-
-        // Usamos un batch para escribir todos los ejercicios de forma atómica (si es posible)
-        // o simplemente añadimos/establecemos cada uno. Usar SetOptions.merge() permite
-        // añadir ejercicios o actualizar existentes sin borrar la subcolección.
-        val batch = db.batch()
-
-        rutina.ejercicios.forEach { ejercicio ->
-            // Mapear el Ejercicio del modelo a EjercicioFirestore
-            val ejercicioFirestoreData = EjercicioFirestore(
-                id = ejercicio.id.ifEmpty { ejerciciosSubcollectionRef.document().id }, // Genera un nuevo ID si está vacío
-                nombre = ejercicio.nombre,
-                descripcion = ejercicio.descripcion,
-                imagenUrl = ejercicio.imagenUrl,
-                videoUrl = ejercicio.videoUrl,
-                duracionSegundos = ejercicio.duracionSegundos,
-                repeticiones = ejercicio.repeticiones,
-                series = ejercicio.series,
-                // Mapea List<Enum> (Modelo Ejercicio) a List<String> (EjercicioFirestore). Esto ya lo tenías y está bien.
-                grupoMuscular = ejercicio.grupoMuscular.map { it.name },
-                equipamientoNecesario = ejercicio.equipamientoNecesario, // List<String> a List<String> (OK)
-                // ¡CAMBIO AQUI!: Mapea List<String> (Modelo Ejercicio) a List<String> (EjercicioFirestore)
-                lugarEntrenamiento = ejercicio.lugarEntrenamiento, // Asigna directamente la lista de Strings
-                orden = ejercicio.orden
-            )
-            // Usa set() con merge para añadir o actualizar el documento del ejercicio
-            batch.set(ejerciciosSubcollectionRef.document(ejercicioFirestoreData.id), ejercicioFirestoreData, SetOptions.merge())
-        }
-
-        // Ejecutar el batch de escrituras para los ejercicios
-        batch.commit().await()
-
-        Log.d(TAG, "Rutina y ejercicios guardados exitosamente en Firestore: ${rutina.id}")
-        Result.success(Unit)
-
-    } catch (e: Exception) {
-        Log.e(TAG, "Error al guardar rutina y ejercicios en Firestore: ${e.message}", e)
-        Result.failure(e)
-    }
-}
-
-suspend fun getRutinaById(rutinaId: String): Rutina? {
-    val db = FirebaseFirestore.getInstance()
-    return try {
-        val documentSnapshot = db.collection("rutinas") // <-- Asegúrate de que tu colección se llama "rutinas"
-            .document(rutinaId)
-            .get()
-            .await()
-
-        if (documentSnapshot.exists()) {
-            // Intenta mapear el documento a tu data class Rutina
-            val rutina = documentSnapshot.toObject(Rutina::class.java)
-            // Firestore no asigna el ID del documento automáticamente al objeto,
-            // así que lo asignamos manualmente después de la conversión.
-            rutina?.copy(id = documentSnapshot.id)
-        } else {
-            Log.w(TAG, "Rutina con ID $rutinaId no encontrada en Firestore.")
-            null
-        }
-    } catch (e: Exception) {
-        Log.e(TAG, "Error al obtener rutina con ID $rutinaId desde Firestore.", e)
-        throw e // Propaga la excepción para que el ViewModel pueda manejarla
-    }
-}
 data class ResumenSemanal(
-    val rutinas: Int,
-    val tiempoTotal: Int,
-    val objetivosRecurrentes: List<String>
+    val rutinas: Int = 0, // Es buena práctica añadir valores por defecto
+    val tiempoTotal: Int = 0, // en segundos
+    val objetivosRecurrentes: List<String> = emptyList(),
+    val totalEjercicios: Int = 0,
+    val ejerciciosPorTiempo: Int = 0,
+    val ejerciciosPorRepeticiones: Int = 0
 )
 
 

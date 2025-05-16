@@ -37,14 +37,11 @@ import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 @Composable
 fun RoutineExplorerScreen(
     navController: NavController,
-    // Obtienes el UserProfileViewModel. Podría venir de un nivel superior
-    // en tu navegación si ya lo tienes disponible, o crearlo aquí.
-    userProfileViewModel: UserProfileViewModel = viewModel(),
-    // Pasas el UserProfileViewModel a la fábrica para crear RoutineExplorerViewModel
-    routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory(userProfileViewModel))
+    userProfileViewModel: UserProfileViewModel = viewModel(), // Todavía puedes necesitarlo para otras cosas
+    // CORRECCIÓN PRINCIPAL AQUÍ:
+    routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory())
 ) {
-    // Observamos los estados del RoutineExplorerViewModel
-    val rutinasState = routineExplorerViewModel.rutinas.collectAsState()
+    val rutinas: List<Rutina> by routineExplorerViewModel.rutinasFiltradas.collectAsState()
     val isLoading by routineExplorerViewModel.isLoading.collectAsState()
     val errorMessage by routineExplorerViewModel.errorMessage.collectAsState()
 
@@ -53,10 +50,11 @@ fun RoutineExplorerScreen(
             TopAppBar(title = { Text("Explorar Rutinas") })
         }
     ) { innerPadding ->
-        Box(modifier = Modifier
-            .padding(innerPadding)
-            .fillMaxSize()) {
-
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else if (errorMessage != null) {
@@ -68,9 +66,9 @@ fun RoutineExplorerScreen(
                         .padding(16.dp)
                 )
             } else {
-                if (rutinasState.value.isEmpty()) {
+                if (rutinas.isEmpty()) {
                     Text(
-                        text = "No se encontraron rutinas para tu perfil.",
+                        text = "No se encontraron rutinas.", // Mensaje ligeramente ajustado
                         modifier = Modifier.align(Alignment.Center)
                     )
                 } else {
@@ -79,9 +77,8 @@ fun RoutineExplorerScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(rutinasState.value) { rutina ->
+                        items(items = rutinas, key = { it.id }) { rutina ->
                             RutinaCard(rutina = rutina, onClick = {
-                                // Navegar a la RoutineScreen pasando el ID de la rutina seleccionada
                                 navController.navigate("routine/${rutina.id}")
                             })
                         }
@@ -107,8 +104,7 @@ fun RutinaCard(rutina: Rutina, onClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text("Nivel: ${rutina.nivelRecomendado.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
             Text("Objetivos: ${rutina.objetivos.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-            // Modifica esta línea:
-            Text("Lugares: ${rutina.lugarEntrenamiento.joinToString(", ")}", style = MaterialTheme.typography.bodySmall) // <--- Elimina .name
+            Text("Lugares: ${rutina.lugarEntrenamiento.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

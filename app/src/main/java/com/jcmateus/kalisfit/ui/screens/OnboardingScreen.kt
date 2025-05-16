@@ -54,8 +54,8 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
     val niveles = listOf("Principiante", "Intermedio", "Avanzado")
     val sexos = listOf("Masculino", "Femenino")
-    val lugares = listOf("Casa", "Gimnasio", "Exterior")
-    val objetivosDisponibles = listOf("Fuerza", "Resistencia", "Masa muscular", "Bienestar mental")
+    val lugares = listOf("Casa", "Gimnasio", "Exterior", "Calistenia")
+    val objetivosDisponibles = listOf("Fuerza", "Resistencia", "Hipertrofia", "Bienestar mental")
 
     var nivel by remember { mutableStateOf("") }
     var expandedNivel by remember { mutableStateOf(false) }
@@ -212,7 +212,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     edadI,
                     sexo,
                     frecuenciaI,
-                    lugaresSeleccionados.toList().toString()
+                    lugaresSeleccionados.toList()
                 ) { success, message ->
                     if (success) onFinish()
                     else Toast.makeText(context, "Error: $message", Toast.LENGTH_LONG).show()

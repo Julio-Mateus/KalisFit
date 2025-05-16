@@ -32,7 +32,7 @@ import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun KalisMainScreen(mainNavController: NavHostController) {
+fun KalisMainScreen(mainNavController: NavHostController) { // Este es el navController de KalisNavGraph
     val bottomNavController = rememberNavController()
     val items = listOf(
         BottomNavItem.Home,
@@ -64,42 +64,38 @@ fun KalisMainScreen(mainNavController: NavHostController) {
         }
     ) { innerPadding ->
         NavHost(
-            navController = bottomNavController, // Este sigue usando el controlador local para la barra inferior
+            navController = bottomNavController, // Este NavHost usa el bottomNavController
             startDestination = BottomNavItem.Home.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            // ¡CORRECCIÓN! Pasa el mainNavController a HomeScreen
-            composable(BottomNavItem.Home.route) { HomeScreen(navController = mainNavController) }
+            composable(BottomNavItem.Home.route) {
+                // PASA AMBOS NavControllers a HomeScreen
+                HomeScreen(
+                    mainNavController = mainNavController, // Para navegación de nivel superior
+                    bottomNavController = bottomNavController  // Para cambiar pestañas del BottomNav
+                )
+            }
 
             composable(BottomNavItem.Routines.route) {
-                // Llama aquí al composable que muestra la lista de todas las rutinas
-                // Pasa mainNavController si desde aquí navegas a la pantalla de rutina individual
-                RoutineExplorerScreen(navController = mainNavController)
+                RoutineExplorerScreen(navController = mainNavController) // mainNavController es correcto si RoutineExplorerScreen navega a "${Routes.ROUTINE}/{rutinaId}"
             }
 
             composable(BottomNavItem.Profile.route) {
                 ProfileScreen(
                     onLogout = {
                         FirebaseAuth.getInstance().signOut()
-                        // Usa el mainNavController para ir al Login de nivel superior
-                        mainNavController.navigate(Routes.LOGIN) {
+                        mainNavController.navigate(Routes.LOGIN) { // Usa mainNavController
                             popUpTo(0) { inclusive = true }
                         }
                     },
                     onEditProfile = {
-                        // Usa el mainNavController para ir a 'edit_profile' de nivel superior
-                        mainNavController.navigate("edit_profile")
+                        mainNavController.navigate("edit_profile") // Usa mainNavController (esta ruta SÍ existe en KalisNavGraph)
                     }
                 )
             }
 
-            // Si EditProfileScreen se mantiene en el NavHost principal (como parece en KalisNavGraph):
-            // No definas 'edit_profile' aquí. Ya está en el NavHost principal.
-            // Si EditProfileScreen estuviera en este NavHost anidado, usaría bottomNavController.
-
             composable(BottomNavItem.History.route) {
-                // HistorialScreen podría necesitar mainNavController si navega a la pantalla de Rutina
-                HistorialScreen(navController = mainNavController)
+                HistorialScreen(navController = mainNavController) // mainNavController es correcto si HistorialScreen navega a "${Routes.ROUTINE}/{rutinaId}"
             }
         }
     }

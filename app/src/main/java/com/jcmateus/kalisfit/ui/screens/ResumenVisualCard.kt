@@ -22,65 +22,129 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.ResumenSemanal
+import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
 
 @Composable
 fun ResumenVisualCard(resumen: ResumenSemanal) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier
-            .width(320.dp)
-            .height(480.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFFFDE68A), Color(0xFFF59E0B))
-                    )
-                )
-                .padding(24.dp)
-        ) {
-            Column(
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Text(
-                    text = "💪 Progreso semanal",
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp),
-                    color = Color.Black
-                )
+    // Para la captura de imagen, a veces MaterialTheme no se propaga automáticamente
+    // si capturas fuera de la jerarquía principal de la UI.
+    // Envolver con KalisFitTheme asegura que use el tema correcto.
+    KalisFitTheme(darkTheme = false) { // O el tema que desees para la tarjeta visual
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("🏋️ Rutinas: ${resumen.rutinas}", fontSize = 18.sp, color = Color.Black)
-                    Text("⏱ Tiempo: ${resumen.tiempoTotal} seg", fontSize = 18.sp, color = Color.Black)
-                    if (resumen.objetivosRecurrentes.isNotEmpty()) {
-                        Text("🎯 Objetivos más comunes:", fontSize = 16.sp, color = Color.Black)
-                        resumen.objetivosRecurrentes.forEach {
-                            Text("• $it", fontSize = 14.sp, color = Color.Black)
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+                .width(320.dp)
+                .height(480.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface // Usa surface para el fondo de la card
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primaryContainer, // Un tono más claro de tu primario
+                                MaterialTheme.colorScheme.primary         // Tu primario
+                            )
+                        )
+                    )
+                    .padding(24.dp)
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // --- SECCIÓN TÍTULO ---
+                    Text(
+                        text = "💪 Progreso Semanal 💪",
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer, // Color de texto sobre el degradado
+                        textAlign = TextAlign.Center
+                    )
+
+                    // --- SECCIÓN DETALLES DEL RESUMEN ---
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "🏋️ Rutinas: ${resumen.rutinas}",
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer // o .onSurface si el fondo del Box fuera surface
+                        )
+                        Text(
+                            "⏱ Tiempo Total: ${formatSecondsToMinutesSeconds(resumen.tiempoTotal)}",
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "🤸 Ejercicios Totales: ${resumen.totalEjercicios}",
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        if (resumen.ejerciciosPorTiempo > 0) {
+                            Text(
+                                "⏱️ Ejercicios por Tiempo: ${resumen.ejerciciosPorTiempo}",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) // Ligeramente menos énfasis
+                            )
+                        }
+                        if (resumen.ejerciciosPorRepeticiones > 0) {
+                            Text(
+                                "🔄 Ejercicios por Reps: ${resumen.ejerciciosPorRepeticiones}",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        if (resumen.objetivosRecurrentes.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "🎯 Objetivos Destacados:",
+                                fontSize = 17.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            resumen.objetivosRecurrentes.forEach { objetivo ->
+                                Text(
+                                    "• $objetivo",
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
-                }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_logo),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("KalisFit", fontSize = 18.sp, color = Color.Black)
-                    Text(
-                        "Transforma tu cuerpo. Cambia tu vida.",
-                        fontSize = 14.sp,
-                        color = Color.DarkGray
-                    )
+                    // --- SECCIÓN LOGO Y ESLOGAN ---
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_logo),
+                            contentDescription = "Logo KalisFit",
+                            modifier = Modifier.size(72.dp)
+                            // Considera tinting el logo si es un icono simple:
+                            // colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "KalisFit",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontSize = 20.sp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "Transforma tu cuerpo. Cambia tu vida.",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f), // Menos prominente
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }

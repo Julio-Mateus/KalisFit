@@ -1,75 +1,168 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.annotation.SuppressLint
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
-import androidx.navigation.NavController
 import androidx.navigation.NavHostController
+import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.navigation.Routes
+import kotlin.collections.isNotEmpty
+import kotlin.random.Random
 
+@SuppressLint("RememberReturnType")
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavHostController) {
-    val viewModel = remember { UserProfileViewModel() }
-    val userState = viewModel.user.collectAsState()
-    val user = userState.value
+fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHostController) {
+    val userViewModel: UserProfileViewModel = viewModel()
 
-    val tipDelDia = remember {
+    // Recolecta los estados del ViewModel
+    val user by userViewModel.user.collectAsState()
+    val isLoadingUser by userViewModel.isLoadingUser.collectAsState()
+    val userErrorMessage by userViewModel.userErrorMessage.collectAsState()
+
+    val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState()
+    val isLoadingRoutines by userViewModel.isLoadingRoutines.collectAsState()
+    val routinesError by userViewModel.routinesErrorMessage.collectAsState()
+
+    val tipsGenerales = remember {
         listOf(
-            "La constancia es tu mejor aliada.",
-            "Respira y enfoca tu energía.",
-            "Tu cuerpo puede más de lo que crees.",
-            "La calistenia es control y mente.",
-            "Hoy también es día de entrenar 💪"
-        ).random()
+            "Mantén una buena postura durante los ejercicios para prevenir lesiones y maximizar la efectividad.",
+            "La hidratación es clave. Bebe suficiente agua antes, durante y después de tus entrenamientos.",
+            "No olvides calentar antes de cada sesión y estirar al finalizar para mejorar la flexibilidad y reducir el dolor muscular.",
+            "Escucha a tu cuerpo. Si sientes dolor agudo, detente y descansa. No te exijas más de la cuenta, especialmente al principio.",
+            "La consistencia es más importante que la intensidad al inicio. Es mejor entrenar 3-4 veces por semana de forma moderada que una vez muy intenso y luego abandonar.",
+            "Una dieta equilibrada rica en proteínas, carbohidratos complejos y grasas saludables potenciará tus resultados.",
+            "El descanso es tan importante como el ejercicio. Asegúrate de dormir entre 7-9 horas para una buena recuperación muscular.",
+            "Varía tus rutinas cada 4-6 semanas para evitar el estancamiento y seguir progresando.",
+            "Establece metas realistas y medibles. Te ayudará a mantener la motivación a largo plazo.",
+            "¡Disfruta el proceso! Encuentra actividades que te gusten para que el ejercicio se convierta en un hábito placentero."
+        )
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadUserProfile()
+    val tipDelDia = remember(tipsGenerales) {
+        if (tipsGenerales.isNotEmpty()) {
+            tipsGenerales.random(Random(System.currentTimeMillis()))
+        } else {
+            "¡Recuerda mantenerte activo hoy!"
+        }
+    }
+
+    LaunchedEffect(key1 = Unit) {
+        userViewModel.loadUserProfile() // Esto iniciará la carga del perfil y, si tiene éxito, la carga de rutinas
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        user?.let {
+        // Estado 1: Cargando el perfil de usuario
+        if (isLoadingUser) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Cargando perfil...",
+                        modifier = Modifier.padding(top = 16.dp),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+        }
+        // Estado 2: Error al cargar el perfil de usuario
+        else if (user == null && userErrorMessage != null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        userErrorMessage ?: "No se pudo cargar el perfil del usuario.",
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { userViewModel.loadUserProfile() }, // Reintentar cargar perfil
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Reintentar", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+            }
+        }
+        // Estado 3: Perfil cargado con éxito, mostrar contenido principal
+        else if (user != null) {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.fillMaxSize(),
+                // Añade contentPadding para el espaciado horizontal y vertical si es necesario
+                contentPadding = PaddingValues(
+                    start = 16.dp, // Espacio a la izquierda de todos los items
+                    end = 16.dp,   // Espacio a la derecha de todos los items
+                    top = 16.dp,   // Espacio en la parte superior del primer item
+                    bottom = 16.dp // Espacio después del último item (antes de la Nav Bar)
+                )
             ) {
+                // --- SECCIÓN BIENVENIDA ---
                 item {
                     Text(
-                        text = "Hola, ${it.nombre} 👋",
-                        style = MaterialTheme.typography.displayLarge,
+                        text = "Hola, ${user!!.nombre} 👋", // user no será nulo aquí
+                        style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
-
-                    Text("Nivel: ${it.nivel}", style = MaterialTheme.typography.titleMedium)
-
-                    Text("Objetivos", style = MaterialTheme.typography.titleMedium)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        it.objetivos.forEach { objetivo ->
-                            AssistChip(onClick = {}, label = { Text(objetivo) })
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Nivel: ${user!!.nivel}", // user no será nulo aquí
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (user!!.objetivos.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Tus Objetivos:",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            for (objetivo in user!!.objetivos) { // Esta línea es la 149 según tu error
+                                Text(text = objetivo, modifier = Modifier.padding(bottom = 8.dp)) // Temporalmente reemplaza AssistChip
+                            }
                         }
                     }
                 }
 
+                // --- TIP DEL DÍA ---
                 item {
-                    Divider()
-                    Text("Tip del día", style = MaterialTheme.typography.titleMedium)
+                    SectionTitle("💡 Tip del Día")
                     Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Text(
                             tipDelDia,
@@ -79,76 +172,286 @@ fun HomeScreen(navController: NavHostController) {
                     }
                 }
 
+                // --- TIPS RECIENTES (Placeholder) ---
                 item {
-                    Divider()
-                    Text("📚 Tips recientes", style = MaterialTheme.typography.titleMedium)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(3) {
-                            Card(
+                    SectionTitle("📚 Tips Recientes")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(3) { index ->
+                            TipCard(
+                                title = "Consejo de Calistenia #${index + 1}",
+                                onClick = { /* TODO: Navegar al detalle del tip */ }
+                            )
+                        }
+                    }
+                }
+
+                // --- RUTINAS RECOMENDADAS ---
+                item {
+                    SectionTitle(
+                        "🏋️‍♂️ Tus Rutinas Recomendadas"
+                    )
+                    when {
+                        isLoadingRoutines -> {
+                            Box(
                                 modifier = Modifier
-                                    .width(220.dp)
-                                    .height(120.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(Modifier.padding(16.dp)) {
-                                    Text("Consejo #${it + 1}", style = MaterialTheme.typography.bodyMedium)
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+
+                        routinesError != null -> {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp)
+                            ) {
+                                Text(
+                                    routinesError ?: "Error al cargar rutinas.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+                                // Podrías añadir un botón de reintento para rutinas aquí si lo deseas
+                                // Button(onClick = { userViewModel.refreshRecommendations() }) { Text("Reintentar") }
+                            }
+                        }
+
+                        recommendedRoutines.isEmpty() && !isLoadingRoutines -> { // Asegurarse de no mostrar esto mientras carga
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp)
+                            ) {
+                                Text(
+                                    "No hay rutinas recomendadas disponibles en este momento.",
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { /* TODO: Navegar a una pantalla de exploración de rutinas, ej: mainNavController.navigate(Routes.EXPLORE_ROUTINES) */ },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text(
+                                        "Explorar Todas las Rutinas",
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        else -> { // recommendedRoutines no está vacía
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(items = recommendedRoutines, key = { it.id }) { rutina ->
+                                    RoutineCard(rutina = rutina, navController = mainNavController)
                                 }
                             }
                         }
                     }
                 }
 
-                item {
-                    Divider()
-                    Text("🏋️‍♂️ Rutinas recomendadas", style = MaterialTheme.typography.titleMedium)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(3) { index -> // Usamos el index para simular IDs temporales si no tienes rutinas cargadas
-                            Card(
-                                modifier = Modifier
-                                    .width(220.dp)
-                                    .height(120.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                onClick = {
-                                    // **Modificado para navegar con ID**
-                                    // Usa un ID de rutina real aquí. Esto es un ejemplo usando el índice.
-                                    val rutinaId = "rutina_id_${index + 1}"
-                                    navController.navigate("${Routes.ROUTINE}/$rutinaId")
-                                }
-                            ) {
-                                Box(Modifier.padding(16.dp)) {
-                                    Text("Rutina #${index + 1}", style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
-                    }
-                }
-
+                // --- BOTONES DE ACCIÓN ---
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
+                    val puedeEmpezarRecomendada =
+                        recommendedRoutines.isNotEmpty() && routinesError == null && !isLoadingRoutines
+
                     Button(
                         onClick = {
-                            // **Modificado para navegar con ID (ejemplo)**
-                            // Aquí deberías tener la lógica para seleccionar o generar un ID de rutina
-                            // para la rutina personalizada. Por ahora, usamos un ID de ejemplo.
-                            val rutinaPersonalizadaId = "rutina_personalizada_001"
-                            navController.navigate("${Routes.ROUTINE}/$rutinaPersonalizadaId")
+                            if (puedeEmpezarRecomendada) {
+                                val primeraRutina = recommendedRoutines.firstOrNull()
+                                primeraRutina?.id?.let { rutinaId ->
+                                    mainNavController.navigate("${Routes.ROUTINE}/$rutinaId")
+                                }
+                            } else {
+                                // mainNavController.navigate(Routes.EXPLORE_ROUTINES) // Ejemplo
+                                // TODO: Definir acción si no hay rutinas o navegar a explorar
+                            }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        enabled = user != null // Se habilita si el usuario está cargado
                     ) {
                         Icon(Icons.Default.FitnessCenter, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Empezar rutina personalizada")
+                        Text(if (puedeEmpezarRecomendada) "Empezar rutina recomendada" else "Explorar rutinas")
                     }
-                    TextButton(onClick = {
-                        // Asumo que "profile" es una ruta dentro del NavHost anidado en KalisMainScreen
-                        navController.navigate(Routes.PROFILE)
-                    }) {
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = { mainNavController.navigate(Routes.PROFILE) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        enabled = user != null // Se habilita si el usuario está cargado
+                    ) {
                         Text("Ver mi perfil")
                     }
+                    Spacer(modifier = Modifier.height(16.dp)) // Espacio al final
                 }
             }
-        } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        }
+        // Estado 4: Caso por defecto o estado inicial antes de que LaunchedEffect se active completamente
+        else if (!isLoadingUser && user == null && userErrorMessage == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // Puedes poner un CircularProgressIndicator aquí también si prefieres
+                // o dejarlo en blanco mientras espera la primera llamada de loadUserProfile
+                Text("Inicializando...", color = MaterialTheme.colorScheme.onBackground)
+            }
+        }
+    }
+}
+
+// --- COMPONENTES REUTILIZABLES SUGERIDOS ---
+
+@Composable
+fun SectionTitle(title: String, icon: ImageVector? = null, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.padding(vertical = 8.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, // <--- COLOR
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall, // Un estilo más prominente para títulos de sección
+            color = MaterialTheme.colorScheme.onBackground // <--- COLOR
+        )
+    }
+}
+
+@Composable
+fun TipCard(title: String, imageUrl: String? = null, onClick: () -> Unit) { // imageUrl es opcional
+    Card(
+        modifier = Modifier
+            .width(220.dp)
+            .height(150.dp), // Un poco más alto para imagen
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant, // <--- COLOR
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant // <--- COLOR
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            if (imageUrl != null) {
+                // AsyncImage(model = imageUrl, contentDescription = title, ...) // Usar Coil o Glide
+            } else {
+                // Placeholder si no hay imagen, o un icono grande
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .background(MaterialTheme.colorScheme.secondaryContainer), // <--- COLOR
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.MenuBook,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(12.dp),
+                maxLines = 2
+            )
+        }
+    }
+}
+
+
+@Composable
+fun RoutineCard(rutina: Rutina, navController: NavHostController) {
+    Card(
+        modifier = Modifier
+            .width(280.dp)
+            .height(180.dp), // Ajusta la altura si añades imagen
+        shape = RoundedCornerShape(16.dp),
+        onClick = {
+            // Navega usando el ID de la rutina.
+            // Asegúrate que tu pantalla de destino sepa cómo manejar este ID.
+            navController.navigate("${Routes.ROUTINE}/${rutina.id}")
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface, // o primaryContainer
+            contentColor = MaterialTheme.colorScheme.onSurface  // o onPrimaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary) // Borde para destacar
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column { // Columna para el contenido superior (nombre e imagen si la hay)
+                // Opcional: Mostrar imagen de la rutina si existe
+                /*
+                if (rutina.imagenUrl != null) {
+                    AsyncImage(
+                        model = rutina.imagenUrl,
+                        contentDescription = "Imagen de ${rutina.nombre}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp) // Ajusta según necesites
+                            .padding(bottom = 8.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                */
+                Text(
+                    rutina.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
+                )
+            }
+
+            Column { // Columna para los detalles inferiores
+                if (rutina.nivelRecomendado.isNotEmpty()) {
+                    Text(
+                        "Nivel: ${rutina.nivelRecomendado.joinToString()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                if (rutina.lugarEntrenamiento.isNotEmpty()) {
+                    Text(
+                        "Lugar: ${rutina.lugarEntrenamiento.joinToString()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                if (rutina.ejercicios.isNotEmpty()) {
+                    Text(
+                        "Ejercicios: ${rutina.ejercicios.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
         }
     }
 }
