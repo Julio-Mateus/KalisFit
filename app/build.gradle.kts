@@ -83,4 +83,7 @@ dependencies {
     implementation(libs.material.icons.extended)
     implementation("androidx.core:core-ktx:1.12.0")
     implementation(libs.compose.charts)
+
+    // Jetpack DataStore Preferences
+    implementation(libs.androidx.datastore.preferences)
 }

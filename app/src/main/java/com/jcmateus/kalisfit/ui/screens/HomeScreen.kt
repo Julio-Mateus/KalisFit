@@ -21,9 +21,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import androidx.navigation.NavHostController
 import com.jcmateus.kalisfit.model.Rutina
+import com.jcmateus.kalisfit.navigation.BottomNavItem
 import com.jcmateus.kalisfit.navigation.Routes
 import kotlin.collections.isNotEmpty
 import kotlin.random.Random
@@ -265,7 +267,7 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
                             if (puedeEmpezarRecomendada) {
                                 val primeraRutina = recommendedRoutines.firstOrNull()
                                 primeraRutina?.id?.let { rutinaId ->
-                                    mainNavController.navigate("${Routes.ROUTINE}/$rutinaId")
+                                    mainNavController.navigate("${Routes.ROUTINE_DETAIL}/$rutinaId")
                                 }
                             } else {
                                 // mainNavController.navigate(Routes.EXPLORE_ROUTINES) // Ejemplo
@@ -287,13 +289,22 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
                     Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedButton(
-                        onClick = { mainNavController.navigate(Routes.PROFILE) },
+                        onClick = {
+                            // CAMBIO AQUÍ: Usa bottomNavController y la ruta de BottomNavItem
+                            bottomNavController.navigate(BottomNavItem.Profile.route) {
+                                popUpTo(bottomNavController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.primary
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        enabled = user != null // Se habilita si el usuario está cargado
+                        enabled = user != null
                     ) {
                         Text("Ver mi perfil")
                     }
@@ -311,9 +322,6 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
         }
     }
 }
-
-// --- COMPONENTES REUTILIZABLES SUGERIDOS ---
-
 @Composable
 fun SectionTitle(title: String, icon: ImageVector? = null, modifier: Modifier = Modifier) {
     Row(
@@ -392,7 +400,7 @@ fun RoutineCard(rutina: Rutina, navController: NavHostController) {
         onClick = {
             // Navega usando el ID de la rutina.
             // Asegúrate que tu pantalla de destino sepa cómo manejar este ID.
-            navController.navigate("${Routes.ROUTINE}/${rutina.id}")
+            navController.navigate("${Routes.ROUTINE_DETAIL}/${rutina.id}")
         },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface, // o primaryContainer

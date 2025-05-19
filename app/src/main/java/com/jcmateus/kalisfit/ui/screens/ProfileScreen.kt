@@ -34,8 +34,6 @@ import com.jcmateus.kalisfit.R
 
 @Composable
 fun ProfileScreen(
-    onLogout: () -> Unit,
-    onEditProfile: () -> Unit
 ) {
     val viewModel = remember { UserProfileViewModel() }
     val userState = viewModel.user.collectAsState()
@@ -90,31 +88,7 @@ fun ProfileScreen(
                     ProfileInfoRow(label = "Entrenamiento en", value = it.lugarEntrenamiento.toString())
                     ProfileInfoRow(label = "Registrado el", value = it.fechaRegistro)
                 }
-
                 Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onEditProfile,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = "Editar perfil")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Editar perfil")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = {
-                        FirebaseAuth.getInstance().signOut()
-                        onLogout()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(Icons.Default.Logout, contentDescription = "Cerrar sesión")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Cerrar sesión")
-                }
             }
         } ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()

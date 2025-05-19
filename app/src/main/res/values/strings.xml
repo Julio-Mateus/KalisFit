@@ -1,4 +1,63 @@
 <resources>
     <string name="app_name">KalisFit</string>
     <string name="default_web_client_id">536221531880-lrpnggjnb1f5tkb1ckm87ifelqh4hh47.apps.googleusercontent.com</string>
+
+    <!-- Títulos para el TopAppBar basados en la pestaña del BottomNav -->
+    <string name="title_home">Inicio</string>
+    <string name="title_routines_explorer">Explorar Rutinas</string>
+    <string name="title_profile">Perfil</string>
+    <string name="title_history">Historial</string>
+
+    <!-- Descripciones de contenido para iconos y botones en TopAppBar -->
+    <string name="desc_edit_profile">Editar Perfil</string>
+    <string name="desc_options_menu">Más opciones</string>
+
+    <!-- Textos para los items del DropdownMenu en TopAppBar -->
+    <string name="menu_settings">Configuración</string>
+    <string name="menu_logout">Cerrar Sesión</string>
+    <!-- Opcional: si añades un explorador de Tips al menú -->
+    <!-- <string name="menu_tips_explorer">Explorar Consejos</string> -->
+
+    <!-- Etiquetas para los items del BottomNavigationBar (si no las obtienes de BottomNavItem.label directamente) -->
+    <!-- Ya los tienes en tu sealed class BottomNavItem, así que probablemente no necesites duplicarlos aquí -->
+    <!-- <string name="bottom_nav_home">Inicio</string> -->
+    <!-- <string name="bottom_nav_routines">Rutinas</string> -->
+    <!-- <string name="bottom_nav_profile">Perfil</string> -->
+    <!-- <string name="bottom_nav_history">Historial</string> -->
+
+    <!-- Otros strings que puedas necesitar en tus pantallas -->
+    <string name="edit_profile_title">Editar Mi Perfil</string>
+    <string name="settings_title">Ajustes de la Aplicación</string>
+    <string name="label_save_changes">Guardar Cambios</string>
+    <string name="label_username">Nombre de Usuario</string>
+    <string name="label_email">Correo Electrónico</string>
+    <!-- ... y cualquier otro texto específico de tu UI ... -->
+
+    <!-- ... tus otros strings ... -->
+    <string name="desc_navigate_back">Volver</string>
+
+    <string name="settings_section_general">General</string>
+    <string name="settings_enable_notifications">Activar notificaciones</string>
+    <string name="settings_app_theme">Tema de la aplicación</string>
+    <string name="settings_select_theme_dialog_title">Seleccionar tema</string>
+
+    <string name="settings_section_units">Unidades</string>
+    <string name="settings_weight_units">Unidades de peso</string>
+    <string name="settings_select_unit_dialog_title">Seleccionar unidad de peso</string>
+
+
+    <string name="settings_section_legal">Legal</string>
+    <string name="settings_privacy_policy">Política de Privacidad</string>
+    <string name="settings_terms_of_service">Términos de Servicio</string>
+
+    <string name="settings_section_about">Acerca de</string>
+    <string name="settings_app_version">Versión de la aplicación</string> <!-- Ya la tienes -->
+    <string name="title_more_options">Opciones Adicionales</string>
+
 </resources>
+
+
+
+
+
+
