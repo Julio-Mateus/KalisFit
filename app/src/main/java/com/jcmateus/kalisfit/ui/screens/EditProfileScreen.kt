@@ -21,12 +21,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,10 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
@@ -46,38 +51,71 @@ import com.google.firebase.storage.FirebaseStorage
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfile
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 @Composable
 fun EditProfileScreen(
-    navController: NavHostController, // Añade NavController
-    user: UserProfile // Mantén el UserProfile si quieres pasarlo desde ProfileScreen
+    navController: NavHostController,
+    viewModel: UserProfileViewModel = viewModel() // Inyectar/Obtener el ViewModel
 ) {
     val context = LocalContext.current
-    val firestore = FirebaseFirestore.getInstance()
-    val storage = FirebaseStorage.getInstance()
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: run {
-        // Manejar caso sin usuario logueado, quizás navegando a login
-        navController.navigate(Routes.LOGIN) {
-            popUpTo(0) { inclusive = true }
-        }
-        return // Salir de la composición si no hay usuario
-    }
 
-    var nombre by remember { mutableStateOf(user.nombre) }
-    var peso by remember { mutableStateOf(user.peso.takeIf { it > 0f }?.toString() ?: "") }
-    var altura by remember { mutableStateOf(user.altura.takeIf { it > 0f }?.toString() ?: "") }
-    var edad by remember { mutableStateOf(user.edad.takeIf { it > 0 }?.toString() ?: "") }
-    var sexo by remember { mutableStateOf(user.sexo) }
-    var frecuencia by remember { mutableStateOf(user.frecuenciaSemanal.toString()) }
-    var lugar by remember { mutableStateOf(user.lugarEntrenamiento.firstOrNull() ?: "") }
-    var fotoUrl by remember { mutableStateOf(user.fotoUrl) }
-
-    val sexos = listOf("Masculino", "Femenino", "Otro")
-    val lugares = listOf("Casa", "Gimnasio", "Exterior")
+    // Observar los ESTADOS EDITABLES del ViewModel
+    val nombre by viewModel.editableNombre.collectAsState() // Antes: viewModel.nombre
+    val peso by viewModel.editablePeso.collectAsState()     // Antes: viewModel.peso
+    val altura by viewModel.editableAltura.collectAsState() // Antes: viewModel.altura
+    val edad by viewModel.editableEdad.collectAsState()     // Antes: viewModel.edad
+    val sexo by viewModel.editableSexo.collectAsState()     // Antes: viewModel.sexo
+    val frecuencia by viewModel.editableFrecuenciaSemanal.collectAsState() // Antes: viewModel.frecuenciaSemanal
+    val lugar by viewModel.editableLugarEntrenamiento.collectAsState()
+    val userProfile by viewModel.user.collectAsState() // Observa el UserProfile completo
+    val fotoUrlActualDelPerfil = userProfile?.fotoUrl
 
     var newImageUri by remember { mutableStateOf<Uri?>(null) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
-        newImageUri = it
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        newImageUri = uri
+        // Opcional: podrías tener viewModel.setPreviewImageUri(uri) si quieres lógica compleja de previsualización
+    }
+
+    val updateState by viewModel.updateState.collectAsState()
+    var isLoading by remember { mutableStateOf(false) }
+
+
+    // Ya no necesitas cargar el perfil explícitamente aquí si el ViewModel lo hace en init
+    // o si tienes un método específico que llamas, pero `loadUserProfile` en init es común.
+    // LaunchedEffect(Unit) {
+    // viewModel.loadUserProfile() // Asegúrate que esto se llama si no está en init o si necesitas recargar
+    // }
+
+
+    LaunchedEffect(updateState) {
+        isLoading = updateState is UserProfileViewModel.UpdateProfileState.Loading
+        when (val state = updateState) { // Renombrar para evitar conflicto con la variable externa
+            is UserProfileViewModel.UpdateProfileState.Success -> {
+                Toast.makeText(context, "Perfil actualizado", Toast.LENGTH_SHORT).show()
+                navController.popBackStack()
+                viewModel.resetUpdateState()
+            }
+            is UserProfileViewModel.UpdateProfileState.Error -> {
+                Toast.makeText(context, "Error: ${state.message}", Toast.LENGTH_LONG).show()
+                viewModel.resetUpdateState()
+            }
+            UserProfileViewModel.UpdateProfileState.Idle -> { /* No hacer nada */ }
+            UserProfileViewModel.UpdateProfileState.Loading -> { /* isLoading se encarga */ }
+        }
+    }
+
+    // Comprobación de si el usuario está logueado
+    if (!viewModel.isUserLoggedIn()) {
+        // Si el usuario no está logueado, navega a Login.
+        // Esto es una forma simple; una app más compleja podría tener un flujo de autenticación más robusto
+        // gestionado a un nivel superior o por el propio ViewModel emitiendo un evento de navegación.
+        LaunchedEffect(Unit) {
+            navController.navigate(Routes.LOGIN) {
+                popUpTo(0) { inclusive = true } // Limpiar toda la pila y ir a Login
+            }
+        }
+        return // No renderizar el resto de la UI si no hay usuario
     }
 
     Column(
@@ -85,102 +123,79 @@ fun EditProfileScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text("Editar perfil", style = MaterialTheme.typography.headlineLarge)
-        // Imagen de perfil
+
         Box(contentAlignment = Alignment.Center) {
-            val painter = rememberAsyncImagePainter(
-                model = newImageUri ?: fotoUrl.ifBlank { R.drawable.ic_default_avatar },
-                placeholder = painterResource(R.drawable.ic_default_avatar)
-            )
+            val urlDelPerfil = fotoUrlActualDelPerfil // Variable local estable
+            val imageToDisplay = newImageUri ?: if (urlDelPerfil?.isNotBlank() == true) urlDelPerfil else R.drawable.ic_default_avatar
             Image(
-                painter = painter,
+                painter = rememberAsyncImagePainter(
+                    model = imageToDisplay,
+                    placeholder = painterResource(R.drawable.ic_default_avatar),
+                    error = painterResource(R.drawable.ic_default_avatar)
+                ),
                 contentDescription = "Foto de perfil",
                 modifier = Modifier
                     .size(120.dp)
                     .clip(CircleShape)
-                    .clickable { launcher.launch("image/*") }
+                    .clickable { launcher.launch("image/*") },
+                contentScale = ContentScale.Crop
             )
         }
         Text("Toca para cambiar foto", style = MaterialTheme.typography.bodySmall)
-        // ➤ Datos personales
-        Text("Datos personales", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = edad, onValueChange = { edad = it }, label = { Text("Edad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = sexo, onValueChange = { sexo = it }, label = { Text("Sexo") }, modifier = Modifier.fillMaxWidth())
 
-        // ➤ Datos físicos
-        Text("Datos físicos", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(value = peso, onValueChange = { peso = it }, label = { Text("Peso (kg)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = altura, onValueChange = { altura = it }, label = { Text("Altura (cm)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = nombre, onValueChange = { viewModel.onNombreChange(it) }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = edad, onValueChange = { viewModel.onEdadChange(it) }, label = { Text("Edad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
-        // ➤ Datos de entrenamiento
-        Text("Entrenamiento", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(value = frecuencia, onValueChange = { frecuencia = it }, label = { Text("Frecuencia semanal (días)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+        // Para 'sexo', considera un DropdownMenu o similar para mejor UX
+        OutlinedTextField(value = sexo, onValueChange = { viewModel.onSexoChange(it) }, label = { Text("Sexo") }, modifier = Modifier.fillMaxWidth())
 
-        // Radios para lugar de entrenamiento
-        Text("Lugar de entrenamiento", style = MaterialTheme.typography.bodyLarge)
-        lugares.forEach {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = lugar == it, onClick = { lugar = it })
-                Text(it)
+        OutlinedTextField(value = peso, onValueChange = { viewModel.onPesoChange(it) }, label = { Text("Peso (kg)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = altura, onValueChange = { viewModel.onAlturaChange(it) }, label = { Text("Altura (cm)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = frecuencia, onValueChange = { viewModel.onFrecuenciaChange(it) }, label = { Text("Frecuencia semanal (días)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+
+        Text("Lugar de entrenamiento", style = MaterialTheme.typography.titleMedium)
+        val lugaresPosibles = listOf("Casa", "Gimnasio", "Exterior") // Podría venir del ViewModel
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            lugaresPosibles.forEach { lugarOpcion ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { viewModel.onLugarEntrenamientoChange(lugarOpcion) }
+                ) {
+                    RadioButton(
+                        selected = lugar == lugarOpcion,
+                        onClick = { viewModel.onLugarEntrenamientoChange(lugarOpcion) }
+                    )
+                    Text(lugarOpcion, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Acciones
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = {
-                // Usa el navController para navegar de vuelta al cancelar
-                navController.popBackStack()
-            }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier.weight(1f),
+                enabled = !isLoading
+            ) {
                 Text("Cancelar")
             }
-
             Button(
                 onClick = {
-                    fun actualizarFirestore(finalUrl: String = fotoUrl) {
-                        val actualizacion = mutableMapOf<String, Any>(
-                            "nombre" to nombre,
-                            "peso" to (peso.toFloatOrNull() ?: 0f),
-                            "altura" to (altura.toFloatOrNull() ?: 0f),
-                            "edad" to (edad.toIntOrNull() ?: 0),
-                            "sexo" to sexo,
-                            "frecuenciaSemanal" to (frecuencia.toIntOrNull() ?: 3),
-                            "lugarEntrenamiento" to lugar,
-                            "fotoUrl" to finalUrl
-                        )
-
-                        firestore.collection("users").document(uid)
-                            .update(actualizacion)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Perfil actualizado", Toast.LENGTH_SHORT).show()
-                                navController.popBackStack()
-                            }
-                            .addOnFailureListener {
-                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
-                            }
-                    }
-
-                    if (newImageUri != null) {
-                        val ref = storage.reference.child("fotos_perfil/$uid.jpg")
-                        ref.putFile(newImageUri!!).continueWithTask {
-                            if (!it.isSuccessful) throw it.exception!!
-                            ref.downloadUrl
-                        }.addOnSuccessListener { uri ->
-                            actualizarFirestore(uri.toString())
-                        }.addOnFailureListener {
-                            Toast.makeText(context, "Error al subir imagen", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        actualizarFirestore()
-                    }
+                    viewModel.saveUserProfile(newImageUri)
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = !isLoading
             ) {
-                Text("Guardar")
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Guardar")
+                }
             }
         }
     }

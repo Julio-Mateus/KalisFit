@@ -290,21 +290,15 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
 
                     OutlinedButton(
                         onClick = {
-                            // CAMBIO AQUÍ: Usa bottomNavController y la ruta de BottomNavItem
-                            bottomNavController.navigate(BottomNavItem.Profile.route) {
-                                popUpTo(bottomNavController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            // NAVEGACIÓN CORRECTA AL PERFIL
+                            mainNavController.navigate(Routes.PROFILE) // Asegúrate que Routes.PROFILE esté definida
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.primary
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        enabled = user != null
+                        enabled = user != null // O currentUser != null, dependiendo de tu variable
                     ) {
                         Text("Ver mi perfil")
                     }

@@ -53,7 +53,51 @@
     <string name="settings_section_about">Acerca de</string>
     <string name="settings_app_version">Versión de la aplicación</string> <!-- Ya la tienes -->
     <string name="title_more_options">Opciones Adicionales</string>
+    <string name="desc_open_drawer">Abrir menú de navegación</string>
+    <!-- Strings para los placeholders del drawer (opcional, pero recomendado) -->
+    <string name="drawer_title_explore_type">Explorar por Tipo</string>
+    <string name="drawer_item_gym">Gimnasio</string>
+    <string name="drawer_item_calisthenics">Calistenia</string>
+    <string name="drawer_item_stoicism">Estoicismo</string>
 
+    <string name="stoicism_title_main">Principios del Estoicismo</string>
+
+    <string name="stoicism_section_introduction">Introducción</string>
+    <string name="stoicism_introduction_text">El estoicismo es una escuela de filosofía helenística fundada por Zenón de Citio en Atenas a principios del siglo III a.C. Es una filosofía de ética personal basada en su sistema lógico y sus puntos de vista sobre el mundo natural. Según sus enseñanzas, como seres sociales, el camino hacia la eudaimonia (felicidad o florecimiento) para los humanos se encuentra en aceptar el momento tal como se presenta, al no permitirnos ser controlados por el deseo de placer o el miedo al dolor, al usar nuestra mente para comprender el mundo que nos rodea y hacer nuestra parte en el plan de la naturaleza, y al trabajar juntos y tratar a los demás de manera justa y equitativa.</string>
+
+    <string name="stoicism_section_control_title">La Dicotomía del Control</string>
+    <string name="stoicism_section_control_text">Uno de los principios fundamentales del estoicismo es la distinción entre lo que podemos controlar y lo que no. Debemos enfocar nuestra energía en nuestras propias acciones, pensamientos y respuestas, y aceptar con serenidad aquello que escapa a nuestro control directo, como los eventos externos, las acciones de otros o nuestro pasado.</string>
+    <string name="stoicism_quote_epictetus_control">"Algunas cosas están bajo nuestro control y otras no. Las cosas bajo nuestro control son la opinión, la búsqueda, el deseo, la aversión y, en una palabra, cualesquiera que sean nuestras propias acciones. Las cosas que no están bajo nuestro control son el cuerpo, la propiedad, la reputación, el mando y, en una palabra, cualesquiera que no sean nuestras propias acciones."</string>
+
+    <string name="stoicism_section_nature_title">Vivir conforme a la Naturaleza</string>
+    <string name="stoicism_section_nature_text">Para los estoicos, "vivir conforme a la naturaleza" significa vivir de acuerdo con la razón, ya que la razón es lo que nos distingue y nos conecta con el logos divino que gobierna el universo. Implica entender nuestro lugar en el cosmos, cumplir con nuestros deberes sociales y actuar con virtud.</string>
+
+    <string name="stoicism_section_exercise_title">Práctica Estoica</string>
+    <string name="stoicism_exercise_negative_visualization_title">Visualización Negativa (Premeditatio Malorum)</string>
+    <string name="stoicism_exercise_negative_visualization_desc">Dedica unos momentos a contemplar los posibles reveses o pérdidas que podrías enfrentar: la pérdida de posesiones, problemas de salud, el fallecimiento de seres queridos. El objetivo no es ser pesimista, sino prepararse mentalmente para la adversidad, apreciar lo que se tiene y reducir el impacto del sufrimiento cuando las cosas no salen como se espera.</string>
+    <string name="drawer_stoicism">Estoicismo</string>
+
+    <string name="running_location_permission_rationale_title">Permiso de Ubicación Necesario</string>
+    <string name="running_location_permission_rationale_message">Para registrar tu actividad y mostrar el mapa, KalisFit necesita acceder a tu ubicación. Por favor, concede el permiso.</string>
+    <string name="grant_permission_button">Conceder Permiso</string>
+    <string name="running_location_needed_for_map">Se necesita permiso de ubicación para mostrar el mapa.</string>
+    <string name="running_waiting_for_location">Esperando señal de GPS...</string>
+
+    <string name="running_metric_time">Tiempo</string>
+    <string name="running_metric_distance">Distancia</string>
+    <string name="running_metric_pace">Ritmo</string>
+    <string name="running_metric_avg_pace">Ritmo Prom.</string>
+    <string name="running_metric_calories">Calorías</string>
+
+    <string name="running_action_start">Iniciar</string>
+    <string name="running_action_pause">Pausar</string>
+    <string name="running_action_resume">Reanudar</string>
+    <string name="running_action_stop">Detener</string>
+
+    <string name="running_summary_title">Resumen de Actividad</string>
+    <string name="done">Hecho</string>
+
+    <string name="title_running">Running</string> <!-- Para la TopAppBar si es necesario -->
 </resources>
 
 

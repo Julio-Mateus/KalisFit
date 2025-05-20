@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.Timestamp
 
 
 
@@ -38,7 +39,20 @@ class AuthViewModel(
                         "email" to email,
                         "nivel" to nivel,
                         "objetivos" to objetivos,
-                        "fechaRegistro" to System.currentTimeMillis()
+                        "fechaRegistro" to Timestamp.now() // <--- CAMBIO AQUÍ
+                        // Puedes añadir otros campos de UserProfile con valores iniciales/por defecto aquí
+                        // si tu data class UserProfile los tiene y quieres que se creen al registrarse.
+                        // Por ejemplo:
+                        // "peso" to 0f,
+                        // "altura" to 0f,
+                        // "edad" to 0,
+                        // "sexo" to "",
+                        // "frecuenciaSemanal" to 3, // O un valor por defecto
+                        // "lugarEntrenamiento" to emptyList<String>(),
+                        // "insignias" to emptyList<String>(),
+                        // "rutinasCompletadas" to 0,
+                        // "progresoActual" to "",
+                        // "fotoUrl" to ""
                     )
                     firestore.collection("users").document(uid).set(userData)
                         .addOnSuccessListener { onResult(true, null) }
@@ -50,21 +64,40 @@ class AuthViewModel(
     }
 
     fun saveUserIfNew(nombre: String, email: String, onFinish: () -> Unit) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            Log.w("AuthViewModel", "saveUserIfNew: UID es nulo, no se puede guardar.")
+            onFinish() // Llama a onFinish para no bloquear el flujo, pero registra el problema.
+            return
+        }
         val docRef = FirebaseFirestore.getInstance().collection("users").document(uid)
 
-        docRef.get().addOnSuccessListener {
-            if (!it.exists()) {
+        docRef.get().addOnSuccessListener { documentSnapshot -> // Cambiado 'it' por 'documentSnapshot' para claridad
+            if (!documentSnapshot.exists()) {
                 val userData = mapOf(
                     "uid" to uid,
                     "nombre" to nombre,
                     "email" to email,
-                    "fechaRegistro" to System.currentTimeMillis()
+                    "fechaRegistro" to Timestamp.now() // <--- CAMBIO AQUÍ
+                    // Similar a register, considera añadir otros campos de UserProfile con valores iniciales
+                    // si esta función puede ser la primera vez que se crea el perfil.
                 )
-                docRef.set(userData).addOnSuccessListener { onFinish() }
+                docRef.set(userData)
+                    .addOnSuccessListener {
+                        Log.d("AuthViewModel", "Nuevo usuario guardado desde saveUserIfNew.")
+                        onFinish()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("AuthViewModel", "Error al guardar nuevo usuario en saveUserIfNew: ${e.message}", e)
+                        onFinish() // Llama a onFinish incluso si hay error para desbloquear
+                    }
             } else {
+                Log.d("AuthViewModel", "El usuario ya existe, no se guardó desde saveUserIfNew.")
                 onFinish()
             }
+        }.addOnFailureListener { e ->
+            Log.e("AuthViewModel", "Error al obtener documento en saveUserIfNew: ${e.message}", e)
+            onFinish() // Llama a onFinish en caso de error de lectura
         }
     }
 

@@ -25,6 +25,7 @@ import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
+import com.jcmateus.kalisfit.ui.screens.StoicismContentScreen
 import com.jcmateus.kalisfit.ui.screens.TipsScreen
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
@@ -39,7 +40,7 @@ fun KalisNavGraph(navController: NavHostController) {
         composable(Routes.SPLASH) {
             SplashScreen(
                 onUserLoggedIn = {
-                    navController.navigate(Routes.MAIN_CONTENT) { // Navega a la pantalla principal
+                    navController.navigate(Routes.MAIN_CONTENT) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
@@ -53,7 +54,7 @@ fun KalisNavGraph(navController: NavHostController) {
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(Routes.MAIN_CONTENT) { // Navega a la pantalla principal
+                    navController.navigate(Routes.MAIN_CONTENT) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -74,7 +75,7 @@ fun KalisNavGraph(navController: NavHostController) {
         }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(onFinish = {
-                navController.navigate(Routes.MAIN_CONTENT) { // Navega a la pantalla principal
+                navController.navigate(Routes.MAIN_CONTENT) {
                     popUpTo(Routes.ONBOARDING) { inclusive = true }
                 }
             })
@@ -82,72 +83,74 @@ fun KalisNavGraph(navController: NavHostController) {
         composable(Routes.ONBOARDING_SUCCESS) {
             OnboardingSuccessScreen(
                 onContinue = {
-                    navController.navigate(Routes.MAIN_CONTENT) { // Navega a la pantalla principal
-                        // Limpia la pila hasta LOGIN para que al presionar "atrás"
-                        // desde MAIN_CONTENT no vuelva al OnboardingSuccess
+                    navController.navigate(Routes.MAIN_CONTENT) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 })
         }
 
-        // --- Contenedor Principal con BottomNav y TopAppBar ---
-        // Esta es la ruta que carga KalisMainScreen
+        // --- Contenedor Principal con Drawer, BottomNav y TopAppBar ---
         composable(Routes.MAIN_CONTENT) {
             KalisMainScreen(mainNavController = navController)
         }
 
         // --- Rutas de Nivel Superior (Sin BottomNav) ---
-        // Estas son accesibles desde pantallas dentro de MAIN_CONTENT (usando el mainNavController)
-        // o desde el TopAppBar.
+        // Accesibles desde el Drawer, TopAppBar, o desde otras pantallas usando mainNavController.
+
+        // NUEVA RUTA PARA LA PANTALLA DE PERFIL COMPLETA
+        composable(Routes.PROFILE) {
+            ProfileScreen(navController = navController) // Asumiendo que ProfileScreen no necesita directamente el navController para navegación interna compleja
+            // o que usa un ViewModel para manejar acciones que podrían navegar.
+            // Si ProfileScreen necesita navegar a otros destinos del mainNavController, pásaselo:
+            // ProfileScreen(navController = navController)
+        }
 
         composable(
-            route = Routes.ROUTINE_DETAIL, // Usar la constante definida
+            route = Routes.ROUTINE_DETAIL,
             arguments = listOf(navArgument("rutinaId") { type = NavType.StringType })
         ) { backStackEntry ->
             val rutinaId = backStackEntry.arguments?.getString("rutinaId")
-            // Valida que rutinaId no sea null si es obligatorio
             if (rutinaId != null) {
                 RoutineScreen(navController = navController, rutinaId = rutinaId)
             } else {
-                // Manejar el caso de rutinaId nulo, quizás volviendo atrás o mostrando un error
-                // navController.popBackStack()
-                // Text("Error: ID de rutina no encontrado")
+                // Manejo de error o volver atrás
             }
         }
         composable(Routes.ROUTINE_SUCCESS) {
             RoutineSuccessScreen(onFinish = {
                 navController.navigate(Routes.MAIN_CONTENT) {
-                    // Limpia hasta MAIN_CONTENT para un reinicio limpio en la pantalla principal
                     popUpTo(Routes.MAIN_CONTENT) { inclusive = true }
                 }
             })
         }
 
         composable(Routes.EDIT_PROFILE) {
-            // EditProfileScreen debería obtener los datos del usuario a través de un ViewModel
-            val userProfileViewModel: UserProfileViewModel =
-                viewModel()
-            EditProfileScreen(navController = navController, user = UserProfile())
+            // EditProfileScreen puede obtener el UserProfileViewModel internamente
+            // o podrías instanciarlo aquí si es compartido de forma específica
+            EditProfileScreen(navController = navController) // Asumiendo que toma el UserProfile de un ViewModel interno
+            // o que ya no pasas 'user = UserProfile()' directamente.
+            // Si aún necesitas pasar 'user', asegúrate que UserProfile() sea el valor correcto
+            // o que lo obtengas de un ViewModel aquí.
         }
 
         composable(Routes.SETTINGS) {
             SettingsScreen(navController = navController)
         }
-
-        // --- Pantalla de Tips ---
-        // Evalúa el propósito de esta pantalla:
-        // 1. ¿Es una pantalla para EXPLORAR una lista de tips? -> Usa Routes.TIPS_EXPLORER y crea TipsExplorerScreen.
-        // 2. ¿Es una pantalla que muestra UN tip (ej. tip del día)? -> Podría no necesitar ser una ruta de nivel superior.
-        //    Podría ser un diálogo, o contenido integrado en HomeScreen.
-        // 3. Si es una pantalla simple a la que necesitas navegar directamente:
-        composable(Routes.TIPS) { // Si mantienes esta ruta
-            // SimpleTipsScreen(navController = navController) // O la pantalla que corresponda
-            // Por ejemplo, si TipsScreen es solo una pantalla simple:
-            TipsScreen() // Si no necesita navController para más navegación.
+        composable(Routes.STOICISM_CONTENT) {
+            StoicismContentScreen(mainNavController = navController) // Pasas el navController del KalisNavGraph
         }
 
-        // NOTA: Las rutas como Routes.HOME y Routes.PROFILE (las antiguas) ya no se definen aquí
+        // --- Pantalla de Tips (si aún la usas) ---
+        if (Routes.TIPS.isNotBlank()) { // Para evitar error si comentas la ruta TIPS en Routes.kt
+            composable(Routes.TIPS) {
+                TipsScreen() // Asumiendo que no necesita navController
+            }
+        }
+
+
+        // NOTA: Las rutas para las PESTAÑAS (HOME_TAB, ROUTINES_TAB, etc.) NO se definen aquí
         // porque son manejadas por el NavHost INTERNO dentro de KalisMainScreen.
-        // El KalisNavGraph solo necesita saber cómo llegar a Routes.MAIN_CONTENT.
+        // Este KalisNavGraph (con mainNavController) solo necesita saber cómo llegar a Routes.MAIN_CONTENT,
+        // y a las pantallas de nivel superior como Routes.PROFILE, Routes.SETTINGS, etc.
     }
 }
