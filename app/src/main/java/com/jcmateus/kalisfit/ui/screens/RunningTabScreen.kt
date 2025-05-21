@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -28,80 +29,63 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import com.google.type.LatLng
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.jcmateus.kalisfit.R
-import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import java.util.jar.Manifest
+import com.jcmateus.kalisfit.viewmodel.ActivityState
+import com.jcmateus.kalisfit.viewmodel.RunningViewModel
 
-// Estados de la actividad
-enum class ActivityState {
-    IDLE,       // Esperando para iniciar
-    RUNNING,    // Actividad en curso
-    PAUSED,     // Actividad pausada
-    FINISHED    // Actividad finalizada (mostrando resumen)
-}
+
 
 @Composable
 fun RunningTabScreen(
-    // navController: NavHostController, // Para navegar si es necesario (ej. a detalles del historial)
-    // runningViewModel: RunningViewModel = viewModel() // ViewModel para la lógica
+    runningViewModel: RunningViewModel = viewModel() // Inyectar el ViewModel
 ) {
-    val context = LocalContext.current
-    var activityState by remember { mutableStateOf(ActivityState.IDLE) }
+    val context = LocalContext.current // Sigue siendo útil para algunas cosas como strings
+
+    // Obtener estados y datos del ViewModel
+    val activityState by runningViewModel.activityState.collectAsState()
+    val elapsedTimeSeconds by runningViewModel.elapsedTimeSeconds.collectAsState()
+    val distanceKm by runningViewModel.distanceKm.collectAsState()
+    val currentPace by runningViewModel.currentPace.collectAsState()
+    val caloriesBurned by runningViewModel.caloriesBurned.collectAsState()
+    val routePoints by runningViewModel.routePoints.collectAsState()
+    val currentLocation by runningViewModel.currentLocation.collectAsState() // Para centrar el mapa
+    val hasLocationPermission by runningViewModel.hasLocationPermission.collectAsState()
+
 
     // --- Lógica de Permisos de Ubicación ---
-    var hasLocationPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
-            hasLocationPermission = isGranted
+            runningViewModel.updateLocationPermission(isGranted)
             if (isGranted) {
-                // Permiso concedido, podrías iniciar la obtención de ubicación si es necesario
+                // El ViewModel manejará el inicio de la obtención de ubicación si es necesario
             } else {
-                // Permiso denegado, mostrar mensaje al usuario
+                // Permiso denegado, podrías mostrar un Snackbar o mensaje
+                // Por ahora, el PermissionRationale se mostrará si no hay permiso y está IDLE
             }
         }
     )
 
-    // --- Datos de la Actividad (Placeholder - vendrán del ViewModel) ---
-    var elapsedTimeSeconds by remember { mutableStateOf(0L) }
-    val distanceKm by remember { mutableStateOf(0.0) } // Placeholder
-    val currentPace by remember { mutableStateOf("0:00 /km") } // Placeholder
-    val caloriesBurned by remember { mutableStateOf(0) } // Placeholder
-    val routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) } // Puntos para el polyline
-
-    // --- Simulación de Cronómetro (si está corriendo) ---
-    LaunchedEffect(activityState) {
-        if (activityState == ActivityState.RUNNING) {
-            while (isActive) {
-                delay(1000)
-                elapsedTimeSeconds++
-            }
-        }
-    }
-
     // --- Solicitar Permiso al inicio si no se tiene ---
+    // Este LaunchedEffect podría ser redundante si el ViewModel ya chequea y la UI reacciona
+    // Pero es bueno para el primer lanzamiento.
     LaunchedEffect(Unit) {
         if (!hasLocationPermission) {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -109,8 +93,7 @@ fun RunningTabScreen(
     }
 
     Scaffold(
-        // Puedes tener un TopAppBar aquí si esta pestaña necesita uno diferente al principal
-        // o si el título debe ser dinámico (ej. "Corriendo...")
+        // ... (TopAppBar si lo necesitas)
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -127,10 +110,10 @@ fun RunningTabScreen(
                 ActivitySummary(
                     distanceKm = distanceKm,
                     elapsedTimeSeconds = elapsedTimeSeconds,
-                    avgPace = currentPace, // Debería ser ritmo promedio
+                    avgPace = currentPace, // Al final, currentPace será el promedio
                     caloriesBurned = caloriesBurned,
                     routePoints = routePoints,
-                    onDone = { activityState = ActivityState.IDLE }
+                    onDone = { runningViewModel.onSummaryDone() }
                 )
             } else {
                 // Vista principal: Mapa y Controles
@@ -138,7 +121,7 @@ fun RunningTabScreen(
                     MapAndMetricsSection(
                         modifier = Modifier.weight(1f),
                         routePoints = routePoints,
-                        currentLocation = routePoints.lastOrNull() // O una ubicación más precisa del GPS
+                        currentLocation = currentLocation // Usar la ubicación del ViewModel
                     )
                 } else {
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -161,26 +144,14 @@ fun RunningTabScreen(
                     activityState = activityState,
                     onStart = {
                         if (hasLocationPermission) {
-                            activityState = ActivityState.RUNNING
-                            elapsedTimeSeconds = 0 // Resetear
-                            // TODO: Iniciar servicio de seguimiento de ubicación en ViewModel
+                            runningViewModel.onStartClicked()
                         } else {
-                            // Solicitar permiso de nuevo o mostrar mensaje
                             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         }
                     },
-                    onPause = {
-                        activityState = ActivityState.PAUSED
-                        // TODO: Pausar servicio en ViewModel
-                    },
-                    onResume = {
-                        activityState = ActivityState.RUNNING
-                        // TODO: Reanudar servicio en ViewModel
-                    },
-                    onStop = {
-                        activityState = ActivityState.FINISHED
-                        // TODO: Detener servicio en ViewModel y guardar datos
-                    }
+                    onPause = { runningViewModel.onPauseClicked() },
+                    onResume = { runningViewModel.onResumeClicked() },
+                    onStop = { runningViewModel.onStopClicked() }
                 )
             }
         }
@@ -215,16 +186,13 @@ fun PermissionRationale(onRequestPermission: () -> Unit) {
 @Composable
 fun MapAndMetricsSection(
     modifier: Modifier = Modifier,
-    routePoints: List<LatLng>,
-    currentLocation: LatLng?
+    routePoints: List<LatLng>, // De com.google.android.gms.maps.model.LatLng
+    currentLocation: LatLng?  // De com.google.android.gms.maps.model.LatLng
 ) {
     // --- Configuración del Mapa ---
-    // Necesitarás añadir la dependencia de Google Maps para Compose:
-    // implementation "com.google.maps.android:maps-compose:X.Y.Z" (revisa la última versión)
-    // Y configurar tu API Key de Google Maps en el AndroidManifest.xml
     val defaultCameraPosition = LatLng(currentLocation?.latitude ?: 40.7128, currentLocation?.longitude ?: -74.0060) // NY como fallback
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(defaultCameraPosition, 15f)
+    val cameraPositionState = rememberCameraPositionState { // De com.google.maps.android.compose
+        position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(defaultCameraPosition, 15f)
     }
 
     // Actualizar cámara cuando la ubicación actual cambia
@@ -237,30 +205,38 @@ fun MapAndMetricsSection(
         }
     }
 
-
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
         if (currentLocation != null || routePoints.isNotEmpty()) {
-            com.google.android.gms.maps.GoogleMap(
+            // Se usa GoogleMap de com.google.maps.android.compose (gracias al import)
+            GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
-                uiSettings = MapUiSettings(
-                    zoomControlsEnabled = false, // Puedes habilitarlos si quieres
+                uiSettings = MapUiSettings( // De com.google.maps.android.compose
+                    zoomControlsEnabled = false,
                     myLocationButtonEnabled = true // Permite al usuario centrar en su ubicación
                 ),
-                properties = MapProperties(
+                properties = MapProperties( // De com.google.maps.android.compose
                     isMyLocationEnabled = true, // Muestra el punto azul de ubicación actual
-                    mapType = MapType.NORMAL,
+                    mapType = MapType.NORMAL,   // De com.google.maps.android.compose
                 )
-            ) {
+            ) { // Contenido @Composable del GoogleMap
                 if (routePoints.size >= 2) {
+                    // Se usa Polyline de com.google.maps.android.compose (gracias al import)
                     Polyline(
                         points = routePoints,
                         color = MaterialTheme.colorScheme.primary,
                         width = 15f
                     )
                 }
-                // Podrías añadir un Marker para el punto de inicio
-                // routePoints.firstOrNull()?.let { Marker(state = MarkerState(position = it), title = "Inicio") }
+                // Ejemplo para añadir un Marker (necesitarías importar Marker y rememberMarkerState
+                // de com.google.maps.android.compose):
+                // routePoints.firstOrNull()?.let {
+                //     val markerState = com.google.maps.android.compose.rememberMarkerState(position = it)
+                //     com.google.maps.android.compose.Marker(
+                //         state = markerState,
+                //         title = stringResource(R.string.start_point_marker_title) // Ejemplo de string resource
+                //     )
+                // }
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -401,8 +377,6 @@ fun ActivitySummary(
         }
     }
 }
-
-
 // --- Funciones de Utilidad ---
 fun formatElapsedTime(totalSeconds: Long): String {
     val hours = totalSeconds / 3600
@@ -415,14 +389,4 @@ fun formatElapsedTime(totalSeconds: Long): String {
     }
 }
 
-// --- Preview ---
-@Preview(showBackground = true)
-@Composable
-fun RunningTabScreenIdlePreview() {
-    KalisFitTheme {
-        // Mockup para el preview, no necesitas ViewModel aquí
-        val mockContext = LocalContext.current
-        RunningTabScreen()
-    }
-}
 

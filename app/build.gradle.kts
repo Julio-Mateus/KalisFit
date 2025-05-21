@@ -86,4 +86,8 @@ dependencies {
 
     // Jetpack DataStore Preferences
     implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.play.services.location)
+    implementation(libs.maps.compose)
 }
