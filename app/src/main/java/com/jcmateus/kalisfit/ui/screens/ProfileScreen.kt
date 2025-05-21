@@ -116,7 +116,7 @@ fun ProfileScreen(
 
                 Button(
                     onClick = {
-                        navController.navigate(Routes.EDIT_PROFILE)
+                        navController.navigate(Routes.EDIT_PROFILE_SCREEN)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

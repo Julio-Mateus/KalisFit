@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -53,7 +54,7 @@ import com.jcmateus.kalisfit.viewmodel.RunningViewModel
 
 
 @Composable
-fun RunningTabScreen(
+fun RunningTabScreen(navController: NavHostController,
     runningViewModel: RunningViewModel = viewModel() // Inyectar el ViewModel
 ) {
     val context = LocalContext.current // Sigue siendo útil para algunas cosas como strings

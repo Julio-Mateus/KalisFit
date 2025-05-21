@@ -3,6 +3,7 @@ package com.jcmateus.kalisfit.navigation
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
@@ -12,6 +13,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.jcmateus.kalisfit.ui.screens.CalisthenicsLevelDetailScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
@@ -84,73 +86,111 @@ fun KalisNavGraph(navController: NavHostController) {
             OnboardingSuccessScreen(
                 onContinue = {
                     navController.navigate(Routes.MAIN_CONTENT) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                        popUpTo(Routes.LOGIN) { inclusive = true } // O a MAIN_CONTENT popUpTo ONBOARDING_SUCCESS
                     }
                 })
         }
 
         // --- Contenedor Principal con Drawer, BottomNav y TopAppBar ---
         composable(Routes.MAIN_CONTENT) {
+            // KalisMainScreen contiene el NavHost interno para las pestañas (Home, Calisthenics, Stoicism, Running)
             KalisMainScreen(mainNavController = navController)
         }
 
         // --- Rutas de Nivel Superior (Sin BottomNav) ---
-        // Accesibles desde el Drawer, TopAppBar, o desde otras pantallas usando mainNavController.
+        // Accesibles desde el Drawer, o navegación directa desde otras pantallas.
 
-        // NUEVA RUTA PARA LA PANTALLA DE PERFIL COMPLETA
-        composable(Routes.PROFILE) {
-            ProfileScreen(navController = navController) // Asumiendo que ProfileScreen no necesita directamente el navController para navegación interna compleja
-            // o que usa un ViewModel para manejar acciones que podrían navegar.
-            // Si ProfileScreen necesita navegar a otros destinos del mainNavController, pásaselo:
-            // ProfileScreen(navController = navController)
+        composable(Routes.PROFILE_SCREEN) { // Usando tu nueva constante de Routes.kt
+            ProfileScreen(navController = navController)
         }
 
         composable(
-            route = Routes.ROUTINE_DETAIL,
-            arguments = listOf(navArgument("rutinaId") { type = NavType.StringType })
+            route = Routes.ROUTINE_DETAIL_SCREEN, // Usando tu nueva constante
+            arguments = listOf(navArgument("routineId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val rutinaId = backStackEntry.arguments?.getString("rutinaId")
-            if (rutinaId != null) {
-                RoutineScreen(navController = navController, rutinaId = rutinaId)
+            val routineId = backStackEntry.arguments?.getString("routineId")
+            if (routineId != null) {
+                RoutineScreen(navController = navController, rutinaId = routineId)
             } else {
-                // Manejo de error o volver atrás
+                // Manejo de error: argumento faltante
+                Text("Error: Falta el ID de la rutina.")
+                // O navController.popBackStack()
             }
         }
-        composable(Routes.ROUTINE_SUCCESS) {
+        composable(Routes.ROUTINE_SUCCESS_SCREEN) { // Usando tu nueva constante
             RoutineSuccessScreen(onFinish = {
-                navController.navigate(Routes.MAIN_CONTENT) {
-                    popUpTo(Routes.MAIN_CONTENT) { inclusive = true }
-                }
+                // Decide a dónde navegar después del éxito de una rutina.
+                // Podría ser a la lista de rutinas, a home, o popBackStack.
+                navController.popBackStack(Routes.MAIN_CONTENT, inclusive = false) // Ejemplo: Volver a main sin incluir la pantalla de éxito
+                // o navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) { popUpTo(Routes.MAIN_CONTENT) }
             })
         }
 
-        composable(Routes.EDIT_PROFILE) {
-            // EditProfileScreen puede obtener el UserProfileViewModel internamente
-            // o podrías instanciarlo aquí si es compartido de forma específica
-            EditProfileScreen(navController = navController) // Asumiendo que toma el UserProfile de un ViewModel interno
-            // o que ya no pasas 'user = UserProfile()' directamente.
-            // Si aún necesitas pasar 'user', asegúrate que UserProfile() sea el valor correcto
-            // o que lo obtengas de un ViewModel aquí.
+        composable(Routes.EDIT_PROFILE_SCREEN) { // Usando tu nueva constante
+            EditProfileScreen(navController = navController)
         }
 
-        composable(Routes.SETTINGS) {
+        composable(Routes.SETTINGS_SCREEN) { // Usando tu nueva constante
             SettingsScreen(navController = navController)
         }
-        composable(Routes.STOICISM_CONTENT) {
-            StoicismContentScreen(mainNavController = navController) // Pasas el navController del KalisNavGraph
-        }
 
-        // --- Pantalla de Tips (si aún la usas) ---
-        if (Routes.TIPS.isNotBlank()) { // Para evitar error si comentas la ruta TIPS en Routes.kt
-            composable(Routes.TIPS) {
-                TipsScreen() // Asumiendo que no necesita navController
+        // Si StoicismContentScreen es una pantalla de nivel superior (ej. desde el Drawer)
+        // y no solo una pestaña, su ruta se definiría aquí.
+        // Por tu Routes.kt, parece que `STOICISM_TAB` es para la pestaña principal.
+        // Si tuvieras una pantalla "Acerca del Estoicismo" o "Principios Clave"
+        // accesible desde el drawer, la pondrías aquí con una ruta diferente.
+        // Ejemplo:
+        // composable("stoicism_deep_dive_screen") {
+        //     StoicismDeepDiveScreen(mainNavController = navController)
+        // }
+
+
+        // --- Pantalla de Tips ---
+        // (Asumo que tus Routes.kt tiene TIPS_SCREEN, no TIPS)
+        if (Routes.TIPS_SCREEN.isNotBlank()) {
+            composable(Routes.TIPS_SCREEN) {
+                TipsScreen() // Asumiendo que no necesita navController o lo obtiene de un ViewModel
             }
         }
 
+        // =======================================================================
+        //          NUEVA RUTA: DETALLE DE NIVEL DE CALISTENIA
+        // =======================================================================
+        composable(
+            route = Routes.CALISTHENICS_LEVEL_DETAIL_SCREEN, // La plantilla de la ruta
+            arguments = listOf(
+                navArgument("progressionId") { type = NavType.StringType },
+                navArgument("levelId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val progressionId = backStackEntry.arguments?.getString("progressionId")
+            val levelId = backStackEntry.arguments?.getString("levelId")
 
-        // NOTA: Las rutas para las PESTAÑAS (HOME_TAB, ROUTINES_TAB, etc.) NO se definen aquí
-        // porque son manejadas por el NavHost INTERNO dentro de KalisMainScreen.
-        // Este KalisNavGraph (con mainNavController) solo necesita saber cómo llegar a Routes.MAIN_CONTENT,
-        // y a las pantallas de nivel superior como Routes.PROFILE, Routes.SETTINGS, etc.
+            if (progressionId != null && levelId != null) {
+                // Una vez que crees CalisthenicsLevelDetailScreen.kt y la importes,
+                // esta línea funcionará:
+                CalisthenicsLevelDetailScreen(
+                    navController = navController,
+                    progressionId = progressionId,
+                    levelId = levelId
+                )
+            } else {
+                // Manejo de error si los argumentos no se pasan correctamente.
+                // Esto no debería suceder si siempre usas la función helper Routes.calisthenicsLevelDetail()
+                Text("Error: Faltan argumentos para el detalle del nivel de calistenia.")
+                // Considera navController.popBackStack() para volver a la pantalla anterior.
+            }
+        }
+        // =======================================================================
+
+
+        // NOTA: Las rutas para las PESTAÑAS (HOME_TAB, CALISTHENICS_TAB, STOICISM_TAB, RUNNING_TAB)
+        // NO se definen aquí como destinos directos. Son manejadas por el NavHost INTERNO
+        // dentro de KalisMainScreen cuando llamas a composable(Routes.MAIN_CONTENT).
+        // Este KalisNavGraph (con 'navController') solo necesita saber cómo llegar a:
+        //   1. Rutas de autenticación/onboarding.
+        //   2. Routes.MAIN_CONTENT (que luego maneja las pestañas).
+        //   3. Pantallas de nivel superior como PROFILE_SCREEN, SETTINGS_SCREEN, ROUTINE_DETAIL_SCREEN,
+        //      y ahora CALISTHENICS_LEVEL_DETAIL_SCREEN.
     }
 }

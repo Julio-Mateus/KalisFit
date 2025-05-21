@@ -4,37 +4,42 @@
 
     <!-- Títulos para el TopAppBar basados en la pestaña del BottomNav -->
     <string name="title_home">Inicio</string>
-    <string name="title_routines_explorer">Explorar Rutinas</string>
-    <string name="title_profile">Perfil</string>
-    <string name="title_history">Historial</string>
+    <string name="title_calisthenics">Calistenia</string>
+    <string name="title_stoicism">Estoicismo</string>
+    <string name="title_running">Running</string>
 
-    <!-- Descripciones de contenido para iconos y botones en TopAppBar -->
+
+    <!-- Descripciones de contenido y etiquetas para iconos/botones -->
     <string name="desc_edit_profile">Editar Perfil</string>
     <string name="desc_options_menu">Más opciones</string>
+    <string name="desc_open_drawer">Abrir menú de navegación</string>
+    <string name="desc_navigate_back">Volver</string>
 
-    <!-- Textos para los items del DropdownMenu en TopAppBar -->
+    <!-- Textos para ítems del menú y Drawer -->
     <string name="menu_settings">Configuración</string>
     <string name="menu_logout">Cerrar Sesión</string>
-    <!-- Opcional: si añades un explorador de Tips al menú -->
-    <!-- <string name="menu_tips_explorer">Explorar Consejos</string> -->
 
-    <!-- Etiquetas para los items del BottomNavigationBar (si no las obtienes de BottomNavItem.label directamente) -->
-    <!-- Ya los tienes en tu sealed class BottomNavItem, así que probablemente no necesites duplicarlos aquí -->
-    <!-- <string name="bottom_nav_home">Inicio</string> -->
-    <!-- <string name="bottom_nav_routines">Rutinas</string> -->
-    <!-- <string name="bottom_nav_profile">Perfil</string> -->
-    <!-- <string name="bottom_nav_history">Historial</string> -->
+    <!-- Etiquetas para los items del BottomNavigationBar -->
+    <string name="bottom_nav_home">Inicio</string>
+    <string name="bottom_nav_calisthenics">Calistenia</string>
+    <string name="bottom_nav_stoicism">Estoicismo</string>
+    <string name="bottom_nav_running">Running</string>
 
-    <!-- Otros strings que puedas necesitar en tus pantallas -->
+    <!-- Textos para ítems del Navigation Drawer -->
+    <string name="drawer_profile">Perfil</string>
+    <string name="drawer_routines_explorer">Explorar Rutinas</string>
+    <string name="drawer_activity_history">Historial</string>
+    <string name="drawer_explore_by_type">Explorar por Tipo</string>
+    <string name="drawer_gym_routines">Gimnasio</string>
+
+    <!-- Títulos de Pantallas -->
     <string name="edit_profile_title">Editar Mi Perfil</string>
     <string name="settings_title">Ajustes de la Aplicación</string>
+
+    <!-- Otros strings generales y de settings -->
     <string name="label_save_changes">Guardar Cambios</string>
     <string name="label_username">Nombre de Usuario</string>
     <string name="label_email">Correo Electrónico</string>
-    <!-- ... y cualquier otro texto específico de tu UI ... -->
-
-    <!-- ... tus otros strings ... -->
-    <string name="desc_navigate_back">Volver</string>
 
     <string name="settings_section_general">General</string>
     <string name="settings_enable_notifications">Activar notificaciones</string>
@@ -45,63 +50,88 @@
     <string name="settings_weight_units">Unidades de peso</string>
     <string name="settings_select_unit_dialog_title">Seleccionar unidad de peso</string>
 
-
     <string name="settings_section_legal">Legal</string>
     <string name="settings_privacy_policy">Política de Privacidad</string>
     <string name="settings_terms_of_service">Términos de Servicio</string>
 
     <string name="settings_section_about">Acerca de</string>
-    <string name="settings_app_version">Versión de la aplicación</string> <!-- Ya la tienes -->
-    <string name="title_more_options">Opciones Adicionales</string>
-    <string name="desc_open_drawer">Abrir menú de navegación</string>
-    <!-- Strings para los placeholders del drawer (opcional, pero recomendado) -->
-    <string name="drawer_title_explore_type">Explorar por Tipo</string>
-    <string name="drawer_item_gym">Gimnasio</string>
-    <string name="drawer_item_calisthenics">Calistenia</string>
-    <string name="drawer_item_stoicism">Estoicismo</string>
+    <string name="settings_app_version">Versión de la aplicación</string>
 
+    <!-- Strings específicos de la sección de Estoicismo -->
     <string name="stoicism_title_main">Principios del Estoicismo</string>
-
     <string name="stoicism_section_introduction">Introducción</string>
-    <string name="stoicism_introduction_text">El estoicismo es una escuela de filosofía helenística fundada por Zenón de Citio en Atenas a principios del siglo III a.C. Es una filosofía de ética personal basada en su sistema lógico y sus puntos de vista sobre el mundo natural. Según sus enseñanzas, como seres sociales, el camino hacia la eudaimonia (felicidad o florecimiento) para los humanos se encuentra en aceptar el momento tal como se presenta, al no permitirnos ser controlados por el deseo de placer o el miedo al dolor, al usar nuestra mente para comprender el mundo que nos rodea y hacer nuestra parte en el plan de la naturaleza, y al trabajar juntos y tratar a los demás de manera justa y equitativa.</string>
-
+    <string name="stoicism_introduction_text">El estoicismo es una escuela de filosofía helenística...</string>
     <string name="stoicism_section_control_title">La Dicotomía del Control</string>
-    <string name="stoicism_section_control_text">Uno de los principios fundamentales del estoicismo es la distinción entre lo que podemos controlar y lo que no. Debemos enfocar nuestra energía en nuestras propias acciones, pensamientos y respuestas, y aceptar con serenidad aquello que escapa a nuestro control directo, como los eventos externos, las acciones de otros o nuestro pasado.</string>
-    <string name="stoicism_quote_epictetus_control">"Algunas cosas están bajo nuestro control y otras no. Las cosas bajo nuestro control son la opinión, la búsqueda, el deseo, la aversión y, en una palabra, cualesquiera que sean nuestras propias acciones. Las cosas que no están bajo nuestro control son el cuerpo, la propiedad, la reputación, el mando y, en una palabra, cualesquiera que no sean nuestras propias acciones."</string>
-
+    <string name="stoicism_section_control_text">Uno de los principios fundamentales del estoicismo...</string>
+    <string name="stoicism_quote_epictetus_control">"Algunas cosas están bajo nuestro control y otras no..."</string>
     <string name="stoicism_section_nature_title">Vivir conforme a la Naturaleza</string>
-    <string name="stoicism_section_nature_text">Para los estoicos, "vivir conforme a la naturaleza" significa vivir de acuerdo con la razón, ya que la razón es lo que nos distingue y nos conecta con el logos divino que gobierna el universo. Implica entender nuestro lugar en el cosmos, cumplir con nuestros deberes sociales y actuar con virtud.</string>
-
+    <string name="stoicism_section_nature_text">Para los estoicos, "vivir conforme a la naturaleza"...</string>
     <string name="stoicism_section_exercise_title">Práctica Estoica</string>
     <string name="stoicism_exercise_negative_visualization_title">Visualización Negativa (Premeditatio Malorum)</string>
-    <string name="stoicism_exercise_negative_visualization_desc">Dedica unos momentos a contemplar los posibles reveses o pérdidas que podrías enfrentar: la pérdida de posesiones, problemas de salud, el fallecimiento de seres queridos. El objetivo no es ser pesimista, sino prepararse mentalmente para la adversidad, apreciar lo que se tiene y reducir el impacto del sufrimiento cuando las cosas no salen como se espera.</string>
-    <string name="drawer_stoicism">Estoicismo</string>
+    <string name="stoicism_exercise_negative_visualization_desc">Dedica unos momentos a contemplar los posibles reveses...</string>
 
+    <!-- Strings específicos de la sección de Running -->
     <string name="running_location_permission_rationale_title">Permiso de Ubicación Necesario</string>
     <string name="running_location_permission_rationale_message">Para registrar tu actividad y mostrar el mapa, KalisFit necesita acceder a tu ubicación. Por favor, concede el permiso.</string>
     <string name="grant_permission_button">Conceder Permiso</string>
     <string name="running_location_needed_for_map">Se necesita permiso de ubicación para mostrar el mapa.</string>
     <string name="running_waiting_for_location">Esperando señal de GPS...</string>
-
     <string name="running_metric_time">Tiempo</string>
     <string name="running_metric_distance">Distancia</string>
     <string name="running_metric_pace">Ritmo</string>
     <string name="running_metric_avg_pace">Ritmo Prom.</string>
     <string name="running_metric_calories">Calorías</string>
-
     <string name="running_action_start">Iniciar</string>
     <string name="running_action_pause">Pausar</string>
     <string name="running_action_resume">Reanudar</string>
     <string name="running_action_stop">Detener</string>
-
     <string name="running_summary_title">Resumen de Actividad</string>
     <string name="done">Hecho</string>
 
-    <string name="title_running">Running</string> <!-- Para la TopAppBar si es necesario -->
+    <!-- =================================================================================== -->
+    <!-- STRINGS: Para la pantalla de Progresiones de Calistenia y sus componentes  -->
+    <!-- =================================================================================== -->
+
+    <!-- Mensaje cuando no se encuentran progresiones -->
+    <string name="calisthenics_no_progressions_found">No se encontraron progresiones de calistenia. ¡Vuelve más tarde!</string>
+
+    <!-- Descripciones de contenido para los iconos de expandir/colapsar -->
+    <string name="calisthenics_expand">Mostrar niveles</string>
+    <string name="calisthenics_collapse">Ocultar niveles</string>
+
+    <!-- Título para la pantalla de detalle de un nivel (ejemplo, puedes ajustarlo) -->
+    <!-- <string name="title_calisthenics_level_detail">Detalle del Nivel</string> --> <!-- Original, reemplazado/complementado abajo -->
+
+    <!-- Textos para métricas de los niveles de ejercicio (si los usas directamente en UI) -->
+    <string name="label_target_sets">Series:</string>
+    <string name="label_target_reps">Reps:</string>
+    <string name="label_target_hold_time">Aguante:</string>
+
+    <!-- Placeholder para imágenes (si decides referenciarlos desde XML, aunque usualmente se definen en drawables) -->
+    <!-- <string name="content_desc_placeholder_image">Imagen de ejemplo</string> -->
+    <!-- <string name="content_desc_broken_image">Error al cargar imagen</string> -->
+
+    <!-- =================================================================================== -->
+    <!-- NUEVOS STRINGS: Para la pantalla de Detalle del Nivel de Calistenia (CalisthenicsLevelDetailScreen) -->
+    <!-- =================================================================================== -->
+
+    <!-- Título para la pantalla de detalle mientras carga o si el nombre no está disponible -->
+    <string name="title_calisthenics_level_detail_loading">Cargando Detalle...</string>
+    <!-- Título genérico para errores al cargar -->
+    <string name="error_loading_title">Error al Cargar</string>
+    <!-- Texto para el botón de reintento -->
+    <string name="button_retry">Reintentar</string>
+    <!-- Etiquetas para los campos de detalle del ejercicio -->
+    <string name="detail_label_description">Descripción</string>
+    <string name="detail_label_sets">Series Recomendadas</string>
+    <string name="detail_label_reps_duration">Repeticiones/Duración</string>
+    <string name="detail_label_hold_time">Tiempo de Aguante</string>
+    <string name="detail_label_notes_tips">Notas/Consejos:</string>
+    <!-- Mensaje cuando no hay información disponible para un nivel -->
+    <string name="info_no_data_available">No hay información disponible para este nivel.</string>
+    <!-- El string "desc_navigate_back" ya existe, se reutilizará. -->
+
 </resources>
-
-
-
 
 
 

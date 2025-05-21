@@ -11,9 +11,11 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.EjercicioSimple
+import com.jcmateus.kalisfit.model.ExerciseLevel
 import com.jcmateus.kalisfit.model.GrupoMuscular
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.ProgresoRutina
+import com.jcmateus.kalisfit.model.Progression
 import com.jcmateus.kalisfit.model.Rutina
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
@@ -47,6 +49,28 @@ data class RutinaFirestore(
     val objetivos: List<String> = emptyList(),
     val lugarEntrenamiento: List<String> = emptyList() // Guardado como lista de Strings
     // No incluir la lista de ejercicios aquí
+)
+// Estructura para un nivel de ejercicio de calistenia TAL COMO SE GUARDARÁ EN FIRESTORE
+data class CalisthenicsLevelFirestore(
+    val id: String = "", // ID único del nivel
+    val name: String = "",
+    val description: String = "",
+    val targetReps: String? = null,
+    val targetSets: String? = null,
+    val targetHoldTime: String? = null,
+    val videoUrl: String? = null,
+    val notes: String? = null,
+    val imageUrl: String? = null, // URL de la imagen del nivel
+    val orden: Int = 0 // Para mantener el orden de los niveles
+)
+
+// Estructura para una progresión de calistenia TAL COMO SE GUARDARÁ EN FIRESTORE
+data class CalisthenicsProgressionFirestore(
+    val id: String = "", // ID del documento en la colección 'calisthenicsProgressions'
+    val name: String = "",
+    val iconUrl: String? = null, // URL del icono de la progresión
+    val description: String? = null
+    // Los niveles se guardarán en una subcolección "levels"
 )
 
 private const val TAG = "FirestoreUtils"
@@ -106,6 +130,105 @@ fun obtenerHistorialProgreso(
         .addOnFailureListener {
             onError(it.message ?: "Error al obtener historial")
         }
+}
+
+suspend fun getAllCalisthenicsProgressions(): List<Progression> {
+    val db = FirebaseFirestore.getInstance()
+    val progressionsList = mutableListOf<Progression>()
+
+    try {
+        // 1. Obtener todos los documentos de la colección principal 'calisthenicsProgressions'
+        val progressionsSnapshot = db.collection("calisthenicsProgressions")
+            // Opcional: Si quieres un orden específico para las progresiones
+            // .orderBy("nombre", Query.Direction.ASCENDING)
+            .get()
+            .await()
+
+        for (progressionDoc in progressionsSnapshot.documents) {
+            val progressionFirestore = progressionDoc.toObject(CalisthenicsProgressionFirestore::class.java)
+            if (progressionFirestore != null) {
+                // 2. Para cada progresión, obtener sus niveles de la subcolección 'levels'
+                val levelsSnapshot = db.collection("calisthenicsProgressions")
+                    .document(progressionDoc.id)
+                    .collection("levels")
+                    .orderBy("orden", Query.Direction.ASCENDING) // Asumiendo que quieres ordenarlos
+                    .get()
+                    .await()
+
+                val exerciseLevels = levelsSnapshot.documents.mapNotNull { levelDoc ->
+                    val levelFirestore = levelDoc.toObject(CalisthenicsLevelFirestore::class.java)
+                    levelFirestore?.let {
+                        // Mapear de CalisthenicsLevelFirestore (Firestore) a ExerciseLevel (UI Model)
+                        ExerciseLevel(
+                            id = it.id.ifEmpty { levelDoc.id }, // Usar ID del documento si el campo id está vacío
+                            name = it.name,
+                            description = it.description,
+                            targetReps = it.targetReps,
+                            targetSets = it.targetSets,
+                            targetHoldTime = it.targetHoldTime,
+                            videoUrl = it.videoUrl,
+                            notes = it.notes,
+                            imageUrl = it.imageUrl
+                            // 'orden' no está en ExerciseLevel, se usa para la query
+                        )
+                    }
+                }
+
+                // Mapear de CalisthenicsProgressionFirestore a Progression (UI Model)
+                progressionsList.add(
+                    Progression(
+                        id = progressionFirestore.id.ifEmpty { progressionDoc.id },
+                        name = progressionFirestore.name,
+                        iconUrl = progressionFirestore.iconUrl,
+                        description = progressionFirestore.description,
+                        levels = exerciseLevels
+                    )
+                )
+            }
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error al obtener progresiones de calistenia desde Firestore.", e)
+        // Puedes lanzar la excepción o devolver una lista vacía/manejar el error de otra forma
+        // throw e // Opcional
+    }
+    return progressionsList
+}
+suspend fun getCalisthenicsExerciseLevel(progressionId: String, levelId: String): ExerciseLevel? {
+    val db = FirebaseFirestore.getInstance() // Puedes usar la instancia global si ya la tienes definida
+    return try {
+        val levelDocSnapshot = db.collection("calisthenicsProgressions")
+            .document(progressionId)
+            .collection("levels")
+            .document(levelId)
+            .get()
+            .await()
+
+        if (levelDocSnapshot.exists()) {
+            val levelFirestore = levelDocSnapshot.toObject(CalisthenicsLevelFirestore::class.java)
+            levelFirestore?.let {
+                // Mapear de CalisthenicsLevelFirestore (Firestore) a ExerciseLevel (UI Model)
+                ExerciseLevel(
+                    id = it.id.ifEmpty { levelDocSnapshot.id }, // Usar ID del documento si el campo id está vacío
+                    name = it.name,
+                    description = it.description,
+                    targetReps = it.targetReps,
+                    targetSets = it.targetSets,
+                    targetHoldTime = it.targetHoldTime,
+                    videoUrl = it.videoUrl,
+                    notes = it.notes,
+                    imageUrl = it.imageUrl
+                    // 'orden' de CalisthenicsLevelFirestore no está en tu ExerciseLevel UI Model,
+                    // pero se usa si necesitaras ordenar al obtener múltiples niveles.
+                )
+            }
+        } else {
+            Log.w(TAG, "Nivel de calistenia no encontrado en Firestore: progressionId='$progressionId', levelId='$levelId'")
+            null
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error al obtener nivel de calistenia desde Firestore: progressionId='$progressionId', levelId='$levelId'", e)
+        null // Devolver null en caso de error
+    }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
