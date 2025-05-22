@@ -143,6 +143,11 @@
     <string name="desc_place_filter_outdoor">Filtrar rutinas para hacer al aire libre</string>
     <string name="desc_place_filter_calisthenics">Filtrar rutinas de calistenia por lugar</string>
 
+    <!-- Strings para la pantalla de Historial Vacío -->
+    <string name="historial_vacio_titulo">¡Es hora de moverse!</string>
+    <string name="historial_vacio_subtitulo">Aún no tienes progreso registrado. ¡Completa tu primera rutina para verlo aquí!</string>
+    <string name="comenzar_rutina">Comenzar una rutina</string>
+
 
 
 </resources>

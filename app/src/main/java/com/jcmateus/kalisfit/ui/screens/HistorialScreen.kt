@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -44,6 +46,9 @@ import com.jcmateus.kalisfit.model.ProgresoRutina
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -55,6 +60,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -294,12 +300,49 @@ fun HistorialScreen(navController: NavHostController) {
             }
 
             if (historial.isEmpty() && resumen == null && !cargando && errorMessage == null) {
-                Box(modifier = Modifier
-                    .fillMaxSize() // Este fillMaxSize se aplicará al espacio restante después de la Card de resumen
-                    .padding(16.dp), // Padding adicional si es necesario
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize() // O .weight(1f) si quieres que ocupe el espacio restante
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Aún no tienes historial de progreso. ¡Completa tu primera rutina!", style = MaterialTheme.typography.bodyLarge)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxHeight() // Para centrar verticalmente en el espacio disponible
+                    ) {
+                        Icon(
+                            // Podrías usar un icono más temático si lo tienes
+                            imageVector = Icons.Outlined.FitnessCenter, // Ejemplo
+                            contentDescription = null, // El texto de abajo lo describe
+                            modifier = Modifier.size(72.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(R.string.historial_vacio_titulo), // "¡Es hora de moverse!"
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.historial_vacio_subtitulo), // "Aún no tienes progreso registrado. ¡Completa tu primera rutina para verlo aquí!"
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = {
+                                // Navegar a la pantalla de selección de rutinas
+                                // navController.navigate(Routes.RoutineExplorerScreen) // Ajusta la ruta
+                            }
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = null)
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(stringResource(R.string.comenzar_rutina))
+                        }
+                    }
                 }
             } else if (historial.isNotEmpty()){
                 LazyColumn(
