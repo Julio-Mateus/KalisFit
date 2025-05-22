@@ -60,6 +60,8 @@ object Routes {
         return "$ROUTINE_DETAIL_PREFIX/$routineId"
     }
 
+
+
     // --- Rutas Potenciales Futuras (o para funcionalidades específicas dentro de pantallas) ---
     // const val RUNNING_DASHBOARD_SCREEN = "running_dashboard_screen" // Pantalla detallada de Running (Drawer)
     // const val GYM_ROUTINES_FILTER_SCREEN = "gym_routines_filter_screen"       // Para rutinas filtradas de gimnasio

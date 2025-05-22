@@ -131,7 +131,24 @@
     <string name="info_no_data_available">No hay información disponible para este nivel.</string>
     <!-- El string "desc_navigate_back" ya existe, se reutilizará. -->
 
+    <string name="drawer_routines_explorer_all">Todas las Rutinas</string> <!-- Nueva -->
+    <string name="drawer_explore_by_place">Explorar por Lugar</string>
+    <string name="place_filter_home">En Casa</string>
+    <string name="place_filter_gym">Gimnasio</string>
+    <string name="place_filter_outdoor">Aire Libre</string>
+    <string name="place_filter_calisthenics">Calistenia (Lugar)</string> <!-- O como quieras llamarlo para diferenciarlo de la pestaña principal si es necesario -->
+
+    <string name="desc_place_filter_home">Filtrar rutinas para hacer en casa</string>
+    <string name="desc_place_filter_gym">Filtrar rutinas de gimnasio</string>
+    <string name="desc_place_filter_outdoor">Filtrar rutinas para hacer al aire libre</string>
+    <string name="desc_place_filter_calisthenics">Filtrar rutinas de calistenia por lugar</string>
+
+
+
 </resources>
+
+
+
 
 
 

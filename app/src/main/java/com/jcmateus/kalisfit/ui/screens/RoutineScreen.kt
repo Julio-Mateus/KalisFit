@@ -43,6 +43,7 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.guardarProgresoRutina
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.EjercicioSimple
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineViewModel
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlinx.coroutines.delay
@@ -289,9 +290,14 @@ fun RoutineScreen(
                                         // ejerciciosCompletados = ejerciciosSimple, // <-- Usa esta línea si la función lo espera
                                         onSuccess = {
                                             // Navegar a la pantalla de éxito después de guardar
-                                            navController.navigate("routine_success") {
+                                            val currentDetailRoute = rutinaId?.let { Routes.routineDetail(it) } // Usa la función helper
+                                            navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) { // <--- CORREGIDO
                                                 // Opcional: Eliminar la pantalla actual de la pila para no poder volver con Back
-                                                popUpTo("routine/${rutinaId}") { inclusive = true }
+                                                if (currentDetailRoute != null) {
+                                                    popUpTo(currentDetailRoute) { inclusive = true }
+                                                }
+                                                // Considera limpiar más el stack si es necesario,
+                                                // por ejemplo, si desde success se va a un tab principal.
                                             }
                                         },
                                         onError = { msg ->
@@ -301,8 +307,11 @@ fun RoutineScreen(
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             // A pesar del error al guardar, quizás aún quieres navegar a la pantalla de éxito
-                                            navController.navigate("routine_success") {
-                                                popUpTo("routine/${rutinaId}") { inclusive = true }
+                                            val currentDetailRoute = rutinaId?.let { Routes.routineDetail(it) }
+                                            navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) { // <--- CORREGIDO
+                                                if (currentDetailRoute != null) {
+                                                    popUpTo(currentDetailRoute) { inclusive = true }
+                                                }
                                             }
                                         }
                                     )
@@ -313,8 +322,11 @@ fun RoutineScreen(
                                         Toast.LENGTH_LONG
                                     ).show()
                                     // Navegar a la pantalla de éxito incluso si no se pudo guardar
-                                    navController.navigate("routine_success") {
-                                        popUpTo("routine/${rutinaId}") { inclusive = true }
+                                    val currentDetailRoute = rutinaId?.let { Routes.routineDetail(it) }
+                                    navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) { // <--- CORREGIDO
+                                        if (currentDetailRoute != null) {
+                                            popUpTo(currentDetailRoute) { inclusive = true }
+                                        }
                                     }
                                 }
                             },

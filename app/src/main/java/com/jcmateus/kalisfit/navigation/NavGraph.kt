@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import com.jcmateus.kalisfit.ui.screens.CalisthenicsLevelDetailScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
+import com.jcmateus.kalisfit.ui.screens.HistorialScreen
 import com.jcmateus.kalisfit.ui.screens.HomeScreen
 import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
@@ -23,6 +24,7 @@ import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineExplorerScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
@@ -104,6 +106,24 @@ fun KalisNavGraph(navController: NavHostController) {
             ProfileScreen(navController = navController)
         }
 
+
+        composable(
+            route = "${Routes.ROUTINES_EXPLORER_SCREEN}?place={place}", //  <-- MODIFICACIÓN IMPORTANTE 1: Define el argumento en la plantilla de la ruta
+            arguments = listOf(navArgument("place") {          //  <-- MODIFICACIÓN IMPORTANTE 2: Declara el argumento
+                type = NavType.StringType
+                nullable = true                                    // Es opcional
+                defaultValue = null                                // Valor por defecto si no se pasa
+            })
+        ) { backStackEntry ->                                    // backStackEntry contiene los argumentos
+            val placeArgument = backStackEntry.arguments?.getString("place") // <-- MODIFICACIÓN IMPORTANTE 3: Extrae el argumento
+
+            RoutineExplorerScreen(
+                navController = navController, // O el NavHostController relevante
+                placeFilterArgument = placeArgument  // <-- MODIFICACIÓN IMPORTANTE 4: Pasa el argumento extraído
+                // viewModel se obtendrá dentro de RoutineExplorerScreen usando viewModel()
+            )
+        }
+
         composable(
             route = Routes.ROUTINE_DETAIL_SCREEN, // Usando tu nueva constante
             arguments = listOf(navArgument("routineId") { type = NavType.StringType })
@@ -132,6 +152,10 @@ fun KalisNavGraph(navController: NavHostController) {
 
         composable(Routes.SETTINGS_SCREEN) { // Usando tu nueva constante
             SettingsScreen(navController = navController)
+        }
+
+        composable(Routes.ACTIVITY_HISTORY_SCREEN) {
+            HistorialScreen(navController = navController) // Pasa navController si tu pantalla lo necesita
         }
 
         // Si StoicismContentScreen es una pantalla de nivel superior (ej. desde el Drawer)
