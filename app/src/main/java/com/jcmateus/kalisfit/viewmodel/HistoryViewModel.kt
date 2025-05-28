@@ -1,74 +1,208 @@
 package com.jcmateus.kalisfit.viewmodel
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.jcmateus.kalisfit.data.ResumenSemanal
-import com.jcmateus.kalisfit.data.calcularResumenSemanal
-import com.jcmateus.kalisfit.data.obtenerHistorialProgreso
 import com.jcmateus.kalisfit.model.ProgresoRutina
+import com.jcmateus.kalisfit.model.UserActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 // Define un data class para representar el estado de la UI de HistorialScreen
 data class HistoryUiState(
-    val historial: List<ProgresoRutina> = emptyList(),
-    val resumen: ResumenSemanal? = null,
-    val isLoading: Boolean = true,
+    // Historial de Rutinas
+    val historialRutinas: List<ProgresoRutina> = emptyList(),
+    val resumenRutinas: ResumenSemanal? = null,
+    val isLoadingRutinas: Boolean = true, // Estado de carga específico para rutinas
+
+    // Historial de Actividades Libres (carreras/caminatas)
+    val historialActividadesLibres: List<UserActivity> = emptyList(),
+    val isLoadingActividadesLibres: Boolean = true, // Estado de carga específico para actividades libres
+
+    // Mensaje de error general
     val errorMessage: String? = null
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
 class HistoryViewModel : ViewModel() {
 
-    // Expone el estado de la UI como un StateFlow inmutable
     private val _historyState = MutableStateFlow(HistoryUiState())
     val historyState: StateFlow<HistoryUiState> = _historyState.asStateFlow()
 
-    // Inicia la carga del historial al crear el ViewModel
+    private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
+
     init {
-        loadHistory()
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    fun loadHistory() {
-        // Empezar la carga, establecer isLoading a true y resetear el error
-        _historyState.value = _historyState.value.copy(isLoading = true, errorMessage = null)
-
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-
-        if (userId == null) {
-            _historyState.value = _historyState.value.copy(
-                isLoading = false,
+        val userId = auth.currentUser?.uid
+        if (userId != null) {
+            Log.d("HistoryViewModel", "Usuario autenticado: $userId. Cargando historiales.")
+            loadRoutineHistoryInternal(userId) // Carga historial de rutinas
+            listenForFreeActivitiesHistoryInternal(userId) // Escucha historial de actividades libres
+        } else {
+            Log.w("HistoryViewModel", "Usuario no autenticado en init. No se cargarán historiales.")
+            _historyState.value = HistoryUiState(
+                isLoadingRutinas = false,
+                isLoadingActividadesLibres = false,
                 errorMessage = "Usuario no autenticado."
             )
-            return
         }
+    }
 
-        // Usar viewModelScope para lanzar una coroutine
+    // --- Funciones para el Historial de Rutinas ---
+
+    // Función INTERNA para cargar el historial de rutinas
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun loadRoutineHistoryInternal(userId: String) {
+        _historyState.value = _historyState.value.copy(isLoadingRutinas = true, errorMessage = null)
         viewModelScope.launch {
-            obtenerHistorialProgreso(
+            // Asegúrate que la ruta `com.jcmateus.kalisfit.data.obtenerHistorialProgreso` es correcta
+            com.jcmateus.kalisfit.data.obtenerHistorialProgreso(
                 userId = userId,
                 onResult = { historialProgreso ->
-                    val resumenSemanal = calcularResumenSemanal(historialProgreso)
+                    // Asegúrate que la ruta `com.jcmateus.kalisfit.data.calcularResumenSemanal` es correcta
+                    val resumenSemanal = com.jcmateus.kalisfit.data.calcularResumenSemanal(historialProgreso)
                     _historyState.value = _historyState.value.copy(
-                        historial = historialProgreso,
-                        resumen = resumenSemanal,
-                        isLoading = false,
-                        errorMessage = null // Limpiar cualquier error previo
+                        historialRutinas = historialProgreso,
+                        resumenRutinas = resumenSemanal,
+                        isLoadingRutinas = false,
+                        // No borrar error si el otro sigue cargando/falló
+                        errorMessage = if (_historyState.value.isLoadingActividadesLibres) _historyState.value.errorMessage else null
                     )
+                    Log.d("HistoryViewModel", "Historial de rutinas cargado. ${historialProgreso.size} elementos.")
                 },
                 onError = { errorMsg ->
                     _historyState.value = _historyState.value.copy(
-                        isLoading = false,
-                        errorMessage = errorMsg
+                        isLoadingRutinas = false,
+                        errorMessage = "Error rutinas: $errorMsg"
                     )
+                    Log.e("HistoryViewModel", "Error cargando historial de rutinas: $errorMsg")
                 }
             )
         }
+    }
+
+    // Función PÚBLICA para que la UI reintente cargar el historial de rutinas
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun loadRoutineHistory() { // Llamada desde la UI
+        val userId = auth.currentUser?.uid
+        if (userId != null) {
+            Log.d("HistoryViewModel", "Reintentando cargar historial de rutinas para usuario: $userId")
+            loadRoutineHistoryInternal(userId) // Llama a la función interna
+        } else {
+            handleUnauthenticatedUser("reintentar cargar historial de rutinas")
+        }
+    }
+
+    // --- Funciones para el Historial de Actividades Libres ---
+
+    // Función INTERNA para escuchar cambios en actividades libres
+    private fun listenForFreeActivitiesHistoryInternal(userId: String) {
+        _historyState.value = _historyState.value.copy(isLoadingActividadesLibres = true, errorMessage = null)
+        val activitiesRef = db.collection("users").document(userId)
+            .collection("activities")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+
+        activitiesRef.addSnapshotListener { snapshots, e ->
+            if (e != null) {
+                Log.w("HistoryViewModel", "Error al escuchar actividades libres.", e)
+                _historyState.value = _historyState.value.copy(
+                    isLoadingActividadesLibres = false,
+                    errorMessage = "Error actividades: ${e.localizedMessage}"
+                )
+                return@addSnapshotListener
+            }
+            if (snapshots != null) {
+                val userActivities = snapshots.documents.mapNotNull { document ->
+                    try {
+                        document.toObject(UserActivity::class.java)?.apply { id = document.id }
+                    } catch (ex: Exception) {
+                        Log.e("HistoryViewModel", "Error al convertir documento a UserActivity: ${document.id}", ex)
+                        null
+                    }
+                }
+                _historyState.value = _historyState.value.copy(
+                    historialActividadesLibres = userActivities,
+                    isLoadingActividadesLibres = false,
+                    // No borrar error si el otro sigue cargando/falló
+                    errorMessage = if (_historyState.value.isLoadingRutinas) _historyState.value.errorMessage else null
+                )
+                Log.d("HistoryViewModel", "Historial de actividades libres actualizado. ${userActivities.size} elementos.")
+            } else {
+                // Esto puede ocurrir si la colección está vacía o no existe inicialmente, pero el listener sigue activo.
+                Log.d("HistoryViewModel", "Snapshot de actividades libres es null o no contiene documentos, pero sin error explícito.")
+                _historyState.value = _historyState.value.copy(
+                    historialActividadesLibres = emptyList(), // Establece una lista vacía
+                    isLoadingActividadesLibres = false
+                )
+            }
+        }
+    }
+
+    // Función PÚBLICA para que la UI reintente cargar/refrescar el historial de actividades libres
+    fun loadFreeActivityHistory() { // Llamada desde la UI
+        val userId = auth.currentUser?.uid
+        if (userId != null) {
+            Log.d("HistoryViewModel", "Reintentando cargar/escuchar historial de actividades libres para usuario: $userId")
+            listenForFreeActivitiesHistoryInternal(userId)
+        } else {
+            handleUnauthenticatedUser("reintentar cargar historial de actividades libres")
+        }
+    }
+
+    // --- Funciones de Gestión de Datos y UI ---
+
+    // Función para eliminar una actividad libre (carrera/caminata)
+    fun deleteFreeActivity(activityId: String?) {
+        if (activityId == null) {
+            Log.w("HistoryViewModel", "Intento de eliminar actividad con ID nulo.")
+            _historyState.value = _historyState.value.copy(errorMessage = "ID de actividad inválido para eliminar.")
+            return
+        }
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            handleUnauthenticatedUser("eliminar actividad libre")
+            return
+        }
+
+        Log.d("HistoryViewModel", "Intentando eliminar actividad libre: $activityId para usuario: $userId")
+        viewModelScope.launch {
+            try {
+                db.collection("users").document(userId)
+                    .collection("activities").document(activityId)
+                    .delete()
+                    .await()
+                Log.d("HistoryViewModel", "Actividad libre eliminada de Firestore: $activityId")
+                // La lista se actualizará automáticamente gracias a addSnapshotListener.
+                // Podrías limpiar un mensaje de error si fuera específico de esta operación y solo si tuvo éxito.
+                _historyState.value = _historyState.value.copy(errorMessage = null)
+            } catch (e: Exception) {
+                Log.e("HistoryViewModel", "Error al eliminar actividad libre '$activityId'", e)
+                _historyState.value = _historyState.value.copy(
+                    errorMessage = "Error al eliminar actividad: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun clearErrorMessage() {
+        _historyState.value = _historyState.value.copy(errorMessage = null)
+    }
+
+    private fun handleUnauthenticatedUser(actionAttempted: String) {
+        Log.w("HistoryViewModel", "Usuario no autenticado al intentar $actionAttempted.")
+        _historyState.value = _historyState.value.copy(
+            isLoadingRutinas = false, // Asume que la carga se detiene si no hay usuario
+            isLoadingActividadesLibres = false,
+            errorMessage = "Usuario no autenticado para $actionAttempted."
+        )
     }
 }

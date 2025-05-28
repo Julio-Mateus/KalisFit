@@ -4,6 +4,7 @@ package com.jcmateus.kalisfit.model
 
 data class ProgresoRutina(
     val fecha: String = "",
+    val nombreRutina: String = "",
     val nivel: String = "",
     val objetivos: List<String> = emptyList(),
     val ejercicios: List<EjercicioSimple> = emptyList(),

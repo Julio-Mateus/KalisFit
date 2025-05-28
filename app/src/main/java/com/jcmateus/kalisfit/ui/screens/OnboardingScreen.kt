@@ -1,11 +1,9 @@
 package com.jcmateus.kalisfit.ui.screens
 
-import android.R.attr.enabled
-import android.R.attr.type
+
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,9 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -159,10 +155,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedSexo) },
                 // *** ¡AQUÍ ESTÁ LA CORRECCIÓN! ***
                 modifier = Modifier
-                    .menuAnchor(
-                        MenuAnchorType.PrimaryNotEditable,
-                        true
-                    ) // Usamos el tipo correcto y habilitamos el ancla
+                    .menuAnchor() // Usamos el tipo correcto y habilitamos el ancla
                     .fillMaxWidth() // Mantiene el ancho completo
             )
             // Este es el menú desplegable que aparece al hacer clic en el OutlinedTextField

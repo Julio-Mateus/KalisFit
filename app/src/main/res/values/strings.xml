@@ -148,6 +148,13 @@
     <string name="historial_vacio_subtitulo">Aún no tienes progreso registrado. ¡Completa tu primera rutina para verlo aquí!</string>
     <string name="comenzar_rutina">Comenzar una rutina</string>
 
+    <string name="historial_rutinas_vacio_titulo">¡Aún no hay rutinas!</string>
+    <string name="historial_rutinas_vacio_subtitulo">Completa tu primera rutina para ver tu progreso aquí.</string>
+
+
+    <string name="historial_actividades_vacio_titulo">¡Sin carreras registradas!</string>
+    <string name="historial_actividades_vacio_subtitulo">Sal a correr o caminar para ver tu historial aquí.</string>
+    <string name="comenzar_actividad_libre">Iniciar Actividad</string>
 
 
 </resources>
