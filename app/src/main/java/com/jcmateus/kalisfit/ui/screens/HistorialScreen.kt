@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -48,6 +49,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -367,35 +370,44 @@ fun ResumenSemanalCard(
     historialRutinas: List<ProgresoRutina>, // Para los gráficos
     context: android.content.Context
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
     var selectedChartTab by remember { mutableStateOf(0) } // Estado para las sub-pestañas del gráfico
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        onClick = { isExpanded = !isExpanded }
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("📊 Resumen semanal de Rutinas", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(12.dp))
-
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (isExpanded) "Colapsar" else "Expandir"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Text("🏋️ Rutinas completadas: ${resumen.rutinas}", style = MaterialTheme.typography.bodyLarge)
             Text("⏱ Tiempo total entrenado: ${formatSecondsToMinutesSeconds(resumen.tiempoTotal)}", style = MaterialTheme.typography.bodyLarge)
-            Text("🤸 Total ejercicios realizados: ${resumen.totalEjercicios}", style = MaterialTheme.typography.bodyLarge)
-
-            if (resumen.ejerciciosPorTiempo > 0) {
-                Text("⏱️ Ejercicios por tiempo: ${resumen.ejerciciosPorTiempo}", style = MaterialTheme.typography.bodyMedium)
+            // Contenido expandible
+            AnimatedVisibility(visible = isExpanded) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("🤸 Total ejercicios realizados: ${resumen.totalEjercicios}", style = MaterialTheme.typography.bodyLarge)
+                    if (resumen.ejerciciosPorTiempo > 0) {
+                        Text("⏱️ Ejercicios por tiempo: ${resumen.ejerciciosPorTiempo}", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (resumen.ejerciciosPorRepeticiones > 0) {
+                        Text("🔄 Ejercicios por repeticiones: ${resumen.ejerciciosPorRepeticiones}", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (resumen.objetivosRecurrentes.isNotEmpty()) {
+                        Text(
+                            "🎯 Objetivos más frecuentes: ${resumen.objetivosRecurrentes.joinToString(", ")}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             }
-            if (resumen.ejerciciosPorRepeticiones > 0) {
-                Text("🔄 Ejercicios por repeticiones: ${resumen.ejerciciosPorRepeticiones}", style = MaterialTheme.typography.bodyMedium)
-            }
-            if (resumen.objetivosRecurrentes.isNotEmpty()) {
-                Text(
-                    "🎯 Objetivos más frecuentes: ${resumen.objetivosRecurrentes.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-
             // Gráficos (si tienes historial para ellos)
             if (historialRutinas.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -415,10 +427,10 @@ fun ResumenSemanalCard(
                 ) {
                     when (selectedChartTab) {
                         0 -> RutinasBarChart(historialRutinas, modifier = Modifier
-                            .height(200.dp)
+                            .height(150.dp)
                             .padding(8.dp))
                         1 -> TiempoBarChart(historialRutinas, modifier = Modifier
-                            .height(200.dp)
+                            .height(150.dp)
                             .padding(8.dp))
                     }
                 }

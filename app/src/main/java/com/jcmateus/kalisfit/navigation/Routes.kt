@@ -37,6 +37,7 @@ object Routes {
     const val ROUTINE_DETAIL_SCREEN = "$ROUTINE_DETAIL_PREFIX/{routineId}" // Añadido "_screen"
     const val ROUTINE_SUCCESS_SCREEN = "routine_success_screen"
 
+
     // Rutas para contenido específico o secciones (evalúa si la de Tips sigue siendo necesaria)
     const val TIPS_SCREEN = "tips_screen"
     // const val STOICISM_CONTENT_SCREEN = "stoicism_content_screen" // Esta ruta se convierte en STOICISM_TAB si la pantalla es la misma.

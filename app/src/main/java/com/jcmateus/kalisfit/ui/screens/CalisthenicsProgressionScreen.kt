@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +54,7 @@ import coil.request.ImageRequest
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.ExerciseLevel
 import com.jcmateus.kalisfit.model.Progression
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.CalisthenicsViewModel
 import kotlinx.coroutines.launch
 
@@ -124,10 +126,14 @@ fun CalisthenicsProgressionScreen(
                                 onHeaderClick = {
                                     calisthenicsViewModel.onProgressionHeaderClick(progression.id)
                                 },
-                                onLevelClick = { levelId, progressionId -> // Pasar también progresión ID
-                                    // TODO: Navegar a una pantalla de detalle del ejercicio o de registro
-                                    println("Nivel clickeado: $levelId (Progresión ID: $progressionId, Nombre: ${progression.name})")
-                                    // mainNavController.navigate("${Routes.CALISTHENICS_LEVEL_DETAIL_SCREEN}/$progressionId/$levelId")
+                                onLevelClick = { levelId, progressionId ->
+                                    Log.d("NavigationDebug", "ProgID: $progressionId, LevelID: $levelId")
+                                    if (progressionId.isNotBlank() && levelId.isNotBlank()) {
+                                        // Usar la función helper
+                                        mainNavController.navigate(Routes.calisthenicsLevelDetail(progressionId, levelId))
+                                    } else {
+                                        Log.e("NavigationDebug", "Error: progressionId o levelId está vacío. No se puede navegar.")
+                                    }
                                 }
                             )
                         }
@@ -201,9 +207,14 @@ fun ProgressionCard(
             }
 
             AnimatedVisibility(visible = isExpanded) {
+                Log.d("ProgressionCard", "Progression ${progression.name} expanded. Levels count: ${progression.levels.size}")
+                if (progression.levels.isEmpty()) {
+                    Log.w("ProgressionCard", "Warning: Progression ${progression.name} has no levels to display.")
+                }
                 Divider(modifier = Modifier.padding(horizontal = 16.dp))
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
                     progression.levels.forEachIndexed { index, level ->
+                        Log.d("ProgressionCard", "Displaying level: ${level.name}")
                         LevelItem(
                             level = level,
                             isFirst = index == 0,

@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
@@ -190,12 +192,15 @@ fun MapAndMetricsSection(
     routePoints: List<LatLng>, // De com.google.android.gms.maps.model.LatLng
     currentLocation: LatLng?  // De com.google.android.gms.maps.model.LatLng
 ) {
+    val context = LocalContext.current
+    val mapStyleOptions = remember {
+        MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style)
+    }
     // --- Configuración del Mapa ---
     val defaultCameraPosition = LatLng(currentLocation?.latitude ?: 40.7128, currentLocation?.longitude ?: -74.0060) // NY como fallback
     val cameraPositionState = rememberCameraPositionState { // De com.google.maps.android.compose
-        position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(defaultCameraPosition, 15f)
+        position = CameraPosition.fromLatLngZoom(defaultCameraPosition, 15f)
     }
-
     // Actualizar cámara cuando la ubicación actual cambia
     LaunchedEffect(currentLocation) {
         currentLocation?.let {
@@ -219,6 +224,7 @@ fun MapAndMetricsSection(
                 properties = MapProperties( // De com.google.maps.android.compose
                     isMyLocationEnabled = true, // Muestra el punto azul de ubicación actual
                     mapType = MapType.NORMAL,   // De com.google.maps.android.compose
+                    mapStyleOptions = mapStyleOptions
                 )
             ) { // Contenido @Composable del GoogleMap
                 if (routePoints.size >= 2) {
@@ -231,13 +237,13 @@ fun MapAndMetricsSection(
                 }
                 // Ejemplo para añadir un Marker (necesitarías importar Marker y rememberMarkerState
                 // de com.google.maps.android.compose):
-                // routePoints.firstOrNull()?.let {
-                //     val markerState = com.google.maps.android.compose.rememberMarkerState(position = it)
-                //     com.google.maps.android.compose.Marker(
-                //         state = markerState,
-                //         title = stringResource(R.string.start_point_marker_title) // Ejemplo de string resource
-                //     )
-                // }
+                 routePoints.firstOrNull()?.let {
+                     val markerState = com.google.maps.android.compose.rememberMarkerState(position = it)
+                     com.google.maps.android.compose.Marker(
+                        state = markerState,
+                        title = stringResource(R.string.start_point_marker_title) // Ejemplo de string resource
+                     )
+                 }
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

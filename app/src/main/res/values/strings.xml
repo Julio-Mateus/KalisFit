@@ -155,6 +155,17 @@
     <string name="historial_actividades_vacio_titulo">¡Sin carreras registradas!</string>
     <string name="historial_actividades_vacio_subtitulo">Sal a correr o caminar para ver tu historial aquí.</string>
     <string name="comenzar_actividad_libre">Iniciar Actividad</string>
+    <string name="start_point_marker_title">Punto de Inicio</string>
+
+    <string name="unknown_error_occurred">An unknown error occurred. Please try again later.</string>
+    <string name="desc_exercise_image">Imagen del ejercicio: %1$s</string>
+    <string name="desc_exercise_video_placeholder">Video del ejercicio disponible</string>
+    <string name="button_watch_video">Ver Video</string>
+    <string name="error_opening_video_link">No se pudo abrir el enlace del video.</string>
+    <string name="header_targets">Objetivos</string>
+    <string name="button_mark_as_completed">Marcar como Completado</string>
+    <string name="level_marked_completed">%1$s marcado como completado.</string>
+    <string name="level_already_completed">¡Nivel Completado!</string>
 
 
 </resources>
