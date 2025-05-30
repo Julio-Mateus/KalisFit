@@ -167,6 +167,32 @@
     <string name="level_marked_completed">%1$s marcado como completado.</string>
     <string name="level_already_completed">¡Nivel Completado!</string>
 
+    <!-- Título de la pestaña/pantalla -->
+    <string name="running_tab_title">Correr</string>
+
+
+    <!-- Permisos de Notificación (Android 13+) -->
+    <string name="running_notification_permission_rationale_title">Permiso de Notificación</string>
+    <string name="running_notification_permission_rationale_message">Para mantener la actividad corriendo en segundo plano y mostrarte el progreso, necesitamos permiso para enviar notificaciones. Esto es esencial para el servicio en primer plano.</string>
+
+    <!-- Mapa -->
+    <string name="end_point_marker_title">Fin</string>
+
+    <!-- Métricas en Vivo -->
+    <string name="running_metric_heart_rate">FREC. CARDÍACA</string> <!-- Para cuando implementes FC -->
+
+
+    <!-- Diálogo de Confirmación de Parada -->
+    <string name="running_confirm_stop_title">¿Finalizar Actividad?</string>
+    <string name="running_confirm_stop_message">¿Quieres guardar esta actividad o descartarla?</string>
+    <string name="save_activity">Guardar Actividad</string>
+    <string name="discard_activity">Descartar</string>
+
+    <!-- Resumen de Actividad -->
+    <string name="running_summary_splits_title">Splits (parciales por km)</string>
+    <string name="running_summary_no_splits">No se completaron kilómetros completos para mostrar parciales.</string>
+    <string name="running_split_km_label">Km %1$d</string> <!-- %1$d será reemplazado por el número del km -->
+
 
 </resources>
 

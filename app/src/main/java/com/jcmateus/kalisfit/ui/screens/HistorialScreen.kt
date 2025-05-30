@@ -1,14 +1,18 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
@@ -72,13 +77,28 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 //import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.captureComposableAsImage
 import com.jcmateus.kalisfit.model.UserActivity
@@ -109,91 +129,239 @@ fun formatSecondsToHMS(totalSeconds: Long): String {
 
 fun buildActivityShareText(activity: UserActivity): String {
     val dateString = activity.timestamp?.let { activityDateFormatter.format(it) } ?: "Fecha desconocida"
+    val activityType = if (activity.distanceKm > 2) "Carrera" else "Caminata"
+    val iconActivity = if (activity.distanceKm > 2) "🏃‍♀️" else "🚶‍♂️" // O iconos más específicos
+
     return """
-        ¡Nueva actividad registrada! 🏃💨
+        ¡${iconActivity} Nueva actividad registrada con KalisFit! ${iconActivity}
         -----------------------------------
         📅 Fecha: $dateString
         ⏱️ Duración: ${formatSecondsToHMS(activity.elapsedTimeSeconds)}
         📏 Distancia: ${String.format(Locale.US, "%.2f km", activity.distanceKm)}
-        🏃‍♂️ Ritmo Promedio: ${activity.avgPace}
+        👟 Ritmo Promedio: ${activity.avgPace}
         🔥 Calorías: ${activity.caloriesBurned} kcal
         -----------------------------------
-        #KalisFit #ActividadFisica #${if (activity.distanceKm > 2) "Carrera" else "Caminata"}
+        #KalisFit #ActividadFisica #$activityType #Fitness
     """.trimIndent()
 }
 
 @Composable
-fun UserActivityVisualCard(activity: UserActivity) {
-    // Este Composable es para la *imagen* a compartir.
-    // Debería ser visualmente atractivo y contener la información clave.
+fun UserActivityVisualCard(
+    activity: UserActivity,
+    routePointsToDraw: List<LatLng> = emptyList() // Asumimos que LatLng aquí ES com.google.android.gms.maps.model.LatLng
+) {
+    val context = LocalContext.current
+    val esTemaOscuro = isSystemInDarkTheme()
+    val mapStyleOptions = remember(context, esTemaOscuro) {
+        val resourceId = if (esTemaOscuro) R.raw.map_style_dark else R.raw.map_style // Asegúrate que estos R.raw existen
+        try {
+            MapStyleOptions.loadRawResourceStyle(context, resourceId)
+        } catch (e: Exception) {
+            Log.e("UserActivityVisualCard", "Error loading map style: ${e.message}")
+            null
+        }
+    }
+
+    // --- ¡¡¡PRUEBA DE COLORES ABSOLUTOS!!! ---
+    val EXPECTED_CARD_BACKGROUND = Color(0xFFFFF0C9) // MustardPale
+    val EXPECTED_ON_CARD_TEXT_COLOR = Color(0xFF1C1C1E) // TextPrimaryLight (casi negro)
+    val EXPECTED_PRIMARY_COLOR_TITLE = Color(0xFFC2850B) // MustardDark (tu mostaza oscuro)
+    val EXPECTED_SECONDARY_COLOR_ICON = Color(0xFF1976D2) // AccentBlue
+    val EXPECTED_TERTIARY_COLOR_HASHTAG = Color(0xFF388E3C) // AccentGreen
+    // --- FIN DE PRUEBA DE COLORES ABSOLUTOS ---
+
+    // Usaremos estos colores forzados en lugar de los del tema para esta prueba
+    val cardBackgroundColor = EXPECTED_CARD_BACKGROUND
+    val onCardColor = EXPECTED_ON_CARD_TEXT_COLOR
+    val primaryColor = EXPECTED_PRIMARY_COLOR_TITLE
+    val secondaryColor = EXPECTED_SECONDARY_COLOR_ICON
+    val tertiaryColor = EXPECTED_TERTIARY_COLOR_HASHTAG
+
+    Log.d("VisualCardColors", "FORZADO - Fondo Tarjeta: $cardBackgroundColor")
+    Log.d("VisualCardColors", "FORZADO - Texto Detalles: $onCardColor")
+    Log.d("VisualCardColors", "FORZADO - Título/Polilínea: $primaryColor")
+
     Card(
         modifier = Modifier
-            // Ajusta el tamaño si es necesario para la captura.
-            // .width(300.dp) // Ejemplo de ancho fijo
-            .padding(0.dp), // Es importante no tener padding externo si la card ya tiene el suyo
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para captura limpia
+            .width(380.dp) // Un poco más ancha para el logo y mejor espaciado
+            .wrapContentHeight(),
+        colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para captura de imagen
     ) {
-        Column(modifier = Modifier.padding(16.dp)) { // Padding interno de la card
-            Text(
-                "¡Mi Actividad en KalisFit!",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Icon(
-                imageVector = Icons.Filled.DirectionsRun,
-                contentDescription = "Actividad",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(48.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+        Column(modifier = Modifier.padding(16.dp)) {
+            // --- Encabezado con Logo ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                // horizontalArrangement = Arrangement.SpaceBetween // Lo ajustamos para que el título pueda crecer
+            ) {
+                // Reemplaza `R.drawable.ic_kalisfit_logo_small` con tu recurso de logo real
+                // Si no tienes uno, puedes comentarlo temporalmente o usar un Icon de Material.
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo2), // ¡¡¡CAMBIA ESTO A TU LOGO!!!
+                    contentDescription = "Logo KalisFit",
+                    modifier = Modifier
+                        .size(48.dp) // Ajusta el tamaño según tu logo
+                        .padding(end = 12.dp) // Más espacio entre logo y texto
+                )
+                Column(modifier = Modifier.weight(1f)) { // Columna para título y fecha
+                    Text(
+                        "¡Mi Actividad!",
+                        style = MaterialTheme.typography.titleLarge.copy(color = primaryColor),
+                        textAlign = TextAlign.Start, // El título puede empezar desde la izquierda
+                    )
+                    Text(
+                        text = activity.timestamp?.let { activityDateFormatter.format(it) } ?: "Fecha desconocida",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = onCardColor.copy(alpha = 0.8f)),
+                        textAlign = TextAlign.Start,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp)) // Más espacio después del encabezado
 
-            Text(
-                text = activity.timestamp?.let { activityDateFormatter.format(it) } ?: "Fecha desconocida",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            // --- Mapa (si hay puntos) ---
+            if (routePointsToDraw.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .padding(vertical = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    val cameraPositionState = rememberCameraPositionState()
 
-            InfoRowVisual("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds))
-            InfoRowVisual("Distancia:", String.format(Locale.US, "%.2f km", activity.distanceKm))
-            InfoRowVisual("Ritmo Promedio:", activity.avgPace)
-            InfoRowVisual("Calorías:", "${activity.caloriesBurned} kcal")
+                    LaunchedEffect(routePointsToDraw) {
+                        if (routePointsToDraw.isNotEmpty()) { // Ya verificado afuera, pero bueno para la lógica interna
+                            if (routePointsToDraw.size >= 2) {
+                                val builder = LatLngBounds.builder()
+                                routePointsToDraw.forEach { latLng ->
+                                    builder.include(latLng)
+                                }
+                                try {
+                                    cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(builder.build(), 50))
+                                } catch (e: IllegalStateException) {
+                                    Log.e("UserActivityVisualCard", "Error setting map bounds: ${e.message}. Falling back.")
+                                    routePointsToDraw.firstOrNull()?.let {
+                                        cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
+                                    }
+                                }
+                            } else { // Solo un punto
+                                routePointsToDraw.firstOrNull()?.let {
+                                    cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
+                                }
+                            }
+                        }
+                    }
 
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraPositionState,
+                        uiSettings = MapUiSettings(
+                            zoomControlsEnabled = false,
+                            myLocationButtonEnabled = false,
+                            scrollGesturesEnabled = false,
+                            zoomGesturesEnabled = false,
+                            tiltGesturesEnabled = false,
+                            mapToolbarEnabled = false
+                        ),
+                        properties = MapProperties(
+                            isMyLocationEnabled = false,
+                            mapType = MapType.NORMAL,
+                            mapStyleOptions = mapStyleOptions
+                        )
+                    ) {
+                        if (routePointsToDraw.size >= 2) {
+                            Polyline(
+                                points = routePointsToDraw,
+                                color = primaryColor, // Usar color primario del tema
+                                width = 10f
+                            )
+                        }
+                        // Marcador de inicio (verde)
+                        routePointsToDraw.firstOrNull()?.let { position ->
+                            Marker(
+                                state = rememberMarkerState(position = position),
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
+                                alpha = 0.9f
+                            )
+                        }
+                        // Marcador de fin (rojo) solo si hay más de un punto y es diferente al primero
+                        if (routePointsToDraw.size > 1 && routePointsToDraw.last() != routePointsToDraw.first()) {
+                            routePointsToDraw.lastOrNull()?.let { position ->
+                                Marker(
+                                    state = rememberMarkerState(position = position),
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
+                                    alpha = 0.9f
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // --- Detalles de la Actividad ---
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.DirectionsRun,
+                    contentDescription = "Actividad",
+                    tint = secondaryColor,
+                    modifier = Modifier.size(40.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    InfoRowVisual("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds), onCardColor)
+                    InfoRowVisual("Distancia:", String.format(Locale.US, "%.2f km", activity.distanceKm), onCardColor)
+                    InfoRowVisual("Ritmo:", activity.avgPace, onCardColor)
+                    InfoRowVisual("Calorías:", "${activity.caloriesBurned} kcal", onCardColor)
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "#KalisFit #${if (activity.distanceKm > 2) "Running" else "Walking"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.End)
-            )
+
+            // --- Hashtags y Nombre de App al Pie ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Compartido desde KalisFit",
+                    style = MaterialTheme.typography.labelSmall.copy(color = onCardColor.copy(alpha = 0.7f)),
+                )
+                Text(
+                    "#KalisFit #${if (activity.distanceKm > 2) "Running" else "Walking"}", // Ajusta la lógica del hashtag si es necesario
+                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColor),
+                )
+            }
         }
     }
 }
 
+// Actualiza InfoRowVisual para aceptar un color y así asegurar la consistencia del tema
 @Composable
-fun InfoRowVisual(label: String, value: String) { // Versión para la card visual
+fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido textColor
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(0.4f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.weight(0.45f), // Ligeramente ajustado el peso
+            color = textColor.copy(alpha = 0.9f) // Usar el color pasado
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(0.6f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontWeight = FontWeight.SemiBold, // Valor un poco más destacado
+            modifier = Modifier.weight(0.55f),
+            color = textColor // Usar el color pasado
         )
     }
-    Spacer(modifier = Modifier.height(4.dp))
+    Spacer(modifier = Modifier.height(6.dp)) // Un poco más de espacio
 }
 
 // Formateador de fecha para UserActivity
@@ -302,7 +470,7 @@ fun HistorialRutinasContent(
     isLoading: Boolean,
     errorMessage: String?,
     navController: NavHostController,
-    context: android.content.Context,
+    context: Context,
     onRetryLoadRutinas: () -> Unit
 ) {
     if (isLoading) {
@@ -368,7 +536,7 @@ fun HistorialRutinasContent(
 fun ResumenSemanalCard(
     resumen: ResumenSemanal,
     historialRutinas: List<ProgresoRutina>, // Para los gráficos
-    context: android.content.Context
+    context: Context
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var selectedChartTab by remember { mutableStateOf(0) } // Estado para las sub-pestañas del gráfico
@@ -513,7 +681,7 @@ fun ProgresoRutinaCard(progreso: ProgresoRutina) {
                 Text("• ${ejercicio.nombre}: $detalleEjercicio", style = MaterialTheme.typography.bodySmall)
             }
             if (progreso.ejercicios.size > 5) {
-                Text("... y ${progreso.ejercicios.size - 5} más.", style = MaterialTheme.typography.bodySmall, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                Text("... y ${progreso.ejercicios.size - 5} más.", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -534,7 +702,7 @@ fun HistorialActividadesLibresContent(
     errorMessage: String?,
     onDeleteActivity: (String?) -> Unit,
     onRetryLoadActividades: () -> Unit,
-    context: android.content.Context
+    context: Context
 ) {
     if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -674,7 +842,7 @@ fun HistorialActividadesLibresContent(
 
 // NUEVO: Composable para mostrar cada UserActivity (carrera/caminata)
 @Composable
-fun UserActivityCard(activity: UserActivity, context: android.content.Context) {
+fun UserActivityCard(activity: UserActivity, context: Context) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -743,9 +911,26 @@ fun UserActivityCard(activity: UserActivity, context: android.content.Context) {
 
                 // Botón Compartir Imagen
                 Button(onClick = {
+                    // --- ESTA ES LA PARTE IMPORTANTE A MODIFICAR EN UserActivityCard ---
+                    // 1. Obtén y transforma los puntos de ruta si es necesario.
+                    //    (Ajusta esto según la estructura de tu 'UserActivity' y 'LocationPoint')
+                    val pointsForVisualCard: List<com.google.android.gms.maps.model.LatLng> =
+                        activity.routePoints.map { locationPoint -> // Asumiendo que activity.routePoints es una lista de tu tipo LocationPoint
+                            com.google.android.gms.maps.model.LatLng(locationPoint.latitude, locationPoint.longitude)
+                        }
+                    //    Si activity.routePoints ya es List<com.google.android.gms.maps.model.LatLng>,
+                    //    entonces simplemente:
+                    //    val pointsForVisualCard = activity.routePoints
+
                     captureComposableAsImage(
                         context = context,
-                        composable = { UserActivityVisualCard(activity = activity) } // El composable a capturar
+                        // 2. Pasa los 'pointsForVisualCard' al UserActivityVisualCard
+                        composable = {
+                            UserActivityVisualCard(
+                                activity = activity,
+                                routePointsToDraw = pointsForVisualCard // <--- Aquí pasas los puntos
+                            )
+                        }
                     ) { imageFile -> // El callback con el File
                         val imageUri = FileProvider.getUriForFile(
                             context,

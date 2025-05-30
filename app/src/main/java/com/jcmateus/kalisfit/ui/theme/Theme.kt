@@ -12,58 +12,71 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
-    primary = MustardDark,
+    primary = MustardDark,                  // Título y Polilínea en VisualCard
     onPrimary = OnPrimaryLight,
     primaryContainer = MustardPale,
-    onPrimaryContainer = TextPrimaryLight, // O un MustardDark más oscuro
-    secondary = AccentBlue, // O puedes seguir usando MustardLight si prefieres monocromático
+    onPrimaryContainer = TextPrimaryLight,
+
+    secondary = AccentBlue,
     onSecondary = OnAccent,
-    secondaryContainer = Color(0xFFE3F2FD), // Un azul muy pálido
+    secondaryContainer = Color(0xFFE3F2FD),
     onSecondaryContainer = TextPrimaryLight,
-    tertiary = AccentGreen, // Opcional, puedes usar otro color o un derivado de mostaza
+
+    tertiary = AccentGreen,
     onTertiary = OnAccent,
-    tertiaryContainer = Color(0xFFE8F5E9), // Un verde muy pálido
+    tertiaryContainer = Color(0xFFE8F5E9),
     onTertiaryContainer = TextPrimaryLight,
+
     background = BackgroundLight,
     onBackground = TextPrimaryLight,
-    surface = SurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = Color(0xFFFAF0DC), // Una variante de superficie un poco más oscura que el fondo
-    onSurfaceVariant = TextSecondaryLight,
-    outline = TextSecondaryLight, // O un gris más claro
+
+    surface = SurfaceLight,                 // Fondo de la tarjeta del mapa dentro de VisualCard
+    onSurface = TextPrimaryLight,           // Texto sobre la tarjeta del mapa
+
+    // --- Clave para la UserActivityVisualCard ---
+    surfaceVariant = MustardPale,           // Fondo principal de UserActivityVisualCard
+    onSurfaceVariant = TextPrimaryLight,    // Texto de detalles (InfoRowVisual) en UserActivityVisualCard
+
+    outline = TextSecondaryLight,
     error = ErrorRed,
-    onError = Color.White,
-    // Puedes añadir más aquí: errorContainer, onErrorContainer, etc.
+    onError = Color.White
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = MustardLight,
-    onPrimary = TextPrimaryLight, // Un negro sobre mostaza claro funciona bien
+    onPrimary = TextPrimaryDark, // Ajustado para mejor contraste si TextPrimaryLight es muy oscuro
     primaryContainer = MustardDeep,
-    onPrimaryContainer = MustardPale, // O un blanco/amarillo muy claro
-    secondary = AccentBlue, // Mantén consistencia con el tema claro si es el mismo rol
-    onSecondary = OnAccent,
-    secondaryContainer = Color(0xFF0A2A47), // Un azul oscuro para container
+    onPrimaryContainer = MustardPale,
+
+    secondary = AccentBlue,
+    onSecondary = OnAccent, // Asumiendo que OnAccent (Blanco) funciona bien sobre AccentBlue
+    secondaryContainer = Color(0xFF0A2A47),
     onSecondaryContainer = Color(0xFFD1E6FF),
+
     tertiary = AccentGreen,
     onTertiary = OnAccent,
     tertiaryContainer = Color(0xFF103112),
     onTertiaryContainer = Color(0xFFC8E6C9),
+
     background = BackgroundDark,
     onBackground = TextPrimaryDark,
+
     surface = SurfaceDark,
     onSurface = TextPrimaryDark,
-    surfaceVariant = Color(0xFF2C2A25), // Una variante de superficie un poco más clara que el fondo oscuro
-    onSurfaceVariant = TextSecondaryDark,
+
+    // Para Dark Theme en UserActivityVisualCard (si lo implementas)
+    surfaceVariant = Color(0xFF2C2A25), // Manteniendo tu original para tema oscuro
+    onSurfaceVariant = TextSecondaryDark, // Manteniendo tu original para tema oscuro
+
     outline = TextSecondaryDark,
     error = ErrorRed,
-    onError = TextPrimaryLight, // Negro sobre rojo en tema oscuro puede ser mejor
+    onError = TextPrimaryDark // Ajustado para mejor contraste, ej. negro sobre rojo
 )
 
 @Composable
 fun KalisFitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true, // Mantén esto si quieres Material You en A12+
+    dynamicColor: Boolean = true, // Considera ponerlo en 'false' temporalmente para depurar tus colores estáticos
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -71,16 +84,14 @@ fun KalisFitTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        // FORZAR TEMA CLARO PARA DEPURAR LA TARJETA VISUAL:
+        // else -> LightColorScheme // Descomenta esta línea y comenta las dos de arriba para forzar LightColorScheme
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
-    // Para forzar un tema específico durante el desarrollo de la Card, puedes hacer:
-    // val forcedLightTheme = LightColorScheme
-    // val forcedDarkTheme = DarkColorScheme // (pero con colores onPrimary, etc. bien definidos)
-
     MaterialTheme(
-        colorScheme = colorScheme, // o colorScheme = forcedLightTheme para probar
+        colorScheme = colorScheme,
         typography = Typography, // Asumo que tienes Typography definida
         content = content
     )
