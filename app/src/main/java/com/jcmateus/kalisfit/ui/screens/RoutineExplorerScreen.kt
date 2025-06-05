@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -47,19 +49,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModelFactory
-import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 @SuppressLint("StateFlowValueCalledInComposition")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -186,57 +191,83 @@ fun RoutineExplorerScreen(
 
 @Composable
 fun RutinaCardEnhanced(rutina: Rutina, onClick: () -> Unit) {
+    Log.d("RutinaCardEnhanced", "ID Rutina: ${rutina.id}, Nombre: ${rutina.nombre}, ImageURL: ${rutina.imagenUrl}")
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), // Menos elevación para un look más plano
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh // Un color de contenedor de M3 más nuevo
-            // Si no tienes surfaceContainerHigh, usa surfaceVariant o surface
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = rutina.nombre,
-                style = MaterialTheme.typography.headlineSmall, // Más impacto para el título
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
-            if (rutina.descripcion.isNotBlank()) {
-                Text(
-                    text = rutina.descripcion,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, // Limitar descripción
-                    overflow = TextOverflow.Ellipsis
+        Column { // Quitamos el padding aquí para que la imagen ocupe todo el ancho
+            // --- INICIO: Mostrar Imagen de la Rutina ---
+            if (!rutina.imagenUrl.isNullOrBlank()) {
+                Log.d("RutinaCardEnhanced", "Mostrando AsyncImage para: ${rutina.imagenUrl}")
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(rutina.imagenUrl)
+                        .crossfade(true) // Opcional: para una carga más suave
+                        // .placeholder(R.drawable.placeholder_image) // Opcional: imagen mientras carga
+                        // .error(R.drawable.error_image) // Opcional: imagen si hay error
+                        .build(),
+                    contentDescription = "Imagen de la rutina: ${rutina.nombre}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(500.dp) // O una altura fija: .height(180.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentScale = ContentScale.Crop // O ContentScale.Fit, según prefieras
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider( // O `Divider()` si usas M2 o M3 < 1.2
-                    thickness = 0.5.dp, // Muy sutil
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+            }else {
+                // ----> INICIO DEBUG <----
+                Log.d("RutinaCardEnhanced", "ImageURL es nula o vacía para la rutina: ${rutina.nombre}")
+                // ----> FIN DEBUG <----
             }
+            // --- FIN: Mostrar Imagen de la Rutina ---
 
+            // Contenido de texto con padding
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = rutina.nombre,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
 
-            RutinaDetailItemWithIcon(
-                icon = Icons.Filled.Star,
-                label = "Nivel",
-                value = rutina.nivelRecomendado.joinToString(" / ")
-            )
-            RutinaDetailItemWithIcon(
-                icon = Icons.Filled.CheckCircle, // O Icons.Filled.Flag
-                label = "Objetivos",
-                value = rutina.objetivos.joinToString(", ")
-            )
-            RutinaDetailItemWithIcon(
-                icon = determinePlaceIcon(rutina.lugarEntrenamiento.firstOrNull()), // Un icono dinámico para el lugar
-                label = "Lugares",
-                value = rutina.lugarEntrenamiento.joinToString(", ")
-            )
+                if (rutina.descripcion.isNotBlank()) {
+                    Text(
+                        text = rutina.descripcion,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                RutinaDetailItemWithIcon(
+                    icon = Icons.Filled.Star,
+                    label = "Nivel",
+                    value = rutina.nivelRecomendado.joinToString(" / ")
+                )
+                RutinaDetailItemWithIcon(
+                    icon = Icons.Filled.CheckCircle,
+                    label = "Objetivos",
+                    value = rutina.objetivos.joinToString(", ")
+                )
+                RutinaDetailItemWithIcon(
+                    icon = determinePlaceIcon(rutina.lugarEntrenamiento.firstOrNull()?.toString()), // Asegúrate que lugarEntrenamiento es String o conviértelo
+                    label = "Lugares",
+                    value = rutina.lugarEntrenamiento.joinToString(", ") { it.toString() } // Si es una lista de Enums
+                )
+            }
         }
     }
 }

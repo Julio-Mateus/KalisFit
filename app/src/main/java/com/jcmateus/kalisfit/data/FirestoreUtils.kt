@@ -43,8 +43,10 @@ data class EjercicioFirestore(
 // Estructura de datos para una rutina TAL COMO SE GUARDARÁ EN FIRESTORE (sin la lista de ejercicios)
 data class RutinaFirestore(
     val id: String = "", // ID del documento en la colección 'rutinas'
+    val slug: String = "",
     val nombre: String = "",
     val descripcion: String = "",
+    val imagenUrl: String? = null,
     val nivelRecomendado: List<String> = emptyList(),
     val objetivos: List<String> = emptyList(),
     val lugarEntrenamiento: List<String> = emptyList() // Guardado como lista de Strings
@@ -379,8 +381,10 @@ fun obtenerRutinas(
             val rutinasModeloFinal = rutinasFiltradasFinal.map { rf ->
                 Rutina(
                     id = rf.id,
+                    slug = rf.slug,
                     nombre = rf.nombre,
                     descripcion = rf.descripcion,
+                    imagenUrl = rf.imagenUrl,
                     nivelRecomendado = rf.nivelRecomendado,
                     objetivos = rf.objetivos,
                     lugarEntrenamiento = rf.lugarEntrenamiento,
@@ -452,8 +456,10 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
         // 3. Construir el objeto Rutina completo con los ejercicios cargados
         val rutinaCompleta = Rutina(
             id = rutinaFirestore.id,
+            slug = rutinaFirestore.slug,
             nombre = rutinaFirestore.nombre,
             descripcion = rutinaFirestore.descripcion,
+            imagenUrl = rutinaFirestore.imagenUrl,
             nivelRecomendado = rutinaFirestore.nivelRecomendado,
             objetivos = rutinaFirestore.objetivos,
             // Mapea List<String> (Firestore) a List<String> (Modelo Rutina). Esto ya lo teníamos y está bien.
