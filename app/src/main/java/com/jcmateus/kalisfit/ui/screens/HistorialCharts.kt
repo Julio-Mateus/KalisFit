@@ -37,12 +37,13 @@ fun RutinasBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifi
 
 @Composable
 fun TiempoBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifier) {
-    val barras = historial.groupBy { it.fecha.take(10) }
+    val barras = historial.groupBy { it.fecha.take(10) } // it.fecha es correcto según tu data class
         .map { (fecha, items) ->
-            val totalTiempo = items.sumOf { it.tiempoTotal }
+            // Corregido: usa tiempoTotalSesionSegundos y especifica el tipo para sumOf
+            val totalTiempo = items.sumOf { it.tiempoTotalSesionSegundos } // Sumará Ints, resultando en Int
             BarChartData.Bar(
                 label = fecha,
-                value = totalTiempo.toFloat(),
+                value = totalTiempo.toFloat(), // Convierte la suma (Int) a Float
                 color = Color(0xFF4CAF50)
             )
         }

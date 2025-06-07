@@ -90,4 +90,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.play.services.location)
     implementation(libs.maps.compose)
+
+    implementation("io.coil-kt:coil-gif:2.4.0")
 }

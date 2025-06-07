@@ -19,7 +19,10 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,13 +43,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.decode.GifDecoder
 import coil.request.ImageRequest
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.ExerciseLevel
@@ -63,21 +68,26 @@ fun CalisthenicsLevelDetailScreen(
     navController: NavHostController,
     progressionId: String,
     levelId: String,
-    viewModel: CalisthenicsViewModel = viewModel() // Asegúrate que CalisthenicsViewModel está importado
+    viewModel: CalisthenicsViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val imageLoader = ImageLoader.Builder(context)
+        .components { add(GifDecoder.Factory()) }
+        .build()
+
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(progressionId, levelId) {
         viewModel.loadExerciseLevelDetails(progressionId, levelId)
+        // Opcional: Asegurarse que los estados de progresión del usuario están cargados
+        // viewModel.loadCurrentUserProgressionStates() // Si no se carga globalmente
     }
 
-    val exerciseDetails: ExerciseLevel? by viewModel.exerciseLevelDetails.collectAsState() // Asegúrate que ExerciseLevel está importado
+    val exerciseDetails: ExerciseLevel? by viewModel.exerciseLevelDetails.collectAsState()
     val isLoading: Boolean by viewModel.isLoading.collectAsState()
     val error: String? by viewModel.error.collectAsState()
-    val userProgressionStates by viewModel.userProgressionStates.collectAsState() // Asegúrate que la clave (progressionId) y el valor (UserProgression) son correctos
-
+    // Ya no necesitamos userProgressionStates aquí directamente si el ViewModel provee las funciones isLevelCompleted/isLevelUnlocked
 
     DisposableEffect(LocalLifecycleOwner.current) {
         onDispose {
@@ -87,7 +97,8 @@ fun CalisthenicsLevelDetailScreen(
 
     LaunchedEffect(error) {
         error?.let {
-            if (exerciseDetails != null) {
+            // Mostrar Snackbar de error solo si no estamos en el estado de error de carga inicial
+            if (exerciseDetails != null || (isLoading && exerciseDetails == null && error != null /* Error durante la carga inicial pero se muestra snackbar*/)) {
                 scope.launch {
                     snackbarHostState.showSnackbar(
                         message = it,
@@ -131,11 +142,11 @@ fun CalisthenicsLevelDetailScreen(
                 .padding(paddingValues)
         ) {
             when {
-                isLoading && exerciseDetails == null -> {
+                isLoading && exerciseDetails == null -> { // Cargando detalles iniciales
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
 
-                error != null && exerciseDetails == null -> {
+                error != null && exerciseDetails == null -> { // Error al cargar detalles iniciales
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -144,22 +155,31 @@ fun CalisthenicsLevelDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
+                        Icon(
+                            imageVector = Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            stringResource(R.string.error_loading_title),
+                            stringResource(R.string.error_loading_details_title), // Título más específico
                             style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            error ?: stringResource(R.string.unknown_error_occurred), // CORRECCIÓN: Usar valor o default
+                            error ?: stringResource(R.string.unknown_error_occurred),
                             style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
-                                viewModel.clearError() // Asegúrate que no es suspend
-                                viewModel.loadExerciseLevelDetails(progressionId, levelId) // Asegúrate que no es suspend
+                                viewModel.clearError()
+                                viewModel.loadExerciseLevelDetails(progressionId, levelId)
                             }
                         ) {
                             Text(stringResource(R.string.button_retry))
@@ -169,38 +189,33 @@ fun CalisthenicsLevelDetailScreen(
 
                 exerciseDetails != null -> {
                     val currentDetails = exerciseDetails!! // Seguro por la condición
-                    if (currentDetails.name == "Ejercicio no encontrado") {
+
+                    // Obtener el estado del nivel desde el ViewModel
+                    val isCompleted = viewModel.isLevelCompleted(progressionId, levelId)
+                    val isUnlocked = viewModel.isLevelUnlocked(progressionId, levelId) // Necesario para la lógica del botón
+
+                    if (currentDetails.name == "Ejercicio no encontrado") { // Caso especial de "no encontrado"
                         Text(
-                            currentDetails.description,
+                            currentDetails.description, // Asumiendo que la descripción contiene el mensaje
                             style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(16.dp)
                         )
                     } else {
-                        val progressionState = userProgressionStates[progressionId] // Puede ser UserProgression?
-                        val isLevelCompleted = progressionState?.isLevelCompleted(levelId) ?: false // CORRECCIÓN
-
-                        val currentProgression = viewModel.progressions.value.firstOrNull { it.id == progressionId }
-                        val isNextLevelOrPast = progressionState?.isLevelNextOrPast(
-                            levelId,
-                            currentDetails,
-                            currentProgression?.levels ?: emptyList()
-                        ) ?: false // CORRECCIÓN
-
-
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 16.dp) // Espacio para el botón de completar al final
                         ) {
-                            // Sección de Imagen/Video
+                            // Sección de Imagen/Video (sin cambios)
                             if (currentDetails.imageUrl != null || currentDetails.videoUrl != null) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .aspectRatio(16f / 9f)
+                                        .fillMaxHeight(0.4f)
                                         .background(
                                             MaterialTheme.colorScheme.surfaceVariant.copy(
                                                 alpha = 0.3f
@@ -209,31 +224,23 @@ fun CalisthenicsLevelDetailScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (currentDetails.imageUrl != null) {
-                                        AsyncImage( // CORRECCIÓN: Usando Coil correctamente
+                                        AsyncImage(
                                             model = ImageRequest.Builder(LocalContext.current)
                                                 .data(currentDetails.imageUrl)
                                                 .crossfade(true)
                                                 .placeholder(R.drawable.ic_default_placeholder)
                                                 .error(R.drawable.ic_error_placeholder)
                                                 .build(),
+                                            imageLoader = imageLoader,
                                             contentDescription = stringResource(R.string.desc_exercise_image, currentDetails.name),
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
                                         )
-                                        // Alternativa más simple:
-                                        // AsyncImage(
-                                        // model = currentDetails.imageUrl,
-                                        // placeholder = painterResource(id = R.drawable.ic_default_placeholder),
-                                        // error = painterResource(id = R.drawable.ic_error_placeholder),
-                                        // contentDescription = stringResource(R.string.desc_exercise_image, currentDetails.name),
-                                        // modifier = Modifier.fillMaxSize(),
-                                        // contentScale = ContentScale.Crop
-                                        // )
-                                    } else if (currentDetails.videoUrl != null) {
+                                    } else if (currentDetails.videoUrl != null) { // Placeholder si solo hay video
                                         Icon(
-                                            imageVector = Icons.Filled.PlayCircleFilled,
+                                            imageVector = Icons.Filled.PlayCircleOutline, // Outline para diferenciar de botón
                                             contentDescription = stringResource(R.string.desc_exercise_video_placeholder),
-                                            modifier = Modifier.size(100.dp),
+                                            modifier = Modifier.size(120.dp), // Más grande
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
@@ -270,7 +277,7 @@ fun CalisthenicsLevelDetailScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
 
-                            // Sección de Nombre y Descripción (con padding horizontal)
+                            // Sección de Nombre y Descripción
                             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                                 Text(
                                     text = currentDetails.name,
@@ -278,80 +285,88 @@ fun CalisthenicsLevelDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                // DetailItem(label = stringResource(R.string.detail_label_description), value = currentDetails.description) // Asegúrate que DetailItem está definido
+                                // Usar el Composable DetailItem si está definido y es apropiado,
+                                // o simplemente Text para la descripción principal.
+                                Text(
+                                    text = currentDetails.description,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-
 
                             // Sección de Metas (Sets, Reps, Hold Time)
                             if (currentDetails.targetSets != null || currentDetails.targetReps != null || currentDetails.targetHoldTime != null) {
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(24.dp)) // Más espacio antes de esta sección
                                 Text(
-                                    text = stringResource(R.string.header_targets),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    text = stringResource(R.string.header_targets).uppercase(), // Título en mayúsculas
+                                    style = MaterialTheme.typography.titleSmall, // titleSmall o labelLarge
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.primary // Color primario para el encabezado
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                     currentDetails.targetSets?.let { DetailItem(label = stringResource(R.string.detail_label_sets), value = it.toString()) } // Asegúrate que DetailItem está definido y `it` se pasa como String
-                                     currentDetails.targetReps?.let { DetailItem(label = stringResource(R.string.detail_label_reps_duration), value = it.toString()) }
-                                     currentDetails.targetHoldTime?.let { DetailItem(label = stringResource(R.string.detail_label_hold_time), value = it.toString()) }
+                                Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    currentDetails.targetSets?.let { DetailItem(label = stringResource(R.string.detail_label_sets), value = it) }
+                                    currentDetails.targetReps?.let { DetailItem(label = stringResource(R.string.detail_label_reps_duration), value = it) } // Asumo que repeticiones y duración usan la misma etiqueta aquí
+                                    currentDetails.targetHoldTime?.let { DetailItem(label = stringResource(R.string.detail_label_hold_time), value = it) }
                                 }
                             }
 
                             // Sección de Notas/Consejos
                             currentDetails.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(24.dp))
                                 Text(
-                                    stringResource(R.string.detail_label_notes_tips),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    stringResource(R.string.detail_label_notes_tips).uppercase(),
+                                    style = MaterialTheme.typography.titleSmall,
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     notes,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(horizontal = 24.dp),
+                                    modifier = Modifier.padding(horizontal = 16.dp), // Alineado con el título
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.weight(1f)) // Empuja el botón hacia abajo si el contenido es corto
 
-                            if (isNextLevelOrPast && !isLevelCompleted) {
+                            // --- Lógica del Botón "Marcar como Completado" ---
+                            // El botón solo debe aparecer si el nivel está DESBLOQUEADO y AÚN NO ESTÁ COMPLETADO.
+                            if (isUnlocked && !isCompleted) {
                                 Button(
                                     onClick = {
-                                        viewModel.markLevelAsCompleted(progressionId, levelId) // Asegúrate que no es suspend
+                                        viewModel.markLevelAsCompleted(progressionId, levelId)
+                                        // El Snackbar se mostrará cuando el estado 'isCompleted' cambie
+                                        // o puedes mostrar uno inmediatamente.
                                         scope.launch {
                                             snackbarHostState.showSnackbar(
-                                                message = context.getString(R.string.level_marked_completed, currentDetails.name),
+                                                message = context.getString(R.string.level_marked_completed_feedback, currentDetails.name),
                                                 duration = SnackbarDuration.Short
                                             )
                                         }
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    enabled = !isLoading
+                                        .padding(horizontal = 16.dp, vertical = 16.dp), // Añadir padding vertical
+                                    enabled = !isLoading // Deshabilitar si el ViewModel está ocupado (opcional)
                                 ) {
                                     Icon(
-                                        Icons.Filled.CheckCircle,
+                                        Icons.Filled.CheckCircleOutline, // Outline para diferenciar de estado completado
                                         contentDescription = null,
                                         modifier = Modifier.size(ButtonDefaults.IconSize)
                                     )
                                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                     Text(stringResource(R.string.button_mark_as_completed))
                                 }
-                            } else if (isLevelCompleted) {
+                            } else if (isCompleted) { // Si ya está completado
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
+                                        .padding(horizontal = 16.dp, vertical = 16.dp)
                                         .background(
-                                            MaterialTheme.colorScheme.primaryContainer.copy(
-                                                alpha = 0.3f
-                                            ), MaterialTheme.shapes.medium
+                                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f), // Color diferente para completado
+                                            MaterialTheme.shapes.medium
                                         )
                                         .padding(vertical = 12.dp, horizontal = 16.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -360,25 +375,31 @@ fun CalisthenicsLevelDetailScreen(
                                     Icon(
                                         Icons.Filled.CheckCircle,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer, // Color que contraste
                                         modifier = Modifier.size(ButtonDefaults.IconSize)
                                     )
                                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                     Text(
                                         stringResource(R.string.level_already_completed),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary
+                                        style = MaterialTheme.typography.labelLarge, // labelLarge o bodyMedium
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
+                            // No se muestra nada si está bloqueado y no completado
+                            // (el usuario no debería poder llegar a esta pantalla si está bloqueado,
+                            // pero por si acaso, no se muestra botón de acción).
+
+                            Spacer(modifier = Modifier.height(16.dp)) // Espacio final
                         }
                     }
                 }
-                else -> {
+                else -> { // Fallback si exerciseDetails es null y no hay error/loading
                     Text(
                         stringResource(R.string.info_no_data_available),
                         style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(16.dp)
@@ -390,27 +411,30 @@ fun CalisthenicsLevelDetailScreen(
 }
 
 
-// El Composable DetailItem sigue igual, es genérico.
+// El Composable DetailItem que usas:
 @Composable
 fun DetailItem(label: String, value: String?) {
     value?.takeIf { it.isNotBlank() }?.let { nonEmptyValue ->
-        Column(
+        Row( // Usar Row para tener etiqueta y valor en la misma línea si caben o diseño preferido
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp) // Reducido para más densidad si es necesario
+                .padding(vertical = 6.dp), // Ajustar padding
+            verticalAlignment = Alignment.Top // Alinear al inicio si el valor es multilínea
         ) {
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge, // Un poco más pequeño que titleSmall
+                text = "$label:", // Añadir dos puntos para claridad
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary, // Color primario para la etiqueta
+                modifier = Modifier.weight(0.4f) // Darle un peso a la etiqueta
             )
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = nonEmptyValue,
-                style = MaterialTheme.typography.bodyLarge, // Mantenemos el tamaño para la legibilidad del valor
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(0.6f) // Darle un peso al valor
             )
-            // Quité el Spacer aquí para más densidad, el padding vertical en Column lo maneja
         }
     }
 }

@@ -65,8 +65,9 @@ class RoutineExplorerViewModel : ViewModel() {
                     true
                 } else {
                     val nombreLugarFiltroMinusculas = lugarEnumFiltro.name.lowercase()
-                    rutina.lugarEntrenamiento.any { lugarRutina -> // lugarRutina es String
-                        lugarRutina.lowercase().equals(nombreLugarFiltroMinusculas)
+                    // Asumiendo que rutina.lugarEntrenamiento es List<LugarEntrenamiento>
+                    rutina.lugarEntrenamiento.any { lugarRutinaEnum -> // lugarRutinaEnum es de tipo LugarEntrenamiento
+                        lugarRutinaEnum.name.lowercase() == nombreLugarFiltroMinusculas
                     }
                 }
 

@@ -13,6 +13,7 @@ import com.jcmateus.kalisfit.data.getCalisthenicsExerciseLevel
 import com.jcmateus.kalisfit.model.ExerciseLevel
 import com.jcmateus.kalisfit.model.Progression
 import com.jcmateus.kalisfit.model.UserProgressionState
+import com.jcmateus.kalisfit.model.isLevelCompleted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -197,43 +198,60 @@ class CalisthenicsViewModel(application: Application) : AndroidViewModel(applica
             Log.e("CalisthenicsVM", "Progression $progressionId not found or has no levels.")
             return
         }
-        // Los niveles ya están ordenados por getAllCalisthenicsProgressions
+        // Asumimos que currentProgression.levels ya está ordenado por 'order'
+        // desde fetchCalisthenicsProgressions o getAllCalisthenicsProgressions
+        val sortedLevels = currentProgression.levels
+
+        val completedLevelInProgression = sortedLevels.find { it.id == completedLevelId }
+        if (completedLevelInProgression == null) {
+            _error.value = "Nivel completado no encontrado en la plantilla de progresión."
+            Log.e("CalisthenicsVM", "Level $completedLevelId not found in progression template ${currentProgression.name}")
+            return
+        }
 
         var userStateToUpdate = getInMemoryOrDefaultUserProgressionState(progressionId)
 
         // Si el estado es el por defecto (sin userId), es porque el usuario no estaba logueado
-        // o es la primera interacción. Forzamos el userId ahora.
+        // o es la primera interacción. Forzamos el userId ahora y el primer nivel.
         if (userStateToUpdate.userId.isBlank() && userId.isNotBlank()) {
-            userStateToUpdate = userStateToUpdate.copy(userId = userId)
-            // Si currentAttemptLevelId es null, intentar poner el primer nivel
-            if (userStateToUpdate.currentAttemptLevelId == null && currentProgression.levels.isNotEmpty()){
-                userStateToUpdate = userStateToUpdate.copy(currentAttemptLevelId = currentProgression.levels.first().id)
-            }
+            userStateToUpdate = userStateToUpdate.copy(
+                userId = userId,
+                // Si currentAttemptLevelId es null y la progresión tiene niveles,
+                // establece el primer nivel como el intento actual.
+                currentAttemptLevelId = userStateToUpdate.currentAttemptLevelId ?: sortedLevels.firstOrNull()?.id
+            )
         }
 
+        // --- Lógica de actualización del estado del usuario ---
 
-        val completedLevelIndex = currentProgression.levels.indexOfFirst { it.id == completedLevelId }
-        if (completedLevelIndex == -1) {
-            _error.value = "Nivel completado no encontrado en la progresión."
-            Log.e("CalisthenicsVM", "Level $completedLevelId not found in progression ${currentProgression.name}")
-            return
-        }
+        // 1. Añadir el nivel completado a la lista de IDs completados (evitando duplicados)
+        val updatedCompletedIds = (userStateToUpdate.completedLevelIds + completedLevelId).distinct()
 
-        val nextLevelId = if (completedLevelIndex < currentProgression.levels.size - 1) {
-            currentProgression.levels[completedLevelIndex + 1].id
+        // 2. Determinar el siguiente nivel para 'currentAttemptLevelId'
+        //    Esto se basa en el orden de los niveles en la progresión.
+        val completedLevelIndex = sortedLevels.indexOfFirst { it.id == completedLevelId }
+        // Este índice debería ser válido si completedLevelInProgression no fue null.
+
+        val nextLevelId: String? = if (completedLevelIndex < sortedLevels.size - 1) {
+            sortedLevels[completedLevelIndex + 1].id
         } else {
-            null // Último nivel completado, no hay siguiente intento
+            null // Se completó el último nivel de la progresión, no hay siguiente intento.
         }
 
+        // 3. Crear el estado actualizado
+        //    'lastCompletedLevelId' se actualiza al nivel que se acaba de completar.
         userStateToUpdate = userStateToUpdate.copy(
             lastCompletedLevelId = completedLevelId,
-            currentAttemptLevelId = nextLevelId, // Será null si se completó el último nivel
+            currentAttemptLevelId = nextLevelId,
+            completedLevelIds = updatedCompletedIds,
             lastUpdated = System.currentTimeMillis()
         )
 
-        // Guardar el estado actualizado en Firestore
+        // --- Guardar el estado actualizado en Firestore ---
         viewModelScope.launch {
-            _isLoading.value = true // O un isLoadingSavingProgress
+            // Podrías usar un StateFlow específico para el estado de guardado si lo necesitas
+            // _isSavingProgress.value = true
+            _isLoading.value = true // Usando el isLoading general por ahora
             _error.value = null
             try {
                 // El ID del documento es crucial para poder sobrescribir/actualizar
@@ -241,23 +259,123 @@ class CalisthenicsViewModel(application: Application) : AndroidViewModel(applica
 
                 db.collection(FirestoreCollections.USER_PROGRESSION_STATES)
                     .document(docId) // Usar el ID compuesto para asegurar que se actualice el mismo doc
-                    .set(userStateToUpdate) // .set() crea o sobrescribe
+                    .set(userStateToUpdate) // .set() crea o sobrescribe el documento completo
                     .await()
 
-                // Actualizar el StateFlow local para reflejar el cambio inmediatamente
+                // Actualizar el StateFlow local para reflejar el cambio inmediatamente en la UI
                 _userProgressionStates.value = _userProgressionStates.value + (progressionId to userStateToUpdate)
-                Log.d("CalisthenicsVM", "UserProgressionState for $progressionId, user $userId updated. Next level: $nextLevelId")
+                Log.d("CalisthenicsVM", "UserProgressionState for $progressionId, user $userId updated. Last completed: $completedLevelId, Next attempt: $nextLevelId. Total completed: ${updatedCompletedIds.size}")
 
             } catch (e: Exception) {
-                Log.e("CalisthenicsVM", "Error updating UserProgressionState for $progressionId", e)
+                Log.e("CalisthenicsVM", "Error updating UserProgressionState for $progressionId (docId: ${userId}_${progressionId})", e)
                 _error.value = "Error al guardar el progreso: ${e.message}"
-                // Considera revertir el cambio en _userProgressionStates.value si Firestore falla
+                // Considera revertir el cambio en _userProgressionStates.value si Firestore falla,
+                // aunque esto puede ser complejo y depende de tu estrategia de manejo de errores.
+                // Por ejemplo, podrías recargar los estados desde Firestore para asegurar consistencia.
             } finally {
+                // _isSavingProgress.value = false
                 _isLoading.value = false
             }
         }
     }
 
+    fun UserProgressionState.isLevelUnlocked(
+        levelIdToCheck: String,
+        levelOrderToCheck: Int, // El 'order' del levelIdToCheck
+        allLevelsInProgression: List<ExerciseLevel> // Lista de todos los ExerciseLevel en la progresión, ORDENADOS por 'order'
+    ): Boolean {
+        // El primer nivel (orden 0) siempre está desbloqueado.
+        if (levelOrderToCheck == 0) return true
+
+        // Si el nivel ya está completado, definitivamente está "desbloqueado".
+        if (this.isLevelCompleted(levelIdToCheck)) return true // Usando tu otra función de extensión
+
+        // Encuentra el nivel completado con el 'order' más alto.
+        val lastTrulyCompletedLevel = allLevelsInProgression
+            .filter { this.completedLevelIds.contains(it.id) }
+            .maxByOrNull { it.order }
+
+        if (lastTrulyCompletedLevel == null) {
+            // No se ha completado ningún nivel aún. Solo el de orden 0 está desbloqueado.
+            // (Ya cubierto por la primera condición, pero es bueno tenerlo en cuenta).
+            return levelOrderToCheck == 0
+        } else {
+            // Un nivel está desbloqueado si su 'order' es el siguiente al 'order'
+            // del último nivel realmente completado.
+            return levelOrderToCheck <= lastTrulyCompletedLevel.order + 1
+        }
+    }
+
+    /**
+     * Obtiene el UserProgressionState para una progresión específica desde el estado en memoria.
+     * Es importante que loadCurrentUserProgressionStates() se haya llamado y completado.
+     */
+    private fun getInMemoryUserProgressionState(progressionId: String): UserProgressionState? {
+        return _userProgressionStates.value[progressionId]
+    }
+
+    /**
+     * Verifica si un nivel específico está completado por el usuario.
+     */
+    fun isLevelCompleted(progressionId: String, levelId: String): Boolean {
+        val userState = getInMemoryUserProgressionState(progressionId)
+        // Usamos la función de extensión de UserProgressionState que definimos antes
+        return userState?.isLevelCompleted(levelId) ?: false
+    }
+
+    /**
+     * Verifica si un nivel específico está desbloqueado para el usuario.
+     * Un nivel está desbloqueado si es el primer nivel (orden 0), ya ha sido completado,
+     * o si el nivel anterior (en orden) ha sido completado.
+     */
+    fun isLevelUnlocked(progressionId: String, levelId: String): Boolean {
+        val targetProgression = _progressions.value.firstOrNull { it.id == progressionId }
+        if (targetProgression == null || targetProgression.levels.isEmpty()) {
+            Log.w("CalisthenicsVM", "isLevelUnlocked: Progression $progressionId not found or has no levels.")
+            return false // O true si el primer nivel siempre debe ser accesible incluso sin datos de progresión
+        }
+
+        // Los niveles en targetProgression.levels YA DEBEN ESTAR ORDENADOS por 'order'
+        val sortedLevels = targetProgression.levels
+        val levelToCheck = sortedLevels.find { it.id == levelId }
+        if (levelToCheck == null) {
+            Log.w("CalisthenicsVM", "isLevelUnlocked: Level $levelId not found in progression $progressionId.")
+            return false // Nivel no encontrado en la plantilla
+        }
+
+        // El primer nivel (order 0) de cualquier progresión siempre está desbloqueado.
+        if (levelToCheck.order == 0) return true
+
+        val userState = getInMemoryUserProgressionState(progressionId)
+
+        // Si no hay estado de usuario para esta progresión, solo el primer nivel (order 0) está desbloqueado.
+        // (Esto ya está cubierto por la condición anterior 'levelToCheck.order == 0').
+        // Si queremos ser explícitos:
+        if (userState == null) {
+            return levelToCheck.order == 0
+        }
+
+        // Usamos la lógica/función de extensión isLevelUnlocked de UserProgressionState si la tienes.
+        // Si no, la implementamos aquí directamente:
+
+        // 1. Si el nivel ya está completado, definitivamente está "desbloqueado".
+        if (userState.isLevelCompleted(levelId)) return true
+
+        // 2. Encuentra el nivel completado con el 'order' más alto.
+        val lastTrulyCompletedLevel = sortedLevels
+            .filter { userState.isLevelCompleted(it.id) } // Usamos la función de extensión
+            .maxByOrNull { it.order }
+
+        if (lastTrulyCompletedLevel == null) {
+            // No se ha completado ningún nivel aún (aparte del posible orden 0 que ya está cubierto).
+            // Solo el de orden 0 está desbloqueado.
+            return levelToCheck.order == 0
+        } else {
+            // Un nivel está desbloqueado si su 'order' es el siguiente al 'order'
+            // del último nivel realmente completado.
+            return levelToCheck.order <= lastTrulyCompletedLevel.order + 1
+        }
+    }
 
     fun onProgressionHeaderClick(progressionId: String) {
         _expandedProgressionId.value = if (_expandedProgressionId.value == progressionId) null else progressionId

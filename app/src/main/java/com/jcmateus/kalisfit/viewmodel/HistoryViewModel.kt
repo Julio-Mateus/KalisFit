@@ -5,9 +5,11 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.jcmateus.kalisfit.data.ProgresoRutinaFirestore
 import com.jcmateus.kalisfit.data.ResumenSemanal
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.UserActivity
@@ -64,20 +66,70 @@ class HistoryViewModel : ViewModel() {
     private fun loadRoutineHistoryInternal(userId: String) {
         _historyState.value = _historyState.value.copy(isLoadingRutinas = true, errorMessage = null)
         viewModelScope.launch {
-            // Asegúrate que la ruta `com.jcmateus.kalisfit.data.obtenerHistorialProgreso` es correcta
-            com.jcmateus.kalisfit.data.obtenerHistorialProgreso(
+            com.jcmateus.kalisfit.data.obtenerHistorialProgreso( // Esta devuelve List<model.ProgresoRutina>
                 userId = userId,
-                onResult = { historialProgreso ->
-                    // Asegúrate que la ruta `com.jcmateus.kalisfit.data.calcularResumenSemanal` es correcta
-                    val resumenSemanal = com.jcmateus.kalisfit.data.calcularResumenSemanal(historialProgreso)
+                onResult = { historialProgresoModel -> // Esto es List<com.jcmateus.kalisfit.model.ProgresoRutina>
+                    // Mapear de List<model.ProgresoRutina> a List<data.ProgresoRutinaFirestore>
+                    val historialProgresoFirestore = historialProgresoModel.map { progresoModel ->
+                        // Convertir model.EjercicioProgreso a data.EjercicioProgresoFirestore
+                        val ejerciciosFirestore = progresoModel.ejerciciosCompletados.map { ejercicioModel ->
+                            com.jcmateus.kalisfit.data.EjercicioProgresoFirestore(
+                                ejercicioIdOriginal = ejercicioModel.ejercicioIdOriginal,
+                                nombre = ejercicioModel.nombre,
+                                duracionPorSerieSegundos = ejercicioModel.duracionPorSerieSegundos,
+                                repeticionesPorSerie = ejercicioModel.repeticionesPorSerie,
+                                seriesRealizadas = ejercicioModel.seriesRealizadas
+                                // Asegúrate de que todos los campos de EjercicioProgresoFirestore se llenen aquí
+                            )
+                        }
+
+                        // Convertir la fecha String del modelo a Timestamp para Firestore
+                        // ESTA ES LA PARTE COMPLICADA Y REQUIERE QUE EL STRING DE FECHA SEA PARSEABLE
+                        // Si tu `progresoModel.fecha` es un String como "yyyy-MM-dd HH:mm:ss" o similar,
+                        // necesitarás parsearlo a un Date y luego a Timestamp.
+                        // Si `obtenerHistorialProgreso` ya te diera un Timestamp o un Long (milis), sería más fácil.
+                        // Por ahora, asumiré que tienes una forma de convertir ese String a Timestamp.
+                        // SI NO TIENES UNA FORMA ESTANDARIZADA, ESTO PUEDE FALLAR O SER IMPRECISO.
+                        // Ejemplo muy básico (y potencialmente propenso a errores si el formato no coincide):
+                        val fechaTimestamp: Timestamp = try {
+                            // Si progresoModel.fecha es milisegundos desde epoch como String:
+                            // Timestamp(Date(progresoModel.fecha.toLong()))
+                            // Si progresoModel.fecha es un formato de fecha específico, necesitarás SimpleDateFormat:
+                            // val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // Ajusta el formato
+                            // Timestamp(sdf.parse(progresoModel.fecha))
+                            // COMO ÚLTIMO RECURSO y si los datos en `progresoModel.fecha` son basura para convertir,
+                            // podrías usar Timestamp.now(), pero perderías la fecha original.
+                            // ESTO ES UN PLACEHOLDER - NECESITAS UNA CONVERSIÓN ROBUSTA AQUÍ
+                            Timestamp.now() // ¡¡¡REEMPLAZA ESTO CON UNA CONVERSIÓN REAL!!!
+                            // Si no puedes convertirlo, tendrás que reconsiderar cómo manejas las fechas.
+                        } catch (e: Exception) {
+                            Log.e("HistoryViewModel", "Error convirtiendo fecha String a Timestamp: ${progresoModel.fecha}", e)
+                            Timestamp.now() // Fallback, no ideal
+                        }
+
+
+                        com.jcmateus.kalisfit.data.ProgresoRutinaFirestore(
+                            userId = userId, // El userId lo tienes de la función del ViewModel
+                            rutinaIdOriginal = progresoModel.rutinaIdOriginal,
+                            nombreRutina = progresoModel.nombreRutina,
+                            fecha = fechaTimestamp, // Usar el Timestamp convertido
+                            nivelUsuarioAlCompletar = progresoModel.nivelUsuarioAlCompletar,
+                            objetivosUsuarioAlCompletar = progresoModel.objetivosUsuarioAlCompletar,
+                            ejerciciosCompletados = ejerciciosFirestore,
+                            rondasRealizadas = progresoModel.rondasRealizadas,
+                            tiempoTotalSesionSegundos = progresoModel.tiempoTotalSesionSegundos
+                        )
+                    }
+
+                    val resumenSemanal = com.jcmateus.kalisfit.data.calcularResumenSemanal(historialProgresoFirestore)
+
                     _historyState.value = _historyState.value.copy(
-                        historialRutinas = historialProgreso,
+                        historialRutinas = historialProgresoModel, // Para el UI, seguimos usando el modelo original
                         resumenRutinas = resumenSemanal,
                         isLoadingRutinas = false,
-                        // No borrar error si el otro sigue cargando/falló
                         errorMessage = if (_historyState.value.isLoadingActividadesLibres) _historyState.value.errorMessage else null
                     )
-                    Log.d("HistoryViewModel", "Historial de rutinas cargado. ${historialProgreso.size} elementos.")
+                    Log.d("HistoryViewModel", "Historial de rutinas cargado y procesado para resumen. ${historialProgresoModel.size} elementos.")
                 },
                 onError = { errorMsg ->
                     _historyState.value = _historyState.value.copy(

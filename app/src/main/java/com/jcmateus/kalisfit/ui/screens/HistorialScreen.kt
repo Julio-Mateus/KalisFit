@@ -660,32 +660,50 @@ fun ProgresoRutinaCard(progreso: ProgresoRutina) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "📅 ${progreso.fecha.take(10)} - ${progreso.nombreRutina}", // Incluye el nombre de la rutina
+                "📅 ${progreso.fecha.take(10)} - ${progreso.nombreRutina}",
                 style = MaterialTheme.typography.titleMedium
             )
-            Text("Nivel: ${progreso.nivel}", style = MaterialTheme.typography.bodyLarge)
-            if (progreso.objetivos.isNotEmpty()) {
+            // Corregido: usar 'nivelUsuarioAlCompletar'
+            Text("Nivel: ${progreso.nivelUsuarioAlCompletar}", style = MaterialTheme.typography.bodyLarge)
+
+            // Corregido: usar 'rondasRealizadas'.
+            // No tienes 'rondasTotales' en el modelo, así que solo mostramos las realizadas.
+            if (progreso.rondasRealizadas > 0) {
                 Text(
-                    "Objetivos: ${progreso.objetivos.joinToString(", ")}",
+                    "🔄 Rondas realizadas: ${progreso.rondasRealizadas}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            // Corregido: usar 'objetivosUsuarioAlCompletar'
+            if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) {
+                Text(
+                    "Objetivos: ${progreso.objetivosUsuarioAlCompletar.joinToString(", ")}",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Ejercicios (${progreso.ejercicios.size}):", style = MaterialTheme.typography.labelLarge)
-            progreso.ejercicios.take(5).forEach { ejercicio -> // Muestra solo los primeros 5 para brevedad
-                val detalleEjercicio = if (ejercicio.repeticiones > 0) {
-                    "${ejercicio.repeticiones} reps"
-                } else if (ejercicio.duracionSegundos > 0) {
-                    "${ejercicio.duracionSegundos}s"
+
+            // Corregido: usar 'ejerciciosCompletados' y sus campos internos
+            Text("Ejercicios (${progreso.ejerciciosCompletados.size}):", style = MaterialTheme.typography.labelLarge)
+            progreso.ejerciciosCompletados.take(5).forEach { ejercicio ->
+                // Corregido: usar 'repeticionesPorSerie' y 'duracionPorSerieSegundos' de EjercicioProgreso
+                val detalleEjercicio = if (ejercicio.repeticionesPorSerie > 0) {
+                    "${ejercicio.repeticionesPorSerie} reps"
+                } else if (ejercicio.duracionPorSerieSegundos > 0) {
+                    "${ejercicio.duracionPorSerieSegundos}s"
                 } else { "N/A" }
-                Text("• ${ejercicio.nombre}: $detalleEjercicio", style = MaterialTheme.typography.bodySmall)
+                // 'ejercicio.nombre' ya estaba bien.
+                Text("• ${ejercicio.nombre}: $detalleEjercicio (${ejercicio.seriesRealizadas} series)", style = MaterialTheme.typography.bodySmall)
             }
-            if (progreso.ejercicios.size > 5) {
-                Text("... y ${progreso.ejercicios.size - 5} más.", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
+            if (progreso.ejerciciosCompletados.size > 5) {
+                Text("... y ${progreso.ejerciciosCompletados.size - 5} más.", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
             }
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Corregido: usar 'tiempoTotalSesionSegundos'
             Text(
-                "⏱️ Tiempo total: ${formatSecondsToMinutesSeconds(progreso.tiempoTotal)}",
+                "⏱️ Tiempo total: ${formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos)}",
                 style = MaterialTheme.typography.bodySmall
             )
         }

@@ -194,6 +194,94 @@
     <string name="running_split_km_label">Km %1$d</string> <!-- %1$d será reemplazado por el número del km -->
 
 
+    <!-- Strings para CalisthenicsProgressionScreen -->
+    <string name="calisthenics_no_levels_in_progression">Esta progresión aún no tiene niveles definidos.</string>
+    <string name="level_completed_desc">Nivel completado</string>
+    <string name="level_locked_desc">Nivel bloqueado</string>
+    <string name="desc_view_level_details">Ver detalles del nivel</string>
+
+    <!-- Strings para CalisthenicsLevelDetailScreen -->
+    <string name="error_loading_details_title">Error al Cargar Detalles</string>
+    <string name="detail_label_reps">Repeticiones</string>
+    <string name="detail_label_duration">Duración</string>
+    <string name="level_marked_completed_feedback">¡Nivel \"%s\" marcado como completado!</string> <!-- %s será reemplazado por el nombre del nivel -->
+
+
+    <!-- Strings para nombres de iconos/botones (pueden ser opcionales si no los usas para accesibilidad o son obvios) -->
+    <string name="icon_desc_completed">Completado</string>
+    <string name="icon_desc_locked">Bloqueado</string>
+    <string name="icon_desc_next_level">Siguiente nivel</string>
+
+
+    <!-- Strings que ya podrías tener o que son genéricos -->
+    <string name="title_activity_kimera_theme">KimeraTheme</string>
+
+    <string name="routine_lets_go">¡Vamos!</string>
+    <string name="routine_exercise_count">Ejercicio %1$d de %2$d</string>
+    <string name="no_media_available">Contenido no disponible</string>
+    <string name="routine_repetitions">Repeticiones: %1$d</string>
+    <string name="routine_seconds_remaining">⏱️ %1$d segundos</string>
+    <string name="button_previous">Anterior</string>
+    <string name="button_next">Siguiente</string>
+    <string name="button_finish_routine">Finalizar</string>
+    <string name="routine_loading_exercise">Cargando ejercicio...</string>
+    <string name="routine_failed_to_load">No se pudo cargar la rutina.</string>
+
+    <string name="error_no_routine_id">ID de rutina no proporcionado.</string>
+    <string name="toast_routine_completed_saving_simulated">Rutina completada (Guardado simulado).</string>
+    <string name="error_cannot_save_progress_user_data">No se pudo guardar el progreso: datos de usuario o rutina incompletos.</string>
+    <string name="rest_between_sets_title">Descanso entre Series</string>
+    <string name="rest_next_set_info">Siguiente: Serie %1$d de %2$d (%3$s)</string> <!-- 1: sig serie, 2: total series, 3: nombre ejercicio -->
+    <string name="rest_between_rounds_title">Descanso entre Rondas</string>
+    <string name="rest_next_round_info">Siguiente: Ronda %1$d de %2$d</string>
+    <string name="progress_indicator_round_exercise_series">Ronda: %1$d/%2$d  |  Ejercicio: %3$d/%4$d  |  Serie: %5$d/%6$d</string>
+    <string name="routine_repetitions_target">Repeticiones: %1$d</string>
+    <string name="button_next_set">Siguiente Serie</string>
+    <string name="button_next_exercise_action">Siguiente Ejercicio</string>
+    <string name="button_next_round_action">Siguiente Ronda</string>
+    <string name="rest_time_seconds_format">%1$d s</string>
+    <string name="button_skip_rest">Saltar Descanso</string>
+
+    <string name="getting_ready_for_next_set">Preparando siguiente serie...</string>
+    <string name="no_description_available">Sin descripción disponible.</string>
+    <string name="error_loading_routine_param">Error al cargar la rutina: %s</string>
+
+
+    <!-- Strings existentes y usados en RoutineScreen (verifica si ya los tienes) -->
+
+    <string name="routine_no_exercises">Esta rutina no tiene ejercicios.</string>
+    <string name="seconds_short">seg.</string> <!-- Para el contador grande en DescansoScreen -->
+
+    <!-- Strings para el ViewModel y guardado de progreso -->
+    <string name="toast_routine_completed_saving_success">¡Rutina completada y progreso guardado!</string>
+    <string name="error_saving_progress">Error al guardar progreso: %1$s</string>
+
+    <!-- Strings para carga y errores generales de RoutineScreen -->
+
+    <!-- Strings para el diálogo de confirmación de salida -->
+    <string name="dialog_exit_routine_title">¿Salir de la Rutina?</string>
+    <string name="dialog_exit_routine_message">Si sales ahora, tu progreso actual en esta sesión no se guardará. ¿Estás seguro?</string>
+    <string name="dialog_exit_confirm">Salir</string>
+    <string name="dialog_exit_cancel">Cancelar</string>
+
+    <!-- NUEVO: String para error de API level al guardar (si aplica) -->
+    <string name="error_api_level_too_low_for_saving">No se puede guardar el progreso, la versión de Android es demasiado antigua.</string>
+
+    <!-- String para formato de tiempo en DescansoScreen (si prefieres usar uno con formato) -->
+    <!-- <string name="rest_time_seconds_format">%1$d</string> -->
+    <!-- Lo he dejado como en tu versión más reciente, solo el número, y "seg." debajo -->
+
+    <!-- Placeholders para imágenes (usados en AsyncImage) -->
+    <!-- Estos no son strings, sino referencias a drawables. Asegúrate de tenerlos en res/drawable -->
+    <!-- R.drawable.ic_default_placeholder -->
+    <!-- R.drawable.ic_error_placeholder -->
+
+    <!-- Referencias a sonidos (usados en playBeepSound) -->
+    <!-- Estos no son strings, sino referencias a raw resources. Asegúrate de tenerlos en res/raw -->
+    <!-- R.raw.beep_countdown -->
+    <!-- R.raw.beep_final_seconds -->
+
+
 </resources>
 
 
