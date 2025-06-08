@@ -267,19 +267,19 @@
     <!-- NUEVO: String para error de API level al guardar (si aplica) -->
     <string name="error_api_level_too_low_for_saving">No se puede guardar el progreso, la versión de Android es demasiado antigua.</string>
 
-    <!-- String para formato de tiempo en DescansoScreen (si prefieres usar uno con formato) -->
-    <!-- <string name="rest_time_seconds_format">%1$d</string> -->
-    <!-- Lo he dejado como en tu versión más reciente, solo el número, y "seg." debajo -->
+    <string name="button_skip_rest_description">Saltar descanso</string>
 
-    <!-- Placeholders para imágenes (usados en AsyncImage) -->
-    <!-- Estos no son strings, sino referencias a drawables. Asegúrate de tenerlos en res/drawable -->
-    <!-- R.drawable.ic_default_placeholder -->
-    <!-- R.drawable.ic_error_placeholder -->
 
-    <!-- Referencias a sonidos (usados en playBeepSound) -->
-    <!-- Estos no son strings, sino referencias a raw resources. Asegúrate de tenerlos en res/raw -->
-    <!-- R.raw.beep_countdown -->
-    <!-- R.raw.beep_final_seconds -->
+    <string name="rest_between_exercises_title">Descanso entre Ejercicios</string>
+    <string name="rest_next_exercise_is">Siguiente: %1$s</string>
+    <string name="rest_next_is_round_break_or_next_round">Preparando descanso de ronda o siguiente ronda…</string>
+    <string name="rest_well_done_routine_ending">¡Bien hecho! Finalizando rutina…</string>
+
+
+
+
+
+
 
 
 </resources>

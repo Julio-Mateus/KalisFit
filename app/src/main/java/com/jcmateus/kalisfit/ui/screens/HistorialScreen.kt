@@ -102,6 +102,7 @@ import com.google.maps.android.compose.rememberMarkerState
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.captureComposableAsImage
 import com.jcmateus.kalisfit.model.UserActivity
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
 import java.text.SimpleDateFormat
 import kotlin.text.format
@@ -507,7 +508,7 @@ fun HistorialRutinasContent(
                 subtitle = stringResource(R.string.historial_rutinas_vacio_subtitulo),
                 buttonText = stringResource(R.string.comenzar_rutina),
                 onButtonClick = {
-                    // navController.navigate(Routes.RoutineExplorerScreen)
+                     navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN)
                 }
             )
         } else if (historialRutinas.isNotEmpty()) {
@@ -522,7 +523,12 @@ fun HistorialRutinasContent(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(historialRutinas, key = { it.fecha + (it.nombreRutina ?: "") }) { progreso ->
+                items(
+                    items = historialRutinas,
+                    // Convertir el Timestamp a milisegundos (Long) para una clave más estable
+                    // y combinarlo con el nombre de la rutina para mayor unicidad.
+                    key = { progreso -> "${progreso.fecha.seconds}-${progreso.fecha.nanoseconds}-${progreso.nombreRutina}" }
+                ) { progreso ->
                     ProgresoRutinaCard(progreso = progreso)
                 }
             }
@@ -654,13 +660,15 @@ fun ResumenSemanalCard(
 // Composable para cada item en la lista de ProgresoRutina
 @Composable
 fun ProgresoRutinaCard(progreso: ProgresoRutina) {
+    val cardDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "📅 ${progreso.fecha.take(10)} - ${progreso.nombreRutina}",
+                // Formatear el Timestamp a String antes de usarlo
+                "📅 ${cardDateFormat.format(progreso.fecha.toDate())} - ${progreso.nombreRutina}",
                 style = MaterialTheme.typography.titleMedium
             )
             // Corregido: usar 'nivelUsuarioAlCompletar'

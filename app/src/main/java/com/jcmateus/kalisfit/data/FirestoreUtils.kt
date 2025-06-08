@@ -165,7 +165,7 @@ fun obtenerHistorialProgreso(
     FirebaseFirestore.getInstance()
         .collection("users")
         .document(userId)
-        .collection("progreso")
+        .collection("progresoRutinas")
         .orderBy("fecha", Query.Direction.DESCENDING)
         .get()
         .addOnSuccessListener { result ->

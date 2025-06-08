@@ -26,6 +26,7 @@ data class Ejercicio(
     // Si es 1, se comporta como antes dentro de una ronda de rutina.
     val descansoEntreSeriesSegundos: Int = 0, // Descanso después de cada serie de ESTE ejercicio
     // (excepto la última, antes de pasar al siguiente ejercicio o ronda)
+    val descansoDespuesEjercicioSegundos: Int = 0,
 
     val grupoMuscular: List<GrupoMuscular> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),

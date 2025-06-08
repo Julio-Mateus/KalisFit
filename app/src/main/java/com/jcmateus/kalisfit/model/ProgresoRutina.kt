@@ -1,9 +1,10 @@
 package com.jcmateus.kalisfit.model
 
+import com.google.firebase.Timestamp
 
 
 data class ProgresoRutina(
-    val fecha: String = "", // O considera usar Long para milisegundos desde epoch, o Timestamp si Firestore lo maneja bien al convertir
+    val fecha: Timestamp = Timestamp.now(), // O considera usar Long para milisegundos desde epoch, o Timestamp si Firestore lo maneja bien al convertir
     val rutinaIdOriginal: String = "", // ID de la rutina base que se realizó
     val nombreRutina: String = "",
     val nivelUsuarioAlCompletar: String = "", // Nivel del usuario en ese momento

@@ -108,7 +108,7 @@ class HistoryViewModel : ViewModel() {
                         }
 
 
-                        com.jcmateus.kalisfit.data.ProgresoRutinaFirestore(
+                        ProgresoRutinaFirestore(
                             userId = userId, // El userId lo tienes de la función del ViewModel
                             rutinaIdOriginal = progresoModel.rutinaIdOriginal,
                             nombreRutina = progresoModel.nombreRutina,
