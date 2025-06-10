@@ -22,7 +22,8 @@ data class Ejercicio(
     val repeticiones: Int = 0,          // Repeticiones si el ejercicio es por cantidad (por serie)
 
     // NUEVOS CAMPOS PARA SERIES POR EJERCICIO
-    val numeroDeSeries: Int = 1,        // Cuántas series de ESTE ejercicio se realizarán
+    val numeroDeSeries: Int = 1
+    ,        // Cuántas series de ESTE ejercicio se realizarán
     // Si es 1, se comporta como antes dentro de una ronda de rutina.
     val descansoEntreSeriesSegundos: Int = 0, // Descanso después de cada serie de ESTE ejercicio
     // (excepto la última, antes de pasar al siguiente ejercicio o ronda)

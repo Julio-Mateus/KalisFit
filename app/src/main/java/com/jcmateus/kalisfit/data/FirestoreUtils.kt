@@ -30,8 +30,9 @@ data class EjercicioFirestore(
     val videoUrl: String? = null,
     val duracionSegundos: Int = 0,
     val repeticiones: Int = 0,
-    val series: Int = 0, // ESTE ES EL NÚMERO DE SERIES PLANIFICADAS
+    val numeroDeSeries: Int = 0, // ESTE ES EL NÚMERO DE SERIES PLANIFICADAS
     val descansoEntreSeriesSegundos: Int = 0, // Añadido para mapear
+    val descansoDespuesEjercicioSegundos: Int = 0,
     val grupoMuscular: List<String> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),
     val lugarEntrenamiento: List<String> = emptyList(), // GUARDADO COMO LISTA DE STRINGS
@@ -487,8 +488,9 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
                 videoUrl = ef.videoUrl,
                 duracionSegundos = ef.duracionSegundos,
                 repeticiones = ef.repeticiones,
-                numeroDeSeries = ef.series, // Mapear 'series' de Firestore a 'numeroDeSeries'
+                numeroDeSeries = ef.numeroDeSeries, // Mapear 'series' de Firestore a 'numeroDeSeries'
                 descansoEntreSeriesSegundos = ef.descansoEntreSeriesSegundos, // Mapear desde EjercicioFirestore
+                descansoDespuesEjercicioSegundos = ef.descansoDespuesEjercicioSegundos,
                 grupoMuscular = gruposMuscularesEnum,
                 equipamientoNecesario = ef.equipamientoNecesario,
                 lugarEntrenamiento = lugaresEntrenamientoEnum, // Usar la lista de Enums mapeada

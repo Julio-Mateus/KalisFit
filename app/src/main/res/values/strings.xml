@@ -276,9 +276,44 @@
     <string name="rest_well_done_routine_ending">¡Bien hecho! Finalizando rutina…</string>
 
 
+    <string name="routine_loading">Cargando rutina...</string>
+    <string name="error_loading_routine">Error al cargar la rutina. Inténtalo de nuevo más tarde.</string>
+    <string name="go_back">Volver</string>
+    <string name="routine_starting_soon">La rutina comienza pronto</string>
+    <string name="routine_round">Ronda</string>
+    <string name="routine_exercise">Ejercicio</string>
+    <string name="routine_series">Serie</string>
+    <string name="routine_do_it_at_your_pace">Hazlo a tu ritmo</string>
+    <string name="routine_hold_for">Mantén por</string>
+    <string name="watch_exercise_video">Ver video del ejercicio</string>
+    <string name="no_app_for_video">No se encontró una aplicación para reproducir el video.</string>
+    <string name="rest_time_left">Tiempo restante</string>
+    <string name="skip_rest_button">Saltar Descanso</string>
+    <string name="routine_paused">RUTINA PAUSADA</string>
+    <string name="resume_routine">Reanudar</string>
+    <string name="exit_routine">Salir de Rutina</string>
+    <string name="routine_finishing">Finalizando rutina...</string>
+    <string name="back_button_desc">Botón de atrás</string>
+    <string name="pause_routine">Pausar rutina</string>
+    <string name="skip_step">Saltar paso actual</string>
+    <string name="error_exercise_not_found">Ejercicio no encontrado.</string>
+    <string name="error_routine_not_found">Rutina no encontrada.</string>
+    <string name="loading_routine">Cargando rutina...</string>
+
+    <!-- Strings para RoutineScreen y relacionados -->
+    <string name="routine_finishing_and_saving">Finalizando y guardando progreso…</string>
 
 
+    <!-- Strings para ExerciseContent -->
+    <string name="watch_exercise_video_icon_desc">Icono de ver video</string>
 
+
+    <!-- Strings para Botones de Navegación de Ejercicio (getNextButtonText) -->
+    <string name="button_loading">Cargando…</string>
+
+    <!-- Strings para IntegratedRestDialog y getNextUpMessage -->
+    <string name="getting_ready">Prepárate…</string>
+    <string name="rest_next_is_round">Siguiente: Ronda %1$d</string>
 
 
 
