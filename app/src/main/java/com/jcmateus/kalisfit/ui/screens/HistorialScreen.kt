@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+//import androidx.activity.result.launch
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -75,6 +76,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -104,10 +106,14 @@ import com.jcmateus.kalisfit.data.captureComposableAsImage
 import com.jcmateus.kalisfit.model.UserActivity
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import kotlin.text.format
 import kotlin.time.Duration.Companion.seconds
 import java.util.Locale
+
 
 
 // Función de formato de tiempo (ya la tenías)
@@ -234,24 +240,26 @@ fun UserActivityVisualCard(
                     val cameraPositionState = rememberCameraPositionState()
 
                     LaunchedEffect(routePointsToDraw) {
-                        if (routePointsToDraw.isNotEmpty()) { // Ya verificado afuera, pero bueno para la lógica interna
-                            if (routePointsToDraw.size >= 2) {
-                                val builder = LatLngBounds.builder()
-                                routePointsToDraw.forEach { latLng ->
-                                    builder.include(latLng)
-                                }
-                                try {
-                                    cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(builder.build(), 50))
-                                } catch (e: IllegalStateException) {
-                                    Log.e("UserActivityVisualCard", "Error setting map bounds: ${e.message}. Falling back.")
-                                    routePointsToDraw.firstOrNull()?.let {
-                                        cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
-                                    }
-                                }
-                            } else { // Solo un punto
+                        Log.d("UserActivityVisualCard", "LaunchedEffect para mover cámara. Puntos: ${routePointsToDraw.size}")
+                        if (routePointsToDraw.size >= 2) {
+                            val builder = LatLngBounds.builder()
+                            routePointsToDraw.forEach { latLng ->
+                                builder.include(latLng)
+                            }
+                            try {
+                                // Mover SIN animación para que sea más rápido para la captura
+                                cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(builder.build(), 50)) // 50px padding
+                                Log.d("UserActivityVisualCard", "Cámara movida a bounds.")
+                            } catch (e: IllegalStateException) {
+                                Log.e("UserActivityVisualCard", "Error setting map bounds: ${e.message}. Fallback.")
                                 routePointsToDraw.firstOrNull()?.let {
                                     cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
                                 }
+                            }
+                        } else if (routePointsToDraw.isNotEmpty()) { // Solo un punto
+                            routePointsToDraw.firstOrNull()?.let {
+                                cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
+                                Log.d("UserActivityVisualCard", "Cámara movida a un solo punto.")
                             }
                         }
                     }
@@ -869,6 +877,14 @@ fun HistorialActividadesLibresContent(
 // NUEVO: Composable para mostrar cada UserActivity (carrera/caminata)
 @Composable
 fun UserActivityCard(activity: UserActivity, context: Context) {
+    val coroutineScope = rememberCoroutineScope()
+
+    // Formateador de fecha (si no lo tienes global, defínelo aquí o pásalo)
+    // Para este ejemplo, lo defino localmente si no estuviera ya accesible.
+    val localActivityDateFormatter = remember {
+        SimpleDateFormat("EEE, d MMM yyyy HH:mm", Locale.getDefault())
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -880,7 +896,7 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = activity.timestamp?.let { activityDateFormatter.format(it) } ?: "Fecha desconocida",
+                    text = activity.timestamp?.let { localActivityDateFormatter.format(it) } ?: "Fecha desconocida",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -892,26 +908,11 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            InfoRow("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds))
+            InfoRow("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds)) // Asume que formatSecondsToHMS existe
             InfoRow("Distancia:", String.format(Locale.US, "%.2f km", activity.distanceKm))
             InfoRow("Ritmo Promedio:", activity.avgPace)
             InfoRow("Calorías Quemadas:", "${activity.caloriesBurned} kcal")
 
-            // Opcional: Mostrar miniatura del mapa si tienes la URL
-            // activity.mapImageUrl?.let { url ->
-            //     Spacer(modifier = Modifier.height(8.dp))
-            //     AsyncImage(
-            //         model = url,
-            //         contentDescription = "Mapa de la ruta",
-            //         modifier = Modifier.fillMaxWidth().height(150.dp).clip(MaterialTheme.shapes.small),
-            //         contentScale = ContentScale.Crop
-            //     )
-            // }
-
-            // Opcional: Mostrar algunos puntos de la ruta o un botón para ver el detalle
-            // if (activity.routePoints.isNotEmpty()) {
-            //     Text("Puntos de ruta: ${activity.routePoints.size}", style = MaterialTheme.typography.bodySmall)
-            // }
             Spacer(modifier = Modifier.height(16.dp)) // Espacio antes de los botones
 
             // --- BOTONES DE COMPARTIR ---
@@ -921,7 +922,7 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
             ) {
                 // Botón Compartir Texto
                 OutlinedButton(onClick = {
-                    val shareText = buildActivityShareText(activity)
+                    val shareText = buildActivityShareText(activity) // Asume que buildActivityShareText existe
                     val sendIntent = Intent().apply {
                         action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, shareText)
@@ -937,39 +938,46 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
 
                 // Botón Compartir Imagen
                 Button(onClick = {
-                    // --- ESTA ES LA PARTE IMPORTANTE A MODIFICAR EN UserActivityCard ---
-                    // 1. Obtén y transforma los puntos de ruta si es necesario.
-                    //    (Ajusta esto según la estructura de tu 'UserActivity' y 'LocationPoint')
-                    val pointsForVisualCard: List<com.google.android.gms.maps.model.LatLng> =
-                        activity.routePoints.map { locationPoint -> // Asumiendo que activity.routePoints es una lista de tu tipo LocationPoint
-                            com.google.android.gms.maps.model.LatLng(locationPoint.latitude, locationPoint.longitude)
+                    val pointsForVisualCard: List<LatLng> =
+                        activity.routePoints.map { locationPoint ->
+                            LatLng(locationPoint.latitude, locationPoint.longitude)
                         }
-                    //    Si activity.routePoints ya es List<com.google.android.gms.maps.model.LatLng>,
-                    //    entonces simplemente:
-                    //    val pointsForVisualCard = activity.routePoints
 
-                    captureComposableAsImage(
-                        context = context,
-                        // 2. Pasa los 'pointsForVisualCard' al UserActivityVisualCard
-                        composable = {
-                            UserActivityVisualCard(
-                                activity = activity,
-                                routePointsToDraw = pointsForVisualCard // <--- Aquí pasas los puntos
+                    Log.d("UserActivityCard", "Iniciando captura de imagen. Puntos: ${pointsForVisualCard.size}")
+
+                    coroutineScope.launch {
+                        // Espera un poco para que el mapa en UserActivityVisualCard se renderice.
+                        // Ajusta este valor según sea necesario. Empieza con 1.5-2.5 segundos.
+                        delay(2000) // 2 segundos de retraso. AUMENTA SI EL MAPA SIGUE EN BLANCO.
+
+                        Log.d("UserActivityCard", "Retraso completado, procediendo a capturar.")
+
+                        captureComposableAsImage( // Asume que captureComposableAsImage existe
+                            context = context,
+                            composable = {
+                                UserActivityVisualCard( // Asume que UserActivityVisualCard existe y está bien definido
+                                    activity = activity,
+                                    routePointsToDraw = pointsForVisualCard
+                                )
+                            }
+                        ) { imageFile: File -> // Especificar el tipo del parámetro lambda ayuda
+                            Log.d("UserActivityCard", "Imagen capturada: ${imageFile.absolutePath}")
+                            val imageUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.provider", // Asegúrate que la autoridad coincide con tu Manifest
+                                imageFile
                             )
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_STREAM, imageUri)
+                                type = "image/png"
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            // Intenta ser explícito con el contexto si hay ambigüedad, aunque no debería ser necesario.
+                            // val currentContext = context
+                            // currentContext.startActivity(Intent.createChooser(shareIntent, "Compartir imagen de actividad con..."))
+                            context.startActivity(Intent.createChooser(shareIntent, "Compartir imagen de actividad con..."))
                         }
-                    ) { imageFile -> // El callback con el File
-                        val imageUri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.provider", // Asegúrate que este authority coincide con tu Manifest
-                            imageFile
-                        )
-                        val shareIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_STREAM, imageUri)
-                            type = "image/png"
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Compartir imagen de actividad con..."))
                     }
                 }) {
                     Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen")
@@ -980,7 +988,6 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
         }
     }
 }
-
 @Composable
 fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {

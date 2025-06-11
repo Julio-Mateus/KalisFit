@@ -315,6 +315,10 @@
     <string name="getting_ready">Prepárate…</string>
     <string name="rest_next_is_round">Siguiente: Ronda %1$d</string>
 
+    <string name="exercise_not_found_placeholder_name">Ejercicio no encontrado</string>
+
+    <string name="progression_completed_achievement">Progresión completada</string>
+
 
 
 </resources>

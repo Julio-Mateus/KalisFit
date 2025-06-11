@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -323,15 +324,20 @@ fun MapAndMetricsSection(
     hasLocationPermission: Boolean
 ) {
     val context = LocalContext.current
-    val mapStyleOptions =
-        remember(context) { // Optimización: no recalcular si el contexto no cambia
-            try {
-                MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style)
-            } catch (e: Exception) {
-                Log.e("MapAndMetricsSection", "Error loading map style: ${e.message}")
-                null // Fallback a estilo por defecto si hay error
-            }
+    val isDarkTheme = isSystemInDarkTheme()
+    val mapStyleOptions = remember(context, isDarkTheme) { // Recalcular si el contexto o el tema cambian
+        val styleResId = if (isDarkTheme) {
+            R.raw.map_style_dark // ASUME que tienes un archivo llamado "map_style_dark.json" en res/raw
+        } else {
+            R.raw.map_style // ASUME que tienes un archivo llamado "map_style_light.json" en res/raw
         }
+        try {
+            MapStyleOptions.loadRawResourceStyle(context, styleResId)
+        } catch (e: Exception) {
+            Log.e("MapAndMetricsSection", "Error loading map style for theme: ${e.message}")
+            null // Fallback a estilo por defecto si hay error
+        }
+    }
 
     val defaultCameraPosition = remember { LatLng(40.7128, -74.0060) } // NY como fallback estático
     val cameraPositionState = rememberCameraPositionState {
@@ -706,11 +712,17 @@ fun ActivitySummary(
     // onDone es para cerrar la pantalla de resumen.
 ) {
     val context = LocalContext.current
-    val mapStyleOptions = remember(context) { // Optimización
+    val isDarkTheme = isSystemInDarkTheme()
+    val mapStyleOptions = remember(context, isDarkTheme) { // <<< MODIFICAR CLAVES
+        val styleResId = if (isDarkTheme) { // <<< AÑADIR LÓGICA
+            R.raw.map_style_dark // Reemplaza con tu archivo de estilo oscuro
+        } else {
+            R.raw.map_style // Reemplaza con tu archivo de estilo claro
+        }
         try {
-            MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style)
+            MapStyleOptions.loadRawResourceStyle(context, styleResId)
         } catch (e: Exception) {
-            // Log.e("ActivitySummary", "Error loading map style: ${e.message}")
+            Log.e("ActivitySummary", "Error loading map style for theme: ${e.message}")
             null
         }
     }
