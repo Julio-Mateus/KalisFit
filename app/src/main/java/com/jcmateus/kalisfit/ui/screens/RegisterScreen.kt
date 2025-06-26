@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,7 +60,9 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
-    val viewModel = remember { AuthViewModel() }
+    // Es mejor instanciar ViewModels usando los constructores de Hilt o androidx.lifecycle.viewmodel.compose.viewModel()
+    // val viewModel: AuthViewModel = viewModel() // Si estás usando Hilt o la librería de ViewModel de Compose
+    val viewModel = remember { AuthViewModel() } // Tu forma actual
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -68,46 +72,58 @@ fun RegisterScreen(
     var showSuccessDialog by remember { mutableStateOf(false) }
     val showFields = remember { mutableStateOf(true) }
 
+    // Estado para manejar el error del campo email
+    var emailError by remember { mutableStateOf<String?>(null) }
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        loading = true // Indicar carga para el flujo de Google Sign-In también
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
-            val account = task.result
+            val account = task.result // Puede lanzar una excepción si la tarea falló
             val credential = GoogleAuthProvider.getCredential(account.idToken, null)
             FirebaseAuth.getInstance().signInWithCredential(credential)
                 .addOnCompleteListener { authResult ->
                     if (authResult.isSuccessful) {
                         viewModel.saveUserIfNew(
                             nombre = account.displayName ?: "",
-                            email = account.email ?: ""
+                            email = account.email ?: "" // El email de Google se asume válido
                         ) {
+                            loading = false
                             showSuccessDialog = true
                         }
                     } else {
-                        Toast.makeText(context, "Error: ${authResult.exception?.message}", Toast.LENGTH_LONG).show()
+                        loading = false
+                        Toast.makeText(context, "Error de inicio de sesión con Google: ${authResult.exception?.message}", Toast.LENGTH_LONG).show()
                     }
                 }
         } catch (e: Exception) {
-            Toast.makeText(context, "Google Sign In cancelado o falló", Toast.LENGTH_SHORT).show()
+            loading = false
+            Toast.makeText(context, "Google Sign In cancelado o falló: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
     if (showSuccessDialog) {
         AlertDialog(
-            onDismissRequest = {},
+            onDismissRequest = { /* No permitir cerrar por clic fuera */ },
             title = { Text("¡Registro exitoso!") },
             text = { Text("Tu cuenta ha sido creada correctamente. Serás redirigido...") },
             confirmButton = {
-                TextButton(onClick = onRegisterSuccess) {
+                TextButton(onClick = {
+                    showSuccessDialog = false // Ocultar diálogo
+                    onRegisterSuccess()
+                }) {
                     Text("Continuar")
                 }
             }
         )
-
+        // La navegación ya se maneja en el LaunchedEffect o podría ser solo con el botón
         LaunchedEffect(Unit) {
-            delay(1500)
-            onRegisterSuccess()
+            delay(2000) // Un poco más de tiempo para leer el mensaje
+            if (showSuccessDialog) { // Solo navegar si el diálogo todavía está visible (el usuario no hizo clic en continuar)
+                onRegisterSuccess()
+            }
         }
     }
 
@@ -137,16 +153,27 @@ fun RegisterScreen(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("Nombre completo") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = {
+                            email = it
+                            emailError = null // Limpiar error al escribir
+                        },
                         label = { Text("Correo electrónico") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        isError = emailError != null, // Indicar si hay error
+                        supportingText = { // Mostrar mensaje de error debajo del campo
+                            if (emailError != null) {
+                                Text(emailError!!, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -160,8 +187,8 @@ fun RegisterScreen(
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             val icon = if (passwordVisible)
-                                Icons.Default.Visibility
-                            else Icons.Default.VisibilityOff
+                                Icons.Filled.Visibility
+                            else Icons.Filled.VisibilityOff
 
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(imageVector = icon, contentDescription = "Mostrar contraseña")
@@ -173,7 +200,23 @@ fun RegisterScreen(
 
                     Button(
                         onClick = {
+                            // --- VALIDACIÓN DEL EMAIL AQUÍ ---
+                            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                                emailError = "Formato de correo inválido"
+                                return@Button // No continuar si el email no es válido
+                            }
+                            // Opcional: Validar que la contraseña no esté vacía, etc.
+                            if (password.length < 6) { // Firebase requiere mínimo 6 caracteres
+                                Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_LONG).show()
+                                return@Button
+                            }
+                            if (name.isBlank()){
+                                Toast.makeText(context, "El nombre no puede estar vacío", Toast.LENGTH_LONG).show()
+                                return@Button
+                            }
+
                             loading = true
+                            emailError = null // Limpiar error si la validación pasó
                             viewModel.register(email, password, name, "", listOf()) { success, message ->
                                 loading = false
                                 if (success) {
@@ -186,24 +229,32 @@ fun RegisterScreen(
                         enabled = !loading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Registrarse")
+                        if (loading && !showSuccessDialog) { // Mostrar indicador de carga solo para el botón de email/pass
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Registrarse")
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
                         onClick = {
+                            // No es necesario validar el email aquí ya que Google lo proporciona
                             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestIdToken(context.getString(R.string.default_web_client_id))
+                                .requestIdToken(context.getString(R.string.default_web_client_id)) // Asegúrate que este string existe en tu R.string
                                 .requestEmail()
                                 .build()
                             val client = GoogleSignIn.getClient(context, gso)
                             launcher.launch(client.signInIntent)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !loading // Deshabilitar si cualquier operación de carga está en curso
                     ) {
+                        // Podrías mostrar un indicador de carga aquí también si 'loading' es true
+                        // debido a un intento de registro con Google.
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_google),
+                            painter = painterResource(id = R.drawable.ic_google), // Asegúrate que este drawable existe
                             contentDescription = "Google",
                             modifier = Modifier.size(20.dp)
                         )
@@ -213,10 +264,19 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    TextButton(onClick = onNavigateToLogin) {
+                    TextButton(onClick = onNavigateToLogin, enabled = !loading) {
                         Text("¿Ya tienes cuenta? Inicia sesión")
                     }
                 }
+            }
+        }
+        // Indicador de carga general centrado (opcional si ya tienes en botones)
+        if (loading && !showSuccessDialog) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // CircularProgressIndicator() // Podrías tener un overlay de carga más general
             }
         }
     }
