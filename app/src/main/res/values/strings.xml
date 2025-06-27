@@ -319,7 +319,72 @@
 
     <string name="progression_completed_achievement">Progresión completada</string>
 
+    <string name="default_notification_title">Recordatorio KalisFit</string>
+    <string name="default_notification_message">¡Es hora de tu actividad!</string>
+    <string name="notification_channel_general_reminders_name">Recordatorios Generales</string>
+    <string name="notification_channel_general_reminders_description">Notificaciones para recordatorios generales de la aplicación.</string>
+    <string name="daily_reminder_notification_title">Recordatorio KalisFit</string>
+    <string name="daily_reminder_notification_message">¡Es hora de tu dosis de bienestar!</string>
 
+    <string name="settings_enable_notifications_desc">Recibe notificaciones diarias para motivarte.</string>
+
+    <string name="settings_section_support">Soporte y Feedback</string>
+    <string name="settings_rate_app">Valora nuestra app</string>
+    <string name="settings_share_app">Comparte esta app</string>
+    <string name="settings_share_app_text">¡Echa un vistazo a %1$s! Descárgala aquí: %2$s</string>
+    <string name="settings_share_using">Compartir usando…</string>
+    <string name="settings_contact_support">Contacta con soporte</string>
+    <string name="settings_support_email_subject">Soporte App: %1$s</string>
+
+
+    <string name="settings_open_source_licenses">Licencias de Código Abierto</string>
+    <string name="settings_open_source_licenses_placeholder">Información sobre las bibliotecas de código abierto utilizadas en esta aplicación...</string>
+
+
+    <string name="settings_app_version_formatted">Versión %1$s (Build %2$s)</string>
+    <string name="settings_developed_by">Desarrollado por</string>
+    <string name="app_logo_desc">Logo de la aplicación</string>
+
+    <string name="profile_title">Perfil de Usuario</string>
+    <string name="profile_picture_desc">Foto de perfil del usuario</string>
+    <string name="name_not_specified">Nombre no especificado</string>
+    <string name="level_not_specified">Nivel no especificado</string>
+    <string name="personal_information">Información Personal</string>
+    <string name="goals">Objetivos</string>
+    <string name="not_specified">No especificado</string>
+    <string name="weight">Peso</string>
+    <string name="height">Altura</string>
+    <string name="age">Edad</string>
+    <string name="years_old">años</string>
+    <string name="gender">Sexo</string>
+    <string name="training_details">Detalles del Entrenamiento</string>
+    <string name="weekly_frequency">Frecuencia Semanal</string>
+    <string name="days_per_week">días/semana</string>
+    <string name="training_location">Entrenamiento en</string>
+    <string name="account_info">Información de la Cuenta</string>
+    <string name="not_available">No disponible</string>
+    <string name="registration_date">Registrado el</string>
+
+    <string name="onboarding_success_title">¡Todo Listo! 🎉</string>
+    <string name="onboarding_success_message">Tu perfil está completo y listo para empezar tu transformación.</string>
+    <string name="onboarding_success_button">Comenzar Aventura</string>
+
+    <string name="profile_updated_success">Perfil actualizado correctamente</string>
+    <string name="error_prefix">Error</string>
+    <string name="personal_information_label">Información Personal</string>
+    <string name="name_label">Nombre</string>
+    <string name="age_label">Edad</string>
+    <string name="sex_label">Sexo</string>
+    <string name="physical_training_details_label">Detalles Físicos y de Entrenamiento</string>
+    <string name="weight_kg_label">Peso (kg)</string>
+    <string name="height_cm_label">Altura (cm)</string>
+    <string name="weekly_frequency_days_label">Frecuencia Semanal (días)</string>
+    <string name="training_place_label">Lugar de entrenamiento</string>
+    <string name="change_photo_desc">Cambiar foto de perfil</string>
+    <string name="tap_to_change_photo_label">Toca para cambiar foto</string>
+    <string name="selected_desc">Seleccionado</string>
+    <string name="cancel_button">Cancelar</string>
+    <string name="save_button">Guardar</string>
 
 </resources>
 

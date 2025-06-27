@@ -33,6 +33,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.jcmateus.kalisfit.MainActivity
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
@@ -45,6 +46,11 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
     val viewModel = remember { AuthViewModel() }
+    val activity = context as? MainActivity
+
+    LaunchedEffect(key1 = activity) {
+        activity?.askNotificationPermissionInternal()
+    }
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }

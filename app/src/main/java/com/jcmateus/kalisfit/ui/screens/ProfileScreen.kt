@@ -1,6 +1,8 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,22 +23,35 @@ import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EventRepeat
+import androidx.compose.material.icons.filled.Female
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.Male
+import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Wc
 import androidx.compose.material3.*
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-//import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
-//import com.google.type.Date
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.navigation.Routes
-import kotlin.text.format
 import java.text.SimpleDateFormat
 import java.util.Date // Asegúrate que es java.util.Date
 import java.util.Locale
@@ -50,15 +65,23 @@ fun ProfileScreen(
     val userState = viewModel.user.collectAsState()
     val user = userState.value
 
-    LaunchedEffect(key1 = userState.value?.uid) {
+    val notAvailableText = stringResource(R.string.not_available)
+
+    // Cargar perfil cuando el UID cambie (o inicialmente si ya está disponible)
+    LaunchedEffect(key1 = Unit) { // O usa userState.value?.uid si quieres recargar si el uid cambia
         viewModel.loadUserProfile()
     }
 
-    // ------ INICIO DE LA MODIFICACIÓN ------
+    val topAppBarColors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.surface, // Un color más sutil para el fondo
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Perfil de Usuario") }, // O usa stringResource
+                title = { Text(stringResource(R.string.profile_title), fontWeight = FontWeight.Medium) },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
@@ -67,124 +90,209 @@ fun ProfileScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors( // Opcional: personaliza colores
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                colors = topAppBarColors,
+                // Considera añadir scrollBehavior si el contenido es muy largo
+                // scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
             )
-        }
-    ) { innerPadding -> // El contenido de tu pantalla va aquí, usando innerPadding
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { navController.navigate(Routes.EDIT_PROFILE_SCREEN) },
+                icon = { Icon(Icons.Filled.Edit, contentDescription = "Editar Perfil") },
+                text = { Text("Editar Perfil") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        },
+        floatingActionButtonPosition = FabPosition.Center // O FabPosition.End
+    ) { innerPadding ->
 
-        // El Box original ahora usa el padding del Scaffold
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding) // Aplicar el padding del Scaffold aquí
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)) // Un fondo sutil para toda la pantalla
         ) {
-            user?.let {
+            if (user == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                val scrollState = rememberScrollState()
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp), // Este padding es interno al contenido, después del padding del Scaffold
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 16.dp, vertical = 24.dp), // Mayor padding vertical
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val painter = rememberAsyncImagePainter(
-                        model = it.fotoUrl.ifBlank { R.drawable.ic_default_avatar }
+                    // --- Sección de Avatar y Nombre ---
+                    val avatarPainter = rememberAsyncImagePainter(
+                        model = user.fotoUrl.ifBlank { R.drawable.ic_default_avatar },
+                        // Opcional: placeholder y error drawables
+                        // placeholder = painterResource(id = R.drawable.ic_avatar_placeholder),
+                        // error = painterResource(id = R.drawable.ic_avatar_error)
                     )
                     Image(
-                        painter = painter,
-                        contentDescription = "Foto de perfil",
+                        painter = avatarPainter,
+                        contentDescription = stringResource(R.string.profile_picture_desc),
                         modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape),
+                            .size(140.dp) // Un poco más grande
+                            .clip(CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape), // Borde opcional
                         contentScale = ContentScale.Crop
                     )
 
-                    Text(it.nombre, style = MaterialTheme.typography.headlineMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Divider(thickness = 1.dp)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = user.nombre.ifBlank { stringResource(R.string.name_not_specified) },
+                        style = MaterialTheme.typography.headlineSmall, // Un poco más pequeño que headlineMedium pero aún prominente
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Nivel: ${user.nivel.ifBlank { stringResource(R.string.level_not_specified) }}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        ProfileInfoRow(label = "Nivel", value = it.nivel.ifBlank { "No especificado" })
-                        ProfileInfoRow(label = "Objetivos", value = it.objetivos.joinToString(", ").ifBlank { "No especificados" })
-                        ProfileInfoRow(label = "Peso", value = if (it.peso > 0f) "${it.peso} kg" else "No especificado")
-                        ProfileInfoRow(label = "Altura", value = if (it.altura > 0f) "${it.altura} cm" else "No especificado")
-                        ProfileInfoRow(label = "Edad", value = if (it.edad > 0) "${it.edad} años" else "No especificado")
-                        ProfileInfoRow(label = "Sexo", value = it.sexo.ifBlank { "No especificado" })
-                        ProfileInfoRow(label = "Frecuencia semanal", value = "${it.frecuenciaSemanal} días")
-                        ProfileInfoRow(label = "Entrenamiento en", value = it.lugarEntrenamiento.joinToString(", ").ifBlank { "No especificado" })
-                        val fechaRegistroFormateada = remember(it.fechaRegistro) {
-                            it.fechaRegistro?.toDate()?.let { date: Date ->
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // --- Sección de Información Personal ---
+                    ProfileSectionCard(title = stringResource(R.string.personal_information)) {
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.FitnessCenter,
+                            label = stringResource(R.string.goals),
+                            value = user.objetivos.joinToString(", ").ifBlank { stringResource(R.string.not_specified) }
+                        )
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.MonitorWeight,
+                            label = stringResource(R.string.weight),
+                            value = if (user.peso > 0f) "${user.peso} kg" else stringResource(R.string.not_specified)
+                        )
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.Height,
+                            label = stringResource(R.string.height),
+                            value = if (user.altura > 0f) "${user.altura} cm" else stringResource(R.string.not_specified)
+                        )
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.Cake, // O Icons.Filled.Person
+                            label = stringResource(R.string.age),
+                            value = if (user.edad > 0) "${user.edad} ${stringResource(R.string.years_old)}" else stringResource(R.string.not_specified)
+                        )
+                        ProfileInfoRowWithIcon(
+                            icon = if (user.sexo.equals("Masculino", true)) Icons.Filled.Male else if (user.sexo.equals("Femenino", true)) Icons.Filled.Female else Icons.Filled.Wc,
+                            label = stringResource(R.string.gender),
+                            value = user.sexo.ifBlank { stringResource(R.string.not_specified) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // --- Sección de Entrenamiento ---
+                    ProfileSectionCard(title = stringResource(R.string.training_details)) {
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.EventRepeat,
+                            label = stringResource(R.string.weekly_frequency),
+                            value = "${user.frecuenciaSemanal} ${stringResource(R.string.days_per_week)}"
+                        )
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.Place,
+                            label = stringResource(R.string.training_location),
+                            value = user.lugarEntrenamiento.joinToString(", ").ifBlank { stringResource(R.string.not_specified) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // --- Sección de Cuenta ---
+                    ProfileSectionCard(title = stringResource(R.string.account_info)) {
+                        val fechaRegistroFormateada = remember(user.fechaRegistro, notAvailableText) { // Añadir notAvailableText como key si su valor pudiera cambiar y afectar el remember
+                            user.fechaRegistro?.toDate()?.let { date: Date ->
                                 val sdf = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale.getDefault())
                                 sdf.format(date)
-                            } ?: "No disponible"
+                            } ?: notAvailableText // Usar la variable que contiene la string
                         }
-                        ProfileInfoRow(label = "Registrado el", value = fechaRegistroFormateada)
+                        ProfileInfoRowWithIcon(
+                            icon = Icons.Filled.DateRange,
+                            label = stringResource(R.string.registration_date),
+                            value = fechaRegistroFormateada
+                        )
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    Button(
-                        onClick = {
-                            navController.navigate(Routes.EDIT_PROFILE_SCREEN)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Editar Perfil")
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(80.dp)) // Espacio para que el FAB no tape el último elemento
                 }
-            } ?: Box(
-                Modifier
-                    .fillMaxSize(), // Este Box también debe estar dentro del contenedor que tiene el padding de Scaffold
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
             }
         }
     }
-    // ------ FIN DE LA MODIFICACIÓN ------
 }
 
 @Composable
-fun ProfileInfoRow(label: String, value: String) {
+fun ProfileSectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp), // Esquinas más redondeadas
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // Fondo de la tarjeta
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+fun ProfileInfoRowWithIcon(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    iconTint: Color = MaterialTheme.colorScheme.secondary // Color del icono
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp) // Espacio entre icono y texto
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        Icon(
+            imageVector = icon,
+            contentDescription = label, // Para accesibilidad
+            tint = iconTint,
+            modifier = Modifier.size(24.dp)
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column(modifier = Modifier.weight(1f)) { // Columna para que la etiqueta y el valor puedan estar uno encima del otro si son largos, o lado a lado.
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge, // O bodyMedium
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = 20.sp // Mejorar legibilidad si el texto es largo
+            )
+        }
     }
 }
 
-@Composable
-fun ProfileSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        content()
-    }
-}
 
 

@@ -31,13 +31,14 @@ import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
 import com.jcmateus.kalisfit.ui.screens.StoicismContentScreen
 import com.jcmateus.kalisfit.ui.screens.TipsScreen
+import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun KalisNavGraph(navController: NavHostController) {
+fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsViewModel) {
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
 
         // --- Rutas de Autenticación y Onboarding ---
@@ -68,7 +69,7 @@ fun KalisNavGraph(navController: NavHostController) {
         }
         composable(Routes.REGISTER) {
             RegisterScreen(
-                onRegisterSuccess = { navController.navigate(Routes.ONBOARDING) },
+                onRegisterSuccess = { navController.navigate(Routes.ONBOARDING){popUpTo(Routes.LOGIN) { inclusive = false } } },// O popUpTo(Routes.REGISTER) { inclusive = true } si prefieres
                 onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
             )
         }
@@ -79,7 +80,7 @@ fun KalisNavGraph(navController: NavHostController) {
         }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(onFinish = {
-                navController.navigate(Routes.MAIN_CONTENT) {
+                navController.navigate(Routes.ONBOARDING_SUCCESS) {
                     popUpTo(Routes.ONBOARDING) { inclusive = true }
                 }
             })
@@ -151,7 +152,7 @@ fun KalisNavGraph(navController: NavHostController) {
         }
 
         composable(Routes.SETTINGS_SCREEN) { // Usando tu nueva constante
-            SettingsScreen(navController = navController)
+            SettingsScreen(navController = navController, settingsViewModel = settingsViewModel)
         }
 
         composable(Routes.ACTIVITY_HISTORY_SCREEN) {

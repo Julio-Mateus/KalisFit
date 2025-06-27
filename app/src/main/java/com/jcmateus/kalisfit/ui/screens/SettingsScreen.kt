@@ -1,13 +1,14 @@
 package com.jcmateus.kalisfit.ui.screens
 
-import android.app.Application
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -17,18 +18,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.Launch
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.Scale
-import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.StarRate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,18 +62,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.values
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import com.jcmateus.kalisfit.R
-import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
 import com.jcmateus.kalisfit.viewmodel.AppTheme
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 import kotlin.text.uppercase
@@ -71,18 +82,27 @@ import kotlin.text.uppercase
 @Composable
 fun SettingsScreen(
     navController: NavHostController,
-    settingsViewModel: SettingsViewModel = viewModel() // Inyecta o crea el ViewModel
+    settingsViewModel: SettingsViewModel = viewModel()
 ) {
     val context = LocalContext.current
 
-    // Recolecta los estados del ViewModel
     val notificationsEnabled by settingsViewModel.notificationsEnabled.collectAsState()
     val currentAppTheme by settingsViewModel.appTheme.collectAsState()
     val currentWeightUnit by settingsViewModel.weightUnit.collectAsState()
-    val appVersion = settingsViewModel.appVersion
+    val appVersionName = remember { getAppVersionName(context) }
+    val appVersionCode = remember { getAppVersionCode(context) }
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
+    var showOpenSourceLicensesDialog by remember { mutableStateOf(false) }
+
+    val appNameString = stringResource(id = R.string.app_name)
+    val playStoreLink = "https://play.google.com/store/apps/details?id=${context.packageName}"
+    val shareBodyString = stringResource(R.string.settings_share_app_text, appNameString, playStoreLink)
+    val shareUsingString = stringResource(R.string.settings_share_using) // Para el chooser
+    val finalSupportSubject = stringResource(R.string.settings_support_email_subject, appNameString)
+
+
 
     Scaffold(
         topBar = {
@@ -97,8 +117,7 @@ fun SettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp) // Sutil elevación
                 )
             )
         }
@@ -107,71 +126,133 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState()) // Para que sea desplazable si hay muchas opciones
-                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 16.dp) // Espacio inferior para que el último elemento no quede pegado
         ) {
+            // Sección General
             SettingsSectionTitle(title = stringResource(R.string.settings_section_general))
             SwitchSettingItem(
                 title = stringResource(R.string.settings_enable_notifications),
+                description = stringResource(R.string.settings_enable_notifications_desc),
                 icon = Icons.Default.Notifications,
                 checked = notificationsEnabled,
                 onCheckedChange = { settingsViewModel.setNotificationsEnabled(it) }
             )
             ClickableSettingItem(
                 title = stringResource(R.string.settings_app_theme),
-                icon = when(currentAppTheme) {
+                icon = when (currentAppTheme) {
                     AppTheme.LIGHT -> Icons.Default.Brightness7
                     AppTheme.DARK -> Icons.Default.Brightness4
-                    AppTheme.SYSTEM -> Icons.Default.SystemUpdateAlt
+                    AppTheme.SYSTEM -> Icons.Default.BrightnessAuto // Icono más adecuado
                 },
                 currentValue = currentAppTheme.name.replaceFirstChar { it.titlecase() },
                 onClick = { showThemeDialog = true }
             )
 
+            // Sección Unidades
             SettingsSectionTitle(title = stringResource(R.string.settings_section_units))
             ClickableSettingItem(
                 title = stringResource(R.string.settings_weight_units),
-                icon = Icons.Default.Scale,
+                icon = Icons.Default.FitnessCenter, // Icono más temático para fitness
                 currentValue = currentWeightUnit.uppercase(),
                 onClick = { showUnitDialog = true }
             )
 
+            // Sección Soporte y Feedback
+            SettingsSectionTitle(title = stringResource(R.string.settings_section_support))
+            InfoSettingItem(
+                title = stringResource(R.string.settings_rate_app),
+                icon = Icons.Default.StarRate,
+                onClick = {
+                    val packageName = context.packageName
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
+                    } catch (e: ActivityNotFoundException) {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
+                    }
+                }
+            )
+            InfoSettingItem(
+                title = stringResource(R.string.settings_share_app),
+                icon = Icons.Default.Share,
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, appNameString)
+                        putExtra(Intent.EXTRA_TEXT, shareBodyString)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, shareUsingString))
+                }
+            )
+            InfoSettingItem(
+                title = stringResource(R.string.settings_contact_support),
+                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                onClick = {
+                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                        data = Uri.parse("mailto:") // Solo apps de email
+                        putExtra(Intent.EXTRA_EMAIL, arrayOf("kalisfit8@gmail.com")) // Reemplaza con tu email
+                        putExtra(Intent.EXTRA_SUBJECT, finalSupportSubject)
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        // Manejar el caso de que no haya cliente de email
+                    }
+                }
+            )
+            // Sección Legal
             SettingsSectionTitle(title = stringResource(R.string.settings_section_legal))
             InfoSettingItem(
                 title = stringResource(R.string.settings_privacy_policy),
                 icon = Icons.Default.Policy,
                 onClick = {
-                    // Reemplaza con tu URL real
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com/privacy"))
-                    context.startActivity(intent)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminoskalisfit.blogspot.com/p/politica-de-privacidad-kalisfit.html")))
                 }
             )
             InfoSettingItem(
                 title = stringResource(R.string.settings_terms_of_service),
-                icon = Icons.Default.Info, // O algún icono más específico
+                icon = Icons.AutoMirrored.Filled.Notes, // Un icono como "documento"
                 onClick = {
-                    // Reemplaza con tu URL real
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com/terms"))
-                    context.startActivity(intent)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminoskalisfit.blogspot.com/p/terminos-y-condiciones-de-uso-kalisfit.html")))
+                }
+            )
+            InfoSettingItem(
+                title = stringResource(R.string.settings_open_source_licenses),
+                icon = Icons.Default.Code,
+                onClick = {
+                    // Idealmente, esto abriría una pantalla o diálogo dentro de la app
+                    // que liste las licencias. La librería "AboutLibraries" es genial para esto.
+                    // Por ahora, un diálogo placeholder:
+                    showOpenSourceLicensesDialog = true
                 }
             )
 
+            // Sección Acerca de
             SettingsSectionTitle(title = stringResource(R.string.settings_section_about))
+            AboutAppItem(
+                versionName = appVersionName,
+                versionCode = appVersionCode
+            )
+            // Puedes añadir un item simple para "Desarrollado por" si lo deseas
             SettingItem(
-                icon = Icons.Default.Info,
+                icon = Icons.Default.Business, // O un icono de persona si es individual
                 content = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(stringResource(R.string.settings_app_version), style = MaterialTheme.typography.bodyLarge)
-                        Text(appVersion, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column {
+                        Text(
+                            stringResource(R.string.settings_developed_by),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            "JcMateus",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp)) // Espacio al final
+
+            Spacer(Modifier.height(32.dp)) // Más espacio al final
         }
     }
 
@@ -183,7 +264,6 @@ fun SettingsScreen(
             onDismiss = { showThemeDialog = false },
             onConfirm = { theme ->
                 settingsViewModel.setAppTheme(theme)
-                // Aquí deberías tener la lógica para aplicar el tema globalmente
                 showThemeDialog = false
             }
         )
@@ -201,17 +281,63 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (showOpenSourceLicensesDialog) {
+        AlertDialog(
+            onDismissRequest = { showOpenSourceLicensesDialog = false },
+            title = { Text(stringResource(R.string.settings_open_source_licenses)) },
+            text = { Text(stringResource(R.string.settings_open_source_licenses_placeholder)) },
+            confirmButton = {
+                TextButton(onClick = { showOpenSourceLicensesDialog = false }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            }
+        )
+    }
 }
 
+// -- Composable para "Acerca de" más elaborado --
+@Composable
+fun AboutAppItem(versionName: String, versionCode: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Logo de la app (opcional)
+        Image(
+            painter = painterResource(id = R.drawable.ic_logo2), // Reemplaza con tu logo real
+            contentDescription = stringResource(R.string.app_logo_desc),
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Fit
+        )
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(
+                text = stringResource(id = R.string.app_name), // Asume que tienes app_name en strings.xml
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = stringResource(R.string.settings_app_version_formatted, versionName, versionCode.toString()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    ListDivider()
+}
 
 @Composable
 fun SettingsSectionTitle(title: String) {
     Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
+        text = title.uppercase(), // Un estilo común es usar mayúsculas para títulos de sección
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp), // Más pequeño, con espaciado
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp, end = 16.dp)
     )
 }
 
@@ -219,34 +345,42 @@ fun SettingsSectionTitle(title: String) {
 fun SettingItem(
     icon: ImageVector? = null,
     iconContentDescription: String? = null,
+    onClick: (() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit
 ) {
+    val itemModifier = Modifier
+        .fillMaxWidth()
+        .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+        .padding(horizontal = 16.dp, vertical = 12.dp) // Ajusta el padding
+        .heightIn(min = 60.dp) // Un poco más de altura mínima
+
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp) // Altura mínima típica para items de lista
-            .padding(vertical = 8.dp),
+        modifier = itemModifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = iconContentDescription,
-                modifier = Modifier.padding(end = 16.dp),
+                modifier = Modifier
+                    .size(32.dp) // Tamaño estándar para iconos en listas
+                    .padding(end = 16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            Spacer(modifier = Modifier.width(24.dp + 16.dp)) // Para alinear con items que sí tienen icono
+            // Si no hay icono, añade un espacio para mantener la alineación del texto
+            Spacer(Modifier.width(24.dp + 16.dp))
         }
         content()
     }
-    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ListDivider() // Usar un divisor más estándar o personalizado
 }
 
 
 @Composable
 fun SwitchSettingItem(
     title: String,
+    description: String? = null,
     icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
@@ -254,19 +388,29 @@ fun SwitchSettingItem(
     SettingItem(
         icon = icon,
         iconContentDescription = title,
+        // Hacemos que todo el item sea clickeable para cambiar el switch, mejora la accesibilidad
+        onClick = { onCheckedChange(!checked) }
     ) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(
-            1f
-        ))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+        }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = onCheckedChange, // El onClick del Row ya lo maneja, pero es bueno tenerlo también aquí por si acaso
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.primary,
-                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
                 uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            modifier = Modifier.padding(start = 8.dp)
         )
     }
 }
@@ -274,6 +418,7 @@ fun SwitchSettingItem(
 @Composable
 fun ClickableSettingItem(
     title: String,
+    description: String? = null,
     icon: ImageVector,
     currentValue: String,
     onClick: () -> Unit
@@ -281,16 +426,30 @@ fun ClickableSettingItem(
     SettingItem(
         icon = icon,
         iconContentDescription = title,
+        onClick = onClick
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(currentValue, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                currentValue,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Icon( // Indicador de que es clickeable para más opciones
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null, // Decorativo
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -298,19 +457,30 @@ fun ClickableSettingItem(
 @Composable
 fun InfoSettingItem(
     title: String,
+    description: String? = null,
     icon: ImageVector,
     onClick: () -> Unit
 ) {
     SettingItem(
         icon = icon,
         iconContentDescription = title,
+        onClick = onClick
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+        }
+        Icon( // Indicador de que navega o abre algo
+            imageVector = Icons.AutoMirrored.Filled.Launch, // El icono "launch" es bueno para enlaces externos
+            contentDescription = null, // Decorativo
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
         )
     }
 }
@@ -362,46 +532,42 @@ fun <T> SingleChoiceDialog(
         }
     )
 }
-
-
+// Un divisor más delgado y sutil
+@Composable
+fun ListDivider() {
+    Divider(
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        thickness = 0.5.dp,
+        modifier = Modifier.padding(start = 16.dp + 32.dp + 16.dp) // Alineado con el inicio del texto
+    )
+}
+// --- Funciones de utilidad para obtener la versión (las tenías fuera, pero pueden estar aquí o en un archivo utils) ---
 fun getAppVersionName(context: Context): String {
     return try {
-        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            context.packageManager.getPackageInfo(context.packageName, 0)
-        }
-        packageInfo.versionName
-    } catch (e: PackageManager.NameNotFoundException) {
+        getPackageInfo(context).versionName
+    } catch (e: Exception) {
         "N/A"
     }.toString()
 }
 
-
-@Preview(showBackground = true, name = "Settings Screen Light")
-@Composable
-fun SettingsScreenPreview() {
-    KalisFitTheme(darkTheme = false) {
-        // Obtén el contexto local y trata de castearlo (puede no ser ideal para previews)
-        val context = LocalContext.current
-        val application = context.applicationContext as Application // ¡Cuidado aquí en previews!
-        SettingsScreen(
-            navController = rememberNavController(),
-            settingsViewModel = SettingsViewModel(application) // Pasa la application
-        )
+fun getAppVersionCode(context: Context): Int {
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getPackageInfo(context).longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            getPackageInfo(context).versionCode
+        }
+    } catch (e: Exception) {
+        0
     }
 }
 
-@Preview(showBackground = true, name = "Settings Screen Dark")
-@Composable
-fun SettingsScreenDarkPreview() {
-    KalisFitTheme(darkTheme = true) {
-        val context = LocalContext.current
-        val application = context.applicationContext as Application // ¡Cuidado aquí en previews!
-        SettingsScreen(
-            navController = rememberNavController(),
-            settingsViewModel = SettingsViewModel(application) // Pasa la application
-        )
+private fun getPackageInfo(context: Context): PackageInfo {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
     }
 }

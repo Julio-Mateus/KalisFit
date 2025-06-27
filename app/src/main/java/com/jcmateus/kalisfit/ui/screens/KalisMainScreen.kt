@@ -38,13 +38,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.values
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -52,6 +53,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
+import com.jcmateus.kalisfit.MainActivity
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.navigation.BottomNavItem
@@ -65,6 +67,12 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val bottomNavController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activity = context as? MainActivity
+
+    LaunchedEffect(key1 = activity) {
+        activity?.askNotificationPermissionInternal()
+    }
 
     val mainNavBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentMainRoute = mainNavBackStackEntry?.destination?.route
@@ -338,7 +346,7 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                 composable(BottomNavItem.Home.route) {
                     HomeScreen(
                         mainNavController = mainNavController,
-                        bottomNavController = bottomNavController
+                        //bottomNavController = bottomNavController
                     )
                 }
                 composable(BottomNavItem.Calisthenics.route) {

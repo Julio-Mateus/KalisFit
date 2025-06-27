@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+//import android.icu.util.TimeUnit
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,33 +10,62 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.Rutina
+import com.jcmateus.kalisfit.model.UserActivity
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.viewmodel.LastActivityItem
+import com.jcmateus.kalisfit.viewmodel.ResumenSemanal
+import com.jcmateus.kalisfit.viewmodel.UserProfile
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlin.random.Random
+import java.util.concurrent.TimeUnit
+
 
 
 @SuppressLint("RememberReturnType")
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHostController) { // bottomNavController se recibe pero no se usa en este ejemplo directamente
+fun HomeScreen(
+    mainNavController: NavHostController,
+    // bottomNavController: NavHostController // No se usa directamente aquí, pero se pasa
+) {
     val userViewModel: UserProfileViewModel = viewModel()
 
-    // Recolecta los estados del ViewModel
     val user by userViewModel.user.collectAsState()
     val isLoadingUser by userViewModel.isLoadingUser.collectAsState()
     val userErrorMessage by userViewModel.userErrorMessage.collectAsState()
+
+    // Datos específicos del HomeScreen del ViewModel
+    val homeScreenSummary by userViewModel.homeScreenSummary.collectAsState()
+    val lastActivity by userViewModel.lastActivity.collectAsState()
+    val isLoadingHomeScreenData by userViewModel.isLoadingHomeScreenData.collectAsState()
+    val homeScreenError by userViewModel.homeScreenErrorMessage.collectAsState()
 
     val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState()
     val isLoadingRoutines by userViewModel.isLoadingRoutines.collectAsState()
@@ -43,293 +73,237 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
 
     val tipsGenerales = remember {
         listOf(
-            "Mantén una buena postura durante los ejercicios para prevenir lesiones y maximizar la efectividad.",
-            "La hidratación es clave. Bebe suficiente agua antes, durante y después de tus entrenamientos.",
-            "No olvides calentar antes de cada sesión y estirar al finalizar para mejorar la flexibilidad y reducir el dolor muscular.",
-            "Escucha a tu cuerpo. Si sientes dolor agudo, detente y descansa. No te exijas más de la cuenta, especialmente al principio.",
-            "La consistencia es más importante que la intensidad al inicio. Es mejor entrenar 3-4 veces por semana de forma moderada que una vez muy intenso y luego abandonar.",
-            "Una dieta equilibrada rica en proteínas, carbohidratos complejos y grasas saludables potenciará tus resultados.",
-            "El descanso es tan importante como el ejercicio. Asegúrate de dormir entre 7-9 horas para una buena recuperación muscular.",
-            "Varía tus rutinas cada 4-6 semanas para evitar el estancamiento y seguir progresando.",
-            "Establece metas realistas y medibles. Te ayudará a mantener la motivación a largo plazo.",
-            "¡Disfruta el proceso! Encuentra actividades que te gusten para que el ejercicio se convierta en un hábito placentero."
+            "Mantén una buena postura durante los ejercicios.",
+            "La hidratación es clave: bebe agua antes, durante y después.",
+            "Calienta antes y estira después de cada sesión.",
+            "Escucha a tu cuerpo; si sientes dolor agudo, detente.",
+            "Consistencia > Intensidad al inicio. Entrena 3-4 veces/semana.",
+            "Una dieta equilibrada potenciará tus resultados.",
+            "Duerme 7-9 horas para una buena recuperación muscular.",
+            "Varía tus rutinas cada 4-6 semanas para progresar.",
+            "Establece metas realistas y medibles para mantener la motivación.",
+            "¡Disfruta el proceso! Encuentra actividades que te gusten."
         )
     }
 
-    val tipDelDia = remember(tipsGenerales, user) { // Re-calcular si el usuario cambia (o al inicio)
+    val tipDelDia = remember(tipsGenerales, user?.uid) { // Cambia con el usuario para nueva semilla
         if (tipsGenerales.isNotEmpty()) {
-            tipsGenerales.random(Random(System.currentTimeMillis()))
+            // Usar una semilla basada en el día actual y el UID para que el tip sea el mismo durante el día para ese usuario
+            val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()?.toLong() ?: 0L)
+            tipsGenerales.random(Random(seed))
         } else {
             "¡Recuerda mantenerte activo hoy!"
         }
     }
 
-    LaunchedEffect(key1 = Unit) {
-        userViewModel.loadUserProfile() // Esto iniciará la carga del perfil y, si tiene éxito, la carga de rutinas
+    // Pull to refresh state
+    val isRefreshing = isLoadingUser || isLoadingHomeScreenData || isLoadingRoutines
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            userViewModel.loadUserProfile() // Esto ya debería llamar a las otras cargas
+            // O puedes ser explícito:
+            // userViewModel.refreshHomeScreenData()
+            // userViewModel.refreshRecommendations()
+
+            // Una vez que la carga finaliza (basado en tus StateFlows de carga),
+            // necesitas llamar a pullToRefreshState.endRefresh()
+            // Esto se puede hacer observando los estados de `isLoading...`
+        }
+    }
+
+    // Observa los estados de carga para finalizar el refresh
+    LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines) {
+        if (!isLoadingUser && !isLoadingHomeScreenData && !isLoadingRoutines) {
+            pullToRefreshState.endRefresh()
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+
     ) {
-        // Estado 1: Cargando el perfil de usuario
-        if (isLoadingUser) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        "Cargando perfil...",
-                        modifier = Modifier.padding(top = 16.dp),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+        when {
+            isLoadingUser && user == null -> { // Mostrar carga principal solo si no hay datos de usuario aún
+                LoadingIndicator(text = "Cargando perfil...")
             }
-        }
-        // Estado 2: Error al cargar el perfil de usuario
-        else if (user == null && userErrorMessage != null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        userErrorMessage ?: "No se pudo cargar el perfil del usuario.",
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { userViewModel.loadUserProfile() }, // Reintentar cargar perfil
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Reintentar", color = MaterialTheme.colorScheme.onPrimary)
-                    }
-                }
-            }
-        }
-        // Estado 3: Perfil cargado con éxito, mostrar contenido principal
-        else if (user != null) {
-            val currentUser = user!! // Sabemos que no es nulo aquí
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 16.dp,
-                    bottom = 16.dp + 56.dp // Espacio extra para el BottomNav si es persistente
+
+            user == null && userErrorMessage != null -> {
+                ErrorState(
+                    message = userErrorMessage ?: "No se pudo cargar el perfil.",
+                    onRetry = { userViewModel.loadUserProfile() }
                 )
-            ) {
-                // --- SECCIÓN BIENVENIDA ---
-                item {
-                    Text(
-                        text = "Hola, ${currentUser.nombre} 👋",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Nivel: ${currentUser.nivel}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    if (currentUser.objetivos.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Tus Objetivos:",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Spacer(modifier = Modifier.height(8.dp)) // Espacio antes del FlowRow
-                        FlowRow(
-                            // Ya no usamos mainAxisSpacing ni crossAxisSpacing aquí directamente
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp) // Espacio horizontal ENTRE ítems
-                        ) {
-                            currentUser.objetivos.forEach { objetivo ->
-                                Text(
-                                    text = objetivo,
-                                    modifier = Modifier
-                                        // Añadimos padding vertical a cada ítem para simular crossAxisSpacing
-                                        .padding(vertical = 4.dp) // (8.dp / 2) en cada lado del ítem
-                                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 12.dp, vertical = 6.dp), // Tu padding original para el contenido interno
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        }
-                    }
-                }
+            }
 
-                // --- TIP DEL DÍA ---
-                item {
-                    SectionTitle("💡 Tip del Día")
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Text(
-                            tipDelDia,
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+            user != null -> {
+                val currentUser = user!! // Sabemos que no es null aquí
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = 16.dp + 56.dp + 16.dp // Espacio para BottomNav y algo más
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    // --- SECCIÓN BIENVENIDA ---
+                    item {
+                        WelcomeSection(currentUser)
                     }
-                }
-
-                // --- TIPS RECIENTES (Placeholder) ---
-                item {
-                    SectionTitle("📚 Tips Recientes")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(3) { index -> // Reemplaza con tus datos reales de tips
-                            TipCard(
-                                title = "Consejo de Calistenia #${index + 1}",
-                                onClick = {
-                                    // TODO: Navegar al detalle del tip si tienes una pantalla para ello
-                                    // mainNavController.navigate(Routes.tipDetailScreen(tipId = "someTipId${index + 1}"))
-                                }
+                    // --- TIP DEL DÍA ---
+                    item {
+                        SectionTitle("💡 Tip del Día",
+                            //icon = Icons.Filled.Lightbulb
+                        )
+                        TipCard(tipDelDia = tipDelDia)
+                    }
+                    // --- RESUMEN SEMANAL ---
+                    item {
+                        SectionTitle("📈 Tu Semana",
+                            //icon = Icons.AutoMirrored.Filled.TrendingUp
+                        )
+                        when {
+                            isLoadingHomeScreenData && homeScreenSummary == null -> LoadingCard(text = "Cargando resumen...")
+                            homeScreenError != null && homeScreenSummary == null -> ErrorCard(
+                                message = homeScreenError ?: "Error al cargar resumen.",
+                                onRetry = { userViewModel.refreshHomeScreenData() }
                             )
+                            homeScreenSummary != null -> WeeklySummaryCard(summary = homeScreenSummary!!)
+                            else -> NoDataCard(message = "Aún no hay datos para tu resumen semanal. ¡Empieza a entrenar!")
                         }
                     }
-                }
 
-                // --- RUTINAS RECOMENDADAS ---
-                item {
-                    SectionTitle("🏋️‍♂️ Tus Rutinas Recomendadas")
-                    when {
-                        isLoadingRoutines -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            }
+                    // --- ÚLTIMA ACTIVIDAD ---
+                    item {
+                        SectionTitle("⏱️ Última Actividad",
+                            //icon = Icons.Filled.Timelapse
+                        )
+                        when (val activity = lastActivity) {
+                            is LastActivityItem.Loading -> LoadingCard(text = "Cargando última actividad...")
+                            is LastActivityItem.None -> NoDataCard(message = "No has registrado actividades recientemente.")
+                            is LastActivityItem.Routine -> LastActivityRoutineCard(activity.progreso, mainNavController)
+                            is LastActivityItem.FreeActivity -> LastActivityFreeCard(activity.activity, mainNavController)
+                            // El caso de error para lastActivity se maneja a través de homeScreenError
+                            // si es un error general de carga de datos del home.
+                            // Si quisieras un error específico para lastActivity, necesitarías otro StateFlow.
                         }
+                        if (homeScreenError != null && lastActivity is LastActivityItem.None) { // Mostrar error si no hay datos Y hubo error
+                            Spacer(Modifier.height(8.dp))
+                            ErrorCard(message = homeScreenError ?: "Error al cargar última actividad.", onRetry = {userViewModel.refreshHomeScreenData()})
+                        }
+                    }
 
-                        routinesError != null -> {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp)
-                            ) {
-                                Text(
-                                    routinesError ?: "Error al cargar rutinas.",
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center
-                                )
-                                Button(
-                                    onClick = { userViewModel.loadRecommendedRoutines(currentUser) }, // Reintentar cargar rutinas
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier.padding(top=8.dp)
+                    // --- RUTINAS RECOMENDADAS ---
+                    item {
+                        SectionTitle("🏋️‍♂️ Tus Rutinas Recomendadas",
+                            //icon = Icons.Filled.FitnessCenter
+                        )
+                        when {
+                            isLoadingRoutines && recommendedRoutines.isEmpty() -> LoadingCard(text = "Buscando recomendaciones...")
+                            routinesError != null && recommendedRoutines.isEmpty() -> ErrorCard(
+                                message = routinesError ?: "Error al cargar rutinas.",
+                                onRetry = { userViewModel.refreshRecommendations() }
+                            )
+
+                            recommendedRoutines.isEmpty() && !isLoadingRoutines -> {
+                                NoDataCard(message = "No hay rutinas recomendadas ahora. ¡Explora y encuentra la tuya!") {
+                                    Button(
+                                        onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Explorar Todas las Rutinas")
+                                    }
+                                }
+                            }
+
+                            else -> {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 2.dp) // Pequeño padding para sombras de card
                                 ) {
-                                    Text("Reintentar", color = MaterialTheme.colorScheme.onPrimary)
-                                }
-                            }
-                        }
-
-                        recommendedRoutines.isEmpty() && !isLoadingRoutines -> {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp)
-                            ) {
-                                Text(
-                                    "No hay rutinas recomendadas disponibles en este momento.",
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                ) {
-                                    Text(
-                                        "Explorar Todas las Rutinas",
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            }
-                        }
-
-                        else -> {
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                items(items = recommendedRoutines, key = { it.id }) { rutina ->
-                                    RoutineCard(rutina = rutina, navController = mainNavController)
+                                    items(items = recommendedRoutines, key = { it.id }) { rutina ->
+                                        RoutineCard(
+                                            rutina = rutina,
+                                            navController = mainNavController,
+                                            modifier = Modifier.width(280.dp) // Ancho fijo para consistencia en LazyRow
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // --- BOTONES DE ACCIÓN ---
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    val puedeEmpezarRecomendada =
-                        recommendedRoutines.isNotEmpty() && routinesError == null && !isLoadingRoutines
-
-                    Button(
-                        onClick = {
-                            if (puedeEmpezarRecomendada) {
-                                val primeraRutina = recommendedRoutines.firstOrNull()
-                                primeraRutina?.id?.let { rutinaId ->
-                                    // NAVEGACIÓN CORRECTA AL DETALLE DE LA RUTINA
-                                    mainNavController.navigate(Routes.routineDetail(rutinaId))
-                                }
-                            } else {
-                                // NAVEGACIÓN CORRECTA A EXPLORAR RUTINAS
-                                mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        enabled = user != null // Habilitado si el usuario está cargado
-                    ) {
-                        Icon(Icons.Default.FitnessCenter, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (puedeEmpezarRecomendada) "Empezar rutina recomendada" else "Explorar rutinas")
+                    // --- BOTONES DE ACCIÓN PRINCIPALES ---
+                    item {
+                        ActionButtonsSection(
+                            navController = mainNavController,
+                            userIsPresent = user != null
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedButton(
-                        onClick = {
-                            // NAVEGACIÓN CORRECTA AL PERFIL
-                            mainNavController.navigate(Routes.PROFILE_SCREEN)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        enabled = user != null
-                    ) {
-                        Text("Ver mi perfil")
-                    }
-                    // Spacer(modifier = Modifier.height(16.dp)) // El padding del LazyColumn ya da espacio abajo
                 }
             }
+            // Caso inicial antes de que LaunchedEffect se active completamente o si el usuario no está logueado
+            else -> {
+                LoadingIndicator(text = "Inicializando...")
+            }
         }
-        // Estado 4: Caso por defecto o estado inicial antes de que LaunchedEffect se active completamente
-        // y el usuario aún no está cargado ni hay error.
-        else if (!isLoadingUser && user == null && userErrorMessage == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                // Este estado es breve, mientras se dispara el LaunchedEffect.
-                // Un CircularProgressIndicator es apropiado si el usuario aún no está cargado.
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter),
+            // Puedes personalizar el indicador si lo deseas
+            // indicator = { CircularProgressIndicator() }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun WelcomeSection(user: UserProfile) {
+    Column {
+        Text(
+            text = "Hola, ${user.nombre.takeIf { it.isNotBlank() } ?: "Usuario"} 👋",
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        if (user.nivel.isNotBlank()) {
+            Text(
+                "Nivel: ${user.nivel}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        if (user.objetivos.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                "Tus Objetivos:",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow( // Usando FlowRow de Accompanist para mejor manejo
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), // Para espaciado horizontal (equivalente a mainAxisSpacing en fila)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                user.objetivos.forEach { objetivo ->
                     Text(
-                        "Inicializando...",
-                        modifier = Modifier.padding(top = 16.dp),
-                        color = MaterialTheme.colorScheme.onBackground
+                        text = objetivo,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -341,146 +315,457 @@ fun HomeScreen(mainNavController: NavHostController, bottomNavController: NavHos
 fun SectionTitle(title: String, icon: ImageVector? = null, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.padding(vertical = 8.dp) // Añadido padding vertical por defecto
+        modifier = modifier.padding(bottom = 8.dp, top = 8.dp) // Añadido padding superior
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
-                contentDescription = null, // El título describe la sección
+                contentDescription = null, // El título ya describe la sección
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp) // Un tamaño ligeramente mayor puede ser bueno
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
         }
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall, // Estilo para títulos de sección
-            color = MaterialTheme.colorScheme.onBackground
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+fun TipCard(tipDelDia: String) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.Lightbulb,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(24.dp)
+                    .padding(end = 8.dp),
+                tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+            )
+            Text(
+                tipDelDia,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RoutineCard(
+    rutina: Rutina,
+    navController: NavHostController,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = {
+            navController.navigate(Routes.routineDetail(rutina.slug.ifBlank { rutina.id })) // Usar slug si está disponible
+        },
+        modifier = modifier
+            .height(IntrinsicSize.Min), // Para que la card se ajuste a su contenido si es más alto
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant, // Ligeramente diferente para destacar
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(rutina.imagenUrl)
+                    .crossfade(true)
+                    // .placeholder(R.drawable.placeholder_routine_card) // Define un placeholder
+                    // .error(R.drawable.error_routine_card) // Define una imagen de error
+                    .build(),
+                contentDescription = "Imagen de la rutina: ${rutina.nombre}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp) // Altura fija para la imagen
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            )
+
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = rutina.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Nivel
+                if (rutina.nivelRecomendado.isNotEmpty()) {
+                    DetailRow(
+                        icon = Icons.Filled.FitnessCenter,
+                        text = "Nivel: ${rutina.nivelRecomendado.joinToString(", ")}"
+                    )
+                }
+
+                // Lugar
+                if (rutina.lugarEntrenamiento.mapNotNull { it.name }.isNotEmpty()) {
+                    DetailRow(
+                        icon = Icons.Filled.CalendarToday, // Placeholder, elige un icono adecuado
+                        text = "Lugar: ${rutina.lugarEntrenamiento.joinToString(", ") { it.name }}"
+                    )
+                }
+                // Objetivos (opcional, si quieres mostrarlo en la card)
+                if (rutina.objetivos.isNotEmpty()){
+                    DetailRow(
+                        icon = Icons.Filled.FitnessCenter, // Cambiar icono
+                        text = "Objetivos: ${rutina.objetivos.take(2).joinToString(", ")}${if(rutina.objetivos.size > 2) "..." else ""}",
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+
+@Composable
+fun WeeklySummaryCard(summary: ResumenSemanal) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SummaryItem(
+                value = summary.rutinasCompletadas.toString(),
+                label = "Rutinas"
+            )
+            Divider(
+                modifier = Modifier
+                    .height(50.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+            SummaryItem(
+                value = formatDuration(summary.tiempoTotalEntrenadoSegundos),
+                label = "Tiempo Total"
+            )
+            // Puedes añadir más items aquí si ResumenSemanal tiene más campos
+        }
+    }
+}
+
+@Composable
+fun SummaryItem(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TipCard(title: String, imageUrl: String? = null, onClick: () -> Unit) {
+fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostController) {
     Card(
-        onClick = onClick,
-        modifier = Modifier
-            .width(220.dp) // Ancho fijo para consistencia en LazyRow
-            .height(150.dp), // Altura fija
-        shape = RoundedCornerShape(16.dp), // Bordes redondeados consistentes
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
+        onClick = { /* Podrías navegar al detalle del progreso si tienes esa pantalla */
+            // navController.navigate(Routes.progressDetail(progreso.id))
+        },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column {
-            // Aquí iría la lógica para cargar la imagen si imageUrl no es nulo
-            // Por ejemplo, usando Coil:
-            // if (imageUrl != null) {
-            //     AsyncImage(
-            //         model = ImageRequest.Builder(LocalContext.current)
-            //             .data(imageUrl)
-            //             .crossfade(true)
-            //             .build(),
-            //         contentDescription = title,
-            //         modifier = Modifier
-            //             .fillMaxWidth()
-            //             .height(80.dp), // Altura para la imagen
-            //         contentScale = ContentScale.Crop
-            //     )
-            // } else {
-            // Si no hay imagen, puedes poner un placeholder o un icono
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp) // Misma altura que la imagen para consistencia
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.MenuBook, // Icono placeholder
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-            // }
-
+        Column(modifier = Modifier
+            .padding(16.dp)
+            .fillMaxWidth()) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(12.dp), // Padding para el texto
-                maxLines = 2 // Limitar a 2 líneas para evitar desbordamiento
+                text = progreso.nombreRutina,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            DetailRow(icon = Icons.Filled.CalendarToday, text = "Fecha: ${UserProfileViewModel.formatFirebaseTimestampForDisplay(progreso.fecha)}")
+            Spacer(modifier = Modifier.height(4.dp))
+            DetailRow(icon = Icons.Filled.Timelapse, text = "Duración: ${formatDuration(progreso.tiempoTotalSesionSegundos)}")
+            Spacer(modifier = Modifier.height(4.dp))
+            DetailRow(icon = Icons.Filled.FitnessCenter, text = "Rondas: ${progreso.rondasRealizadas}")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LastActivityFreeCard(activity: UserActivity, navController: NavHostController) {
+    Card(
+        onClick = { /* Podrías navegar al detalle de la actividad libre */
+            // navController.navigate(Routes.activityDetail(activity.id))
+        },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier
+            .padding(16.dp)
+            .fillMaxWidth()) {
+            Text(
+                // UserActivity no tiene un "nombre" per se, usa la fecha o un título genérico
+                text = "Actividad Libre",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DetailRow(icon = Icons.Filled.CalendarToday, text = "Fecha: ${UserProfileViewModel.formatDateForDisplay(activity.timestamp)}")
+            Spacer(modifier = Modifier.height(4.dp))
+            DetailRow(icon = Icons.Filled.Timelapse, text = "Duración: ${formatDuration(activity.elapsedTimeSeconds.toInt())}")
+            if (activity.distanceKm > 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                DetailRow(icon = Icons.AutoMirrored.Filled.TrendingUp, text = "Distancia: ${String.format("%.2f", activity.distanceKm)} km")
+            }
         }
     }
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoutineCard(rutina: Rutina, navController: NavHostController) {
+fun ActionButtonsSection(navController: NavHostController, userIsPresent: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(
+            onClick = {
+                // Podrías decidir qué hacer basado en si hay recomendaciones o no
+                navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) // Simplificado a explorar siempre
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+            ),
+            enabled = userIsPresent,
+            contentPadding = PaddingValues(vertical = 14.dp)
+        ) {
+            Icon(Icons.Filled.FitnessCenter, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Explorar Rutinas", fontSize = 16.sp)
+        }
+
+        OutlinedButton(
+            onClick = {
+                navController.navigate(Routes.PROFILE_SCREEN)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.primary
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+            enabled = userIsPresent,
+            contentPadding = PaddingValues(vertical = 14.dp)
+        ) {
+            Text("Ver Mi Perfil", fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun LoadingIndicator(text: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Text(
+                text,
+                modifier = Modifier.padding(top = 16.dp),
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+@Composable
+fun LoadingCard(text: String = "Cargando...") {
     Card(
-        onClick = {
-            // NAVEGACIÓN CORRECTA AL DETALLE DE LA RUTINA
-            navController.navigate(Routes.routineDetail(rutina.id))
-        },
-        modifier = Modifier
-            .width(280.dp) // Ancho de la tarjeta
-            .height(180.dp), // Altura de la tarjeta
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) // Borde más sutil
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+
+@Composable
+fun ErrorState(message: String, onRetry: () -> Unit) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("Reintentar")
+            }
+        }
+    }
+}
+
+@Composable
+fun ErrorCard(message: String, onRetry: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween // Distribuye el espacio
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column { // Contenido superior
-                // Aquí podrías añadir una imagen si tu modelo `Rutina` la tiene
-                // if (rutina.imagenUrl != null) {
-                //     AsyncImage(...)
-                // }
-                Text(
-                    text = rutina.nombre,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    color = MaterialTheme.colorScheme.primary // Destacar el nombre
+            Icon(
+                Icons.Filled.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
                 )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { // Detalles inferiores
-                if (rutina.nivelRecomendado.isNotEmpty()) {
-                    Text(
-                        "Nivel: ${rutina.nivelRecomendado.joinToString(", ")}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (rutina.lugarEntrenamiento.isNotEmpty()) {
-                    Text(
-                        "Lugar: ${rutina.lugarEntrenamiento.joinToString(", ")}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (rutina.ejercicios.isNotEmpty()) {
-                    Text(
-                        "Ejercicios: ${rutina.ejercicios.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            ) {
+                Text("Reintentar")
             }
         }
+    }
+}
+
+
+@Composable
+fun NoDataCard(message: String, content: (@Composable () -> Unit)? = null) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 100.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                message,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (content != null) {
+                Spacer(Modifier.height(12.dp))
+                content()
+            }
+        }
+    }
+}
+
+
+fun formatDuration(totalSeconds: Int): String {
+    if (totalSeconds < 0) return "0s"
+    val hours = TimeUnit.SECONDS.toHours(totalSeconds.toLong())
+    val minutes = TimeUnit.SECONDS.toMinutes(totalSeconds.toLong()) % 60
+    val seconds = totalSeconds % 60
+
+    return when {
+        hours > 0 -> String.format("%dh %02dm", hours, minutes)
+        minutes > 0 -> String.format("%dm %02ds", minutes, seconds)
+        else -> String.format("%ds", seconds)
     }
 }
 
