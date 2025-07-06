@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Timestamp
-
+import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 
 class AuthViewModel(
@@ -13,6 +16,14 @@ class AuthViewModel(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) : ViewModel() {
 
+    private val _currentUser = MutableStateFlow(firebaseAuth.currentUser)
+    val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
+    // En init o donde configures listeners
+    init {
+        firebaseAuth.addAuthStateListener { auth ->
+            _currentUser.value = auth.currentUser
+        }
+    }
     fun login(email: String, password: String, onResult: (Boolean, String?) -> Unit) {
         firebaseAuth.signInWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->

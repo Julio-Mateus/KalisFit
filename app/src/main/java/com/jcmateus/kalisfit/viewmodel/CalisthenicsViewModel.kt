@@ -27,6 +27,7 @@ import kotlin.text.mapNotNull
 
 object FirestoreCollections {
     const val USER_PROGRESSION_STATES = "userProgressStates"
+
 }
 
 class CalisthenicsViewModel(application: Application) : AndroidViewModel(application) {

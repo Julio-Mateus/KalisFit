@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.jcmateus.kalisfit.ui.screens.CalisthenicsLevelDetailScreen
+import com.jcmateus.kalisfit.ui.screens.CartScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HistorialScreen
@@ -22,6 +23,7 @@ import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
+import com.jcmateus.kalisfit.ui.screens.ProductDetailScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineExplorerScreen
@@ -206,16 +208,31 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 // Considera navController.popBackStack() para volver a la pantalla anterior.
             }
         }
-        // =======================================================================
-
-
-        // NOTA: Las rutas para las PESTAÑAS (HOME_TAB, CALISTHENICS_TAB, STOICISM_TAB, RUNNING_TAB)
-        // NO se definen aquí como destinos directos. Son manejadas por el NavHost INTERNO
-        // dentro de KalisMainScreen cuando llamas a composable(Routes.MAIN_CONTENT).
-        // Este KalisNavGraph (con 'navController') solo necesita saber cómo llegar a:
-        //   1. Rutas de autenticación/onboarding.
-        //   2. Routes.MAIN_CONTENT (que luego maneja las pestañas).
-        //   3. Pantallas de nivel superior como PROFILE_SCREEN, SETTINGS_SCREEN, ROUTINE_DETAIL_SCREEN,
-        //      y ahora CALISTHENICS_LEVEL_DETAIL_SCREEN.
+        composable(
+            route = Routes.PRODUCT_DETAIL_SCREEN, // Asumiendo que Routes.PRODUCT_DETAIL_SCREEN ahora es algo como "productDetail/{productId}"
+            arguments = listOf(navArgument("productId") { type = NavType.StringType }) // <--- CAMBIO: "productId"
+        ) { backStackEntry ->
+            val productId = backStackEntry.arguments?.getString("productId") // <--- CAMBIO: obtener "productId"
+            if (productId != null) {
+                ProductDetailScreen(
+                    navController = navController,
+                    productId = productId, // <--- CAMBIO: pasar productId
+                    // storeViewModel se inyectará por defecto o con la factory en ProductDetailScreen
+                )
+            } else {
+                // Manejo de error: argumento faltante
+                Text("Error: Falta el ID del producto.")
+                // Considera navController.popBackStack() para volver
+            }
+        }
+        composable(Routes.CART_SCREEN) { // Asumiendo que Routes.CART_SCREEN es "cart_screen" o similar
+            CartScreen(
+                navController = navController
+                // Aquí también pasarías el CartRepository y AuthRepository si los
+                // estás inyectando manualmente en lugar de usar viewModel() con una factory
+                // que los obtiene de Firebase directamente dentro de CartScreen.
+                // Por como está estructurado CartScreen ahora, no necesitas pasar los repos aquí.
+            )
+        }
     }
 }

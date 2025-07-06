@@ -1,62 +1,49 @@
 <resources>
     <string name="app_name">KalisFit</string>
-    <string name="default_web_client_id">536221531880-lrpnggjnb1f5tkb1ckm87ifelqh4hh47.apps.googleusercontent.com</string>
-
+    <string name="default_web_client_id">536221531880-5duscsap35v8eon0v4h0il2dqapa1ess.apps.googleusercontent.com</string>
     <!-- Títulos para el TopAppBar basados en la pestaña del BottomNav -->
     <string name="title_home">Inicio</string>
     <string name="title_calisthenics">Calistenia</string>
     <string name="title_stoicism">Estoicismo</string>
     <string name="title_running">Running</string>
-
-
     <!-- Descripciones de contenido y etiquetas para iconos/botones -->
     <string name="desc_edit_profile">Editar Perfil</string>
     <string name="desc_options_menu">Más opciones</string>
     <string name="desc_open_drawer">Abrir menú de navegación</string>
     <string name="desc_navigate_back">Volver</string>
-
     <!-- Textos para ítems del menú y Drawer -->
     <string name="menu_settings">Configuración</string>
     <string name="menu_logout">Cerrar Sesión</string>
-
     <!-- Etiquetas para los items del BottomNavigationBar -->
     <string name="bottom_nav_home">Inicio</string>
     <string name="bottom_nav_calisthenics">Calistenia</string>
-    <string name="bottom_nav_stoicism">Estoicismo</string>
+    <string name="bottom_nav_stoicism">Estoico</string>
     <string name="bottom_nav_running">Running</string>
-
     <!-- Textos para ítems del Navigation Drawer -->
     <string name="drawer_profile">Perfil</string>
     <string name="drawer_routines_explorer">Explorar Rutinas</string>
     <string name="drawer_activity_history">Historial</string>
     <string name="drawer_explore_by_type">Explorar por Tipo</string>
     <string name="drawer_gym_routines">Gimnasio</string>
-
     <!-- Títulos de Pantallas -->
     <string name="edit_profile_title">Editar Mi Perfil</string>
     <string name="settings_title">Ajustes de la Aplicación</string>
-
     <!-- Otros strings generales y de settings -->
     <string name="label_save_changes">Guardar Cambios</string>
     <string name="label_username">Nombre de Usuario</string>
     <string name="label_email">Correo Electrónico</string>
-
     <string name="settings_section_general">General</string>
     <string name="settings_enable_notifications">Activar notificaciones</string>
     <string name="settings_app_theme">Tema de la aplicación</string>
     <string name="settings_select_theme_dialog_title">Seleccionar tema</string>
-
     <string name="settings_section_units">Unidades</string>
     <string name="settings_weight_units">Unidades de peso</string>
     <string name="settings_select_unit_dialog_title">Seleccionar unidad de peso</string>
-
     <string name="settings_section_legal">Legal</string>
     <string name="settings_privacy_policy">Política de Privacidad</string>
     <string name="settings_terms_of_service">Términos de Servicio</string>
-
     <string name="settings_section_about">Acerca de</string>
     <string name="settings_app_version">Versión de la aplicación</string>
-
     <!-- Strings específicos de la sección de Estoicismo -->
     <string name="stoicism_title_main">Principios del Estoicismo</string>
     <string name="stoicism_section_introduction">Introducción</string>
@@ -69,7 +56,6 @@
     <string name="stoicism_section_exercise_title">Práctica Estoica</string>
     <string name="stoicism_exercise_negative_visualization_title">Visualización Negativa (Premeditatio Malorum)</string>
     <string name="stoicism_exercise_negative_visualization_desc">Dedica unos momentos a contemplar los posibles reveses...</string>
-
     <!-- Strings específicos de la sección de Running -->
     <string name="running_location_permission_rationale_title">Permiso de Ubicación Necesario</string>
     <string name="running_location_permission_rationale_message">Para registrar tu actividad y mostrar el mapa, KalisFit necesita acceder a tu ubicación. Por favor, concede el permiso.</string>
@@ -87,34 +73,26 @@
     <string name="running_action_stop">Detener</string>
     <string name="running_summary_title">Resumen de Actividad</string>
     <string name="done">Hecho</string>
-
     <!-- =================================================================================== -->
     <!-- STRINGS: Para la pantalla de Progresiones de Calistenia y sus componentes  -->
     <!-- =================================================================================== -->
-
     <!-- Mensaje cuando no se encuentran progresiones -->
     <string name="calisthenics_no_progressions_found">No se encontraron progresiones de calistenia. ¡Vuelve más tarde!</string>
-
     <!-- Descripciones de contenido para los iconos de expandir/colapsar -->
     <string name="calisthenics_expand">Mostrar niveles</string>
     <string name="calisthenics_collapse">Ocultar niveles</string>
-
     <!-- Título para la pantalla de detalle de un nivel (ejemplo, puedes ajustarlo) -->
     <!-- <string name="title_calisthenics_level_detail">Detalle del Nivel</string> --> <!-- Original, reemplazado/complementado abajo -->
-
     <!-- Textos para métricas de los niveles de ejercicio (si los usas directamente en UI) -->
     <string name="label_target_sets">Series:</string>
     <string name="label_target_reps">Reps:</string>
     <string name="label_target_hold_time">Aguante:</string>
-
     <!-- Placeholder para imágenes (si decides referenciarlos desde XML, aunque usualmente se definen en drawables) -->
     <!-- <string name="content_desc_placeholder_image">Imagen de ejemplo</string> -->
     <!-- <string name="content_desc_broken_image">Error al cargar imagen</string> -->
-
     <!-- =================================================================================== -->
     <!-- NUEVOS STRINGS: Para la pantalla de Detalle del Nivel de Calistenia (CalisthenicsLevelDetailScreen) -->
     <!-- =================================================================================== -->
-
     <!-- Título para la pantalla de detalle mientras carga o si el nombre no está disponible -->
     <string name="title_calisthenics_level_detail_loading">Cargando Detalle...</string>
     <!-- Título genérico para errores al cargar -->
@@ -130,33 +108,26 @@
     <!-- Mensaje cuando no hay información disponible para un nivel -->
     <string name="info_no_data_available">No hay información disponible para este nivel.</string>
     <!-- El string "desc_navigate_back" ya existe, se reutilizará. -->
-
     <string name="drawer_routines_explorer_all">Todas las Rutinas</string> <!-- Nueva -->
     <string name="drawer_explore_by_place">Explorar por Lugar</string>
     <string name="place_filter_home">En Casa</string>
     <string name="place_filter_gym">Gimnasio</string>
     <string name="place_filter_outdoor">Aire Libre</string>
     <string name="place_filter_calisthenics">Calistenia (Lugar)</string> <!-- O como quieras llamarlo para diferenciarlo de la pestaña principal si es necesario -->
-
     <string name="desc_place_filter_home">Filtrar rutinas para hacer en casa</string>
     <string name="desc_place_filter_gym">Filtrar rutinas de gimnasio</string>
     <string name="desc_place_filter_outdoor">Filtrar rutinas para hacer al aire libre</string>
     <string name="desc_place_filter_calisthenics">Filtrar rutinas de calistenia por lugar</string>
-
     <!-- Strings para la pantalla de Historial Vacío -->
     <string name="historial_vacio_titulo">¡Es hora de moverse!</string>
     <string name="historial_vacio_subtitulo">Aún no tienes progreso registrado. ¡Completa tu primera rutina para verlo aquí!</string>
     <string name="comenzar_rutina">Comenzar una rutina</string>
-
     <string name="historial_rutinas_vacio_titulo">¡Aún no hay rutinas!</string>
     <string name="historial_rutinas_vacio_subtitulo">Completa tu primera rutina para ver tu progreso aquí.</string>
-
-
     <string name="historial_actividades_vacio_titulo">¡Sin carreras registradas!</string>
     <string name="historial_actividades_vacio_subtitulo">Sal a correr o caminar para ver tu historial aquí.</string>
     <string name="comenzar_actividad_libre">Iniciar Actividad</string>
     <string name="start_point_marker_title">Punto de Inicio</string>
-
     <string name="unknown_error_occurred">An unknown error occurred. Please try again later.</string>
     <string name="desc_exercise_image">Imagen del ejercicio: %1$s</string>
     <string name="desc_exercise_video_placeholder">Video del ejercicio disponible</string>
@@ -166,56 +137,40 @@
     <string name="button_mark_as_completed">Marcar como Completado</string>
     <string name="level_marked_completed">%1$s marcado como completado.</string>
     <string name="level_already_completed">¡Nivel Completado!</string>
-
     <!-- Título de la pestaña/pantalla -->
     <string name="running_tab_title">Correr</string>
-
-
     <!-- Permisos de Notificación (Android 13+) -->
     <string name="running_notification_permission_rationale_title">Permiso de Notificación</string>
     <string name="running_notification_permission_rationale_message">Para mantener la actividad corriendo en segundo plano y mostrarte el progreso, necesitamos permiso para enviar notificaciones. Esto es esencial para el servicio en primer plano.</string>
-
     <!-- Mapa -->
     <string name="end_point_marker_title">Fin</string>
-
     <!-- Métricas en Vivo -->
     <string name="running_metric_heart_rate">FREC. CARDÍACA</string> <!-- Para cuando implementes FC -->
-
-
     <!-- Diálogo de Confirmación de Parada -->
     <string name="running_confirm_stop_title">¿Finalizar Actividad?</string>
     <string name="running_confirm_stop_message">¿Quieres guardar esta actividad o descartarla?</string>
     <string name="save_activity">Guardar Actividad</string>
     <string name="discard_activity">Descartar</string>
-
     <!-- Resumen de Actividad -->
     <string name="running_summary_splits_title">Splits (parciales por km)</string>
     <string name="running_summary_no_splits">No se completaron kilómetros completos para mostrar parciales.</string>
     <string name="running_split_km_label">Km %1$d</string> <!-- %1$d será reemplazado por el número del km -->
-
-
     <!-- Strings para CalisthenicsProgressionScreen -->
     <string name="calisthenics_no_levels_in_progression">Esta progresión aún no tiene niveles definidos.</string>
     <string name="level_completed_desc">Nivel completado</string>
     <string name="level_locked_desc">Nivel bloqueado</string>
     <string name="desc_view_level_details">Ver detalles del nivel</string>
-
     <!-- Strings para CalisthenicsLevelDetailScreen -->
     <string name="error_loading_details_title">Error al Cargar Detalles</string>
     <string name="detail_label_reps">Repeticiones</string>
     <string name="detail_label_duration">Duración</string>
     <string name="level_marked_completed_feedback">¡Nivel \"%s\" marcado como completado!</string> <!-- %s será reemplazado por el nombre del nivel -->
-
-
     <!-- Strings para nombres de iconos/botones (pueden ser opcionales si no los usas para accesibilidad o son obvios) -->
     <string name="icon_desc_completed">Completado</string>
     <string name="icon_desc_locked">Bloqueado</string>
     <string name="icon_desc_next_level">Siguiente nivel</string>
-
-
     <!-- Strings que ya podrías tener o que son genéricos -->
     <string name="title_activity_kimera_theme">KimeraTheme</string>
-
     <string name="routine_lets_go">¡Vamos!</string>
     <string name="routine_exercise_count">Ejercicio %1$d de %2$d</string>
     <string name="no_media_available">Contenido no disponible</string>
@@ -226,7 +181,6 @@
     <string name="button_finish_routine">Finalizar</string>
     <string name="routine_loading_exercise">Cargando ejercicio...</string>
     <string name="routine_failed_to_load">No se pudo cargar la rutina.</string>
-
     <string name="error_no_routine_id">ID de rutina no proporcionado.</string>
     <string name="toast_routine_completed_saving_simulated">Rutina completada (Guardado simulado).</string>
     <string name="error_cannot_save_progress_user_data">No se pudo guardar el progreso: datos de usuario o rutina incompletos.</string>
@@ -241,41 +195,28 @@
     <string name="button_next_round_action">Siguiente Ronda</string>
     <string name="rest_time_seconds_format">%1$d s</string>
     <string name="button_skip_rest">Saltar Descanso</string>
-
     <string name="getting_ready_for_next_set">Preparando siguiente serie...</string>
     <string name="no_description_available">Sin descripción disponible.</string>
     <string name="error_loading_routine_param">Error al cargar la rutina: %s</string>
-
-
     <!-- Strings existentes y usados en RoutineScreen (verifica si ya los tienes) -->
-
     <string name="routine_no_exercises">Esta rutina no tiene ejercicios.</string>
     <string name="seconds_short">seg.</string> <!-- Para el contador grande en DescansoScreen -->
-
     <!-- Strings para el ViewModel y guardado de progreso -->
     <string name="toast_routine_completed_saving_success">¡Rutina completada y progreso guardado!</string>
     <string name="error_saving_progress">Error al guardar progreso: %1$s</string>
-
     <!-- Strings para carga y errores generales de RoutineScreen -->
-
     <!-- Strings para el diálogo de confirmación de salida -->
     <string name="dialog_exit_routine_title">¿Salir de la Rutina?</string>
     <string name="dialog_exit_routine_message">Si sales ahora, tu progreso actual en esta sesión no se guardará. ¿Estás seguro?</string>
     <string name="dialog_exit_confirm">Salir</string>
     <string name="dialog_exit_cancel">Cancelar</string>
-
     <!-- NUEVO: String para error de API level al guardar (si aplica) -->
     <string name="error_api_level_too_low_for_saving">No se puede guardar el progreso, la versión de Android es demasiado antigua.</string>
-
     <string name="button_skip_rest_description">Saltar descanso</string>
-
-
     <string name="rest_between_exercises_title">Descanso entre Ejercicios</string>
     <string name="rest_next_exercise_is">Siguiente: %1$s</string>
     <string name="rest_next_is_round_break_or_next_round">Preparando descanso de ronda o siguiente ronda…</string>
     <string name="rest_well_done_routine_ending">¡Bien hecho! Finalizando rutina…</string>
-
-
     <string name="routine_loading">Cargando rutina...</string>
     <string name="error_loading_routine">Error al cargar la rutina. Inténtalo de nuevo más tarde.</string>
     <string name="go_back">Volver</string>
@@ -299,35 +240,24 @@
     <string name="error_exercise_not_found">Ejercicio no encontrado.</string>
     <string name="error_routine_not_found">Rutina no encontrada.</string>
     <string name="loading_routine">Cargando rutina...</string>
-
     <!-- Strings para RoutineScreen y relacionados -->
     <string name="routine_finishing_and_saving">Finalizando y guardando progreso…</string>
-
-
     <!-- Strings para ExerciseContent -->
     <string name="watch_exercise_video_icon_desc">Icono de ver video</string>
-
-
     <!-- Strings para Botones de Navegación de Ejercicio (getNextButtonText) -->
     <string name="button_loading">Cargando…</string>
-
     <!-- Strings para IntegratedRestDialog y getNextUpMessage -->
     <string name="getting_ready">Prepárate…</string>
     <string name="rest_next_is_round">Siguiente: Ronda %1$d</string>
-
     <string name="exercise_not_found_placeholder_name">Ejercicio no encontrado</string>
-
     <string name="progression_completed_achievement">Progresión completada</string>
-
     <string name="default_notification_title">Recordatorio KalisFit</string>
     <string name="default_notification_message">¡Es hora de tu actividad!</string>
     <string name="notification_channel_general_reminders_name">Recordatorios Generales</string>
     <string name="notification_channel_general_reminders_description">Notificaciones para recordatorios generales de la aplicación.</string>
     <string name="daily_reminder_notification_title">Recordatorio KalisFit</string>
     <string name="daily_reminder_notification_message">¡Es hora de tu dosis de bienestar!</string>
-
     <string name="settings_enable_notifications_desc">Recibe notificaciones diarias para motivarte.</string>
-
     <string name="settings_section_support">Soporte y Feedback</string>
     <string name="settings_rate_app">Valora nuestra app</string>
     <string name="settings_share_app">Comparte esta app</string>
@@ -335,16 +265,11 @@
     <string name="settings_share_using">Compartir usando…</string>
     <string name="settings_contact_support">Contacta con soporte</string>
     <string name="settings_support_email_subject">Soporte App: %1$s</string>
-
-
     <string name="settings_open_source_licenses">Licencias de Código Abierto</string>
     <string name="settings_open_source_licenses_placeholder">Información sobre las bibliotecas de código abierto utilizadas en esta aplicación...</string>
-
-
     <string name="settings_app_version_formatted">Versión %1$s (Build %2$s)</string>
     <string name="settings_developed_by">Desarrollado por</string>
     <string name="app_logo_desc">Logo de la aplicación</string>
-
     <string name="profile_title">Perfil de Usuario</string>
     <string name="profile_picture_desc">Foto de perfil del usuario</string>
     <string name="name_not_specified">Nombre no especificado</string>
@@ -364,28 +289,40 @@
     <string name="account_info">Información de la Cuenta</string>
     <string name="not_available">No disponible</string>
     <string name="registration_date">Registrado el</string>
-
     <string name="onboarding_success_title">¡Todo Listo! 🎉</string>
     <string name="onboarding_success_message">Tu perfil está completo y listo para empezar tu transformación.</string>
     <string name="onboarding_success_button">Comenzar Aventura</string>
-
     <string name="profile_updated_success">Perfil actualizado correctamente</string>
     <string name="error_prefix">Error</string>
-    <string name="personal_information_label">Información Personal</string>
+    <string name="tap_to_change_photo_label">Toca para cambiar foto</string>
     <string name="name_label">Nombre</string>
     <string name="age_label">Edad</string>
     <string name="sex_label">Sexo</string>
-    <string name="physical_training_details_label">Detalles Físicos y de Entrenamiento</string>
     <string name="weight_kg_label">Peso (kg)</string>
     <string name="height_cm_label">Altura (cm)</string>
-    <string name="weekly_frequency_days_label">Frecuencia Semanal (días)</string>
+    <string name="weekly_frequency_days_label">Frecuencia semanal (días)</string>
+    <string name="select_age_desc">Seleccionar edad</string>
+    <string name="select_sex_desc">Seleccionar sexo</string>
+    <string name="select_weight_desc">Seleccionar peso</string>
+    <string name="select_height_desc">Seleccionar altura</string>
+    <string name="select_frequency_desc">Seleccionar frecuencia</string>
     <string name="training_place_label">Lugar de entrenamiento</string>
-    <string name="change_photo_desc">Cambiar foto de perfil</string>
-    <string name="tap_to_change_photo_label">Toca para cambiar foto</string>
-    <string name="selected_desc">Seleccionado</string>
     <string name="cancel_button">Cancelar</string>
     <string name="save_button">Guardar</string>
-
+    <string name="accept_button">Aceptar</string>
+    <string name="select_age_title">Selecciona tu Edad</string>
+    <string name="select_sex_title">Selecciona tu Sexo</string>
+    <string name="select_weight_title">Selecciona tu Peso</string>
+    <string name="select_height_title">Selecciona tu Altura</string>
+    <string name="select_frequency_title">Frecuencia Semanal</string>
+    <string name="personal_information_label">Información Personal</string>
+    <string name="physical_training_details_label">Detalles Físicos y de Entrenamiento</string>
+    <string name="not_set_placeholder">No establecido</string> <!-- Para campos vacíos -->
+    <string name="desc_edit_field">Editar campo</string>
+    <string name="selected_desc">Seleccionado</string>
+    <string name="tap_to_select_placeholder">Toca para seleccionar</string>
+    <string name="title_store">Tienda</string>
+    <string name="desc_cart">Ver carrito de compras</string>
 </resources>
 
 

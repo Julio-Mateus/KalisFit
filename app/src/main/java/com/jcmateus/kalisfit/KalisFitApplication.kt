@@ -6,6 +6,9 @@ import android.app.NotificationManager
 import android.graphics.Color
 import android.os.Build
 import android.content.Context
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.firestore
 
 class KalisFitApplication : Application() {
 
@@ -77,6 +80,12 @@ class KalisFitApplication : Application() {
                  enableVibration(true)
             }
             notificationManager.createNotificationChannel(generalChannel)
+        }
+    }
+
+    object FirestoreInstance {
+        val instance: FirebaseFirestore by lazy {
+            Firebase.firestore
         }
     }
 }

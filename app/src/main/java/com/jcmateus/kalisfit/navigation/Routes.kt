@@ -61,6 +61,15 @@ object Routes {
         return "$ROUTINE_DETAIL_PREFIX/$routineId"
     }
 
+    // --- NUEVAS RUTAS PARA LA TIENDA ---
+    const val STORE_TAB = "store_tab" // Para la pestaña en la BottomNav
+    const val PRODUCT_DETAIL_BASE = "productDetail" // O el nombre que prefieras
+    const val PRODUCT_DETAIL_SCREEN = "$PRODUCT_DETAIL_BASE/{productId}" // Plantilla completa
+
+    // Y la función helper para navegar:
+    fun productDetail(productId: String) = "$PRODUCT_DETAIL_BASE/$productId"
+
+    const val CART_SCREEN = "cart_screen"
 
 
     // --- Rutas Potenciales Futuras (o para funcionalidades específicas dentro de pantallas) ---

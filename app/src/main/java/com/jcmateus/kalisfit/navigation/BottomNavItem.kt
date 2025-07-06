@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Store
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.jcmateus.kalisfit.R
@@ -37,6 +38,13 @@ sealed class BottomNavItem(
         Routes.RUNNING_TAB,
         Icons.Filled.DirectionsRun,
         R.string.bottom_nav_running // Ejemplo: strings.xml -> <string name="bottom_nav_running">Running</string>
+    )
+
+    // --- NUEVO ITEM PARA LA TIENDA ---
+    object Store : BottomNavItem(
+        route = Routes.STORE_TAB, // Usa la constante de Routes
+        labelResource = R.string.title_store, // Necesitarás añadir este string
+        icon = Icons.Filled.Store // Icono para la tienda
     )
 }
 

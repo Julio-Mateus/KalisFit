@@ -30,7 +30,6 @@
     <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" /> si es para sincronizar datos -->
     <!-- ===================================================================== -->
 
-
     <application
         android:name=".KalisFitApplication"
     android:allowBackup="true"
