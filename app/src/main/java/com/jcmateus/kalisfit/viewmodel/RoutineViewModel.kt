@@ -232,32 +232,40 @@ class RoutineViewModel : ViewModel() {
     }
 
     private suspend fun moveToNextRoutineStep() {
+        // Es buena idea cancelar aquí para evitar que un temporizador anterior
+        // llame a moveToNextRoutineStep de nuevo si esta instancia ya está en proceso.
         currentCountdownJob?.cancel()
+        Log.d(TAG, "moveToNextRoutineStep: Job de cuenta atrás anterior cancelado (si existía).")
+
         val currentUiState = _uiState.value // Usar el estado más reciente
         val rutina = currentUiState.rutina ?: run {
+            Log.e(TAG, "moveToNextRoutineStep: Error interno - Rutina no disponible.")
             finishRoutineWithError("Error interno: Rutina no disponible.")
             return
         }
 
-        Log.d(TAG, "moveToNextRoutineStep: Procesando desde ESTADO=${currentUiState.estado}, EJ=${currentUiState.indiceEjercicioActual}, SERIE=${currentUiState.serieActualEjercicio}, RONDA=${currentUiState.rondaActual}")
+        Log.i(TAG, "moveToNextRoutineStep: ================== INICIO ==================")
+        Log.i(TAG, "moveToNextRoutineStep: Procesando desde ESTADO=${currentUiState.estado}, EjIdx=${currentUiState.indiceEjercicioActual}, Serie=${currentUiState.serieActualEjercicio}, Ronda=${currentUiState.rondaActual}, EjActual=${currentUiState.ejercicioActual?.nombre}")
 
         when (currentUiState.estado) {
             RoutineExecutionState.INITIAL_COUNTDOWN -> {
                 Log.d(TAG, "INITIAL_COUNTDOWN finalizado. Preparando primer ejercicio.")
                 if (rutina.ejercicios.isEmpty()) {
+                    Log.w(TAG, "moveToNextRoutineStep: La rutina no tiene ejercicios.")
                     finishRoutineWithError("La rutina no tiene ejercicios.")
                     return
                 }
-                // El ejercicio actual ya debería estar seteado al primero en startRoutine.
-                // Si no, o para asegurar, lo seteamos aquí antes de prepareAndStart.
+                val primerEjercicio = rutina.ejercicios.first()
+                Log.d(TAG, "moveToNextRoutineStep: Primer ejercicio a preparar: ${primerEjercicio.nombre}")
                 _uiState.update {
                     it.copy(
-                        ejercicioActual = rutina.ejercicios.first(),
+                        ejercicioActual = primerEjercicio,
                         indiceEjercicioActual = 0,
                         serieActualEjercicio = 1,
                         rondaActual = 1 // Asegurar que la ronda es 1
                     )
                 }
+                Log.d(TAG, "moveToNextRoutineStep: Estado actualizado para primer ejercicio. Llamando a prepareAndStartExerciseStep.")
                 prepareAndStartExerciseStep()
             }
 
@@ -267,14 +275,19 @@ class RoutineViewModel : ViewModel() {
                     ?: rutina.ejercicios.getOrNull(currentUiState.indiceEjercicioActual)
 
                 if (ejercicioTerminado == null) {
+                    Log.e(TAG, "moveToNextRoutineStep: Error - Ejercicio actual no encontrado al finalizar EXERCISE_ACTIVE. Estado: $currentUiState")
                     finishRoutineWithError("Error: Ejercicio actual no encontrado al finalizar EXERCISE_ACTIVE.")
                     return
                 }
 
+                Log.d(TAG, "Ejercicio '${ejercicioTerminado.nombre}' (Serie ${currentUiState.serieActualEjercicio}/${ejercicioTerminado.numeroDeSeries}) finalizado.")
+
+                // Siguiente serie del mismo ejercicio
                 if (currentUiState.serieActualEjercicio < ejercicioTerminado.numeroDeSeries) {
-                    Log.d(TAG, "Ejercicio '${ejercicioTerminado.nombre}': Serie ${currentUiState.serieActualEjercicio}/${ejercicioTerminado.numeroDeSeries} completada.")
+                    Log.d(TAG, "Pasando a la siguiente serie del ejercicio '${ejercicioTerminado.nombre}'.")
                     if (ejercicioTerminado.descansoEntreSeriesSegundos > 0) {
-                        _soundEvents.emit("rest_start")
+                        Log.d(TAG, "Iniciando REST_BETWEEN_SETS de ${ejercicioTerminado.descansoEntreSeriesSegundos}s.")
+                        viewModelScope.launch { _soundEvents.emit("rest_start") }
                         _uiState.update {
                             it.copy(
                                 estado = RoutineExecutionState.REST_BETWEEN_SETS,
@@ -283,17 +296,21 @@ class RoutineViewModel : ViewModel() {
                             )
                         }
                         startActiveTimerForCurrentStep()
-                    } else { // Sin descanso, ir a la siguiente serie
-                        Log.d(TAG, "Sin descanso entre series. Iniciando siguiente serie.")
+                    } else {
+                        Log.d(TAG, "Sin descanso entre series. Iniciando siguiente serie directamente.")
                         _uiState.update {
+                            // Incrementar serie y mantener el ejercicio actual.
+                            // El estado se cambiará a EXERCISE_ACTIVE en prepareAndStartExerciseStep
                             it.copy(serieActualEjercicio = it.serieActualEjercicio + 1)
                         }
                         prepareAndStartExerciseStep()
                     }
+                    // Siguiente ejercicio de la misma ronda
                 } else if (currentUiState.indiceEjercicioActual < rutina.ejercicios.size - 1) {
-                    Log.d(TAG, "Todas las series de '${ejercicioTerminado.nombre}' completadas.")
+                    Log.d(TAG, "Todas las series de '${ejercicioTerminado.nombre}' completadas. Pasando al siguiente ejercicio.")
                     if (ejercicioTerminado.descansoDespuesEjercicioSegundos > 0) {
-                        _soundEvents.emit("rest_start")
+                        Log.d(TAG, "Iniciando REST_BETWEEN_EXERCISES de ${ejercicioTerminado.descansoDespuesEjercicioSegundos}s.")
+                        viewModelScope.launch { _soundEvents.emit("rest_start") }
                         _uiState.update {
                             it.copy(
                                 estado = RoutineExecutionState.REST_BETWEEN_EXERCISES,
@@ -302,22 +319,30 @@ class RoutineViewModel : ViewModel() {
                             )
                         }
                         startActiveTimerForCurrentStep()
-                    } else { // Sin descanso, ir al siguiente ejercicio
-                        Log.d(TAG, "Sin descanso después de ejercicio. Iniciando siguiente ejercicio.")
+                    } else {
+                        Log.d(TAG, "Sin descanso después de ejercicio. Iniciando siguiente ejercicio directamente.")
                         val nuevoIndice = currentUiState.indiceEjercicioActual + 1
+                        val proximoEjercicio = rutina.ejercicios.getOrNull(nuevoIndice)
+                        if (proximoEjercicio == null) { // Doble check, aunque la condición del if ya debería cubrirlo
+                            Log.e(TAG, "moveToNextRoutineStep: Error lógico - Próximo ejercicio nulo aunque el índice es válido.")
+                            finishRoutineWithError("Error al pasar al siguiente ejercicio.")
+                            return
+                        }
                         _uiState.update {
                             it.copy(
                                 indiceEjercicioActual = nuevoIndice,
-                                serieActualEjercicio = 1,
-                                ejercicioActual = rutina.ejercicios.getOrNull(nuevoIndice)
+                                serieActualEjercicio = 1, // Resetear serie para el nuevo ejercicio
+                                ejercicioActual = proximoEjercicio
                             )
                         }
                         prepareAndStartExerciseStep()
                     }
+                    // Siguiente ronda
                 } else if (currentUiState.rondaActual < rutina.numeroDeRondas) {
-                    Log.d(TAG, "Último ejercicio de la ronda ${currentUiState.rondaActual} completado.")
+                    Log.d(TAG, "Último ejercicio de la ronda ${currentUiState.rondaActual} completado. Pasando a la siguiente ronda.")
                     if (rutina.descansoEntreRondasSegundos > 0) {
-                        _soundEvents.emit("rest_start")
+                        Log.d(TAG, "Iniciando REST_BETWEEN_ROUNDS de ${rutina.descansoEntreRondasSegundos}s.")
+                        viewModelScope.launch { _soundEvents.emit("rest_start") }
                         _uiState.update {
                             it.copy(
                                 estado = RoutineExecutionState.REST_BETWEEN_ROUNDS,
@@ -326,80 +351,107 @@ class RoutineViewModel : ViewModel() {
                             )
                         }
                         startActiveTimerForCurrentStep()
-                    } else { // Sin descanso, ir a la siguiente ronda
-                        Log.d(TAG, "Sin descanso entre rondas. Iniciando siguiente ronda.")
+                    } else {
+                        Log.d(TAG, "Sin descanso entre rondas. Iniciando siguiente ronda directamente.")
+                        val primerEjercicioSiguienteRonda = rutina.ejercicios.firstOrNull()
+                        if (primerEjercicioSiguienteRonda == null) {
+                            Log.e(TAG, "moveToNextRoutineStep: Error - No hay ejercicios para la siguiente ronda aunque hay más rondas.")
+                            finishRoutineWithError("Error: No hay ejercicios para la siguiente ronda.")
+                            return
+                        }
                         _uiState.update {
                             it.copy(
                                 rondaActual = it.rondaActual + 1,
-                                indiceEjercicioActual = 0,
-                                serieActualEjercicio = 1,
-                                ejercicioActual = rutina.ejercicios.firstOrNull()
+                                indiceEjercicioActual = 0, // Resetear índice de ejercicio
+                                serieActualEjercicio = 1, // Resetear serie
+                                ejercicioActual = primerEjercicioSiguienteRonda
                             )
                         }
                         prepareAndStartExerciseStep()
                     }
+                    // Fin de la rutina
                 } else {
-                    Log.d(TAG, "Todas las series, ejercicios y rondas completadas.")
+                    Log.i(TAG, "Todas las series, ejercicios y rondas completadas. Finalizando rutina.")
                     finishRoutine()
                 }
             }
 
             RoutineExecutionState.REST_BETWEEN_SETS -> {
-                Log.d(TAG, "REST_BETWEEN_SETS finalizado.")
-                _soundEvents.emit("rest_end")
+                Log.d(TAG, "REST_BETWEEN_SETS finalizado para ejercicio '${currentUiState.ejercicioActual?.nombre}'.")
+                Log.d(TAG, "Intentando emitir sonido 'rest_end' y actualizar UI para la siguiente serie.")
+                try {
+                    // Asumiendo que _soundEvents.emit es suspend o seguro de llamar en una corrutina
+                    viewModelScope.launch {
+                        _soundEvents.emit("rest_end")
+                        Log.d(TAG, "Sonido 'rest_end' emitido (o intento hecho).")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al emitir sonido 'rest_end' en REST_BETWEEN_SETS", e)
+                    // Considerar si el flujo debe continuar o no en caso de error de sonido
+                }
+
+                val serieAnterior = currentUiState.serieActualEjercicio
                 _uiState.update {
                     it.copy(
                         serieActualEjercicio = it.serieActualEjercicio + 1
                         // ejercicioActual sigue siendo el mismo
-                        // estado se cambia en prepareAndStartExerciseStep
+                        // estado se cambiará en prepareAndStartExerciseStep
                     )
                 }
+                Log.d(TAG, "Serie actualizada de $serieAnterior a ${_uiState.value.serieActualEjercicio}. Llamando a prepareAndStartExerciseStep AHORA.")
                 prepareAndStartExerciseStep()
             }
 
             RoutineExecutionState.REST_BETWEEN_EXERCISES -> {
                 Log.d(TAG, "REST_BETWEEN_EXERCISES finalizado.")
-                _soundEvents.emit("rest_end")
+                viewModelScope.launch { _soundEvents.emit("rest_end") } // Asumir suspend o seguro en launch
+
                 val nuevoIndice = currentUiState.indiceEjercicioActual + 1
                 val proximoEjercicio = rutina.ejercicios.getOrNull(nuevoIndice)
+
                 if (proximoEjercicio == null) {
+                    Log.e(TAG, "moveToNextRoutineStep: Error - No se encontró el próximo ejercicio (índice: $nuevoIndice) después del descanso entre ejercicios.")
                     finishRoutineWithError("Error: No se encontró el próximo ejercicio después del descanso.")
                     return
                 }
+                Log.d(TAG, "Preparando próximo ejercicio: ${proximoEjercicio.nombre}")
                 _uiState.update {
                     it.copy(
                         indiceEjercicioActual = nuevoIndice,
-                        serieActualEjercicio = 1,
+                        serieActualEjercicio = 1, // Resetear serie para el nuevo ejercicio
                         ejercicioActual = proximoEjercicio
                     )
                 }
+                Log.d(TAG, "Estado actualizado para próximo ejercicio. Llamando a prepareAndStartExerciseStep.")
                 prepareAndStartExerciseStep()
             }
 
             RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
                 Log.d(TAG, "REST_BETWEEN_ROUNDS finalizado.")
-                _soundEvents.emit("rest_end")
+                viewModelScope.launch { _soundEvents.emit("rest_end") } // Asumir suspend o seguro en launch
+
                 val proximaRonda = currentUiState.rondaActual + 1
-                // Ya deberíamos haber comprobado si hay más rondas antes de entrar en este descanso,
-                // pero una doble comprobación no hace daño si la lógica es compleja.
+                // Doble comprobación, aunque la lógica en EXERCISE_ACTIVE ya debería haberlo manejado
                 if (proximaRonda <= rutina.numeroDeRondas) {
                     val primerEjercicioDeRonda = rutina.ejercicios.firstOrNull()
                     if (primerEjercicioDeRonda == null) {
+                        Log.e(TAG, "moveToNextRoutineStep: Error - No hay ejercicios para la siguiente ronda ($proximaRonda) aunque la ronda es válida.")
                         finishRoutineWithError("Error: No hay ejercicios para la siguiente ronda.")
                         return
                     }
+                    Log.d(TAG, "Preparando primera serie de la ronda $proximaRonda, ejercicio: ${primerEjercicioDeRonda.nombre}")
                     _uiState.update {
                         it.copy(
                             rondaActual = proximaRonda,
-                            indiceEjercicioActual = 0,
-                            serieActualEjercicio = 1,
+                            indiceEjercicioActual = 0, // Resetear índice de ejercicio
+                            serieActualEjercicio = 1, // Resetear serie
                             ejercicioActual = primerEjercicioDeRonda
                         )
                     }
+                    Log.d(TAG, "Estado actualizado para próxima ronda. Llamando a prepareAndStartExerciseStep.")
                     prepareAndStartExerciseStep()
                 } else {
-                    // Esto teóricamente no debería pasar si la lógica en EXERCISE_ACTIVE es correcta
-                    Log.w(TAG, "Se intentó pasar a la siguiente ronda (${proximaRonda}) pero ya se completaron todas (${rutina.numeroDeRondas}). Finalizando.")
+                    Log.w(TAG, "Se intentó pasar a la siguiente ronda (${proximaRonda}) pero ya se completaron todas (${rutina.numeroDeRondas}). Esto no debería suceder si la lógica anterior es correcta. Finalizando.")
                     finishRoutine()
                 }
             }
@@ -408,16 +460,21 @@ class RoutineViewModel : ViewModel() {
             RoutineExecutionState.LOADING,
             RoutineExecutionState.FINISHED,
             RoutineExecutionState.ERROR -> {
-                Log.w(TAG, "moveToNextRoutineStep llamado desde un estado no procesable o ya final: ${currentUiState.estado}")
+                Log.w(TAG, "moveToNextRoutineStep llamado desde un estado no procesable o ya final: ${currentUiState.estado}. No se realiza ninguna acción.")
             }
         }
+        Log.i(TAG, "moveToNextRoutineStep: =================== FIN ====================")
     }
 
     private fun prepareAndStartExerciseStep() {
-        val currentState = _uiState.value // Estado actual (podría ser un estado de descanso recién terminado)
-        val currentEjercicio = currentState.ejercicioActual // Ya debería estar seteado por moveToNextRoutineStep
+        val currentStateBeforeUpdate = _uiState.value
+        val currentEjercicio = currentStateBeforeUpdate.ejercicioActual
+
+        Log.d(TAG, "prepareAndStartExerciseStep: ================== INICIO ==================")
+        Log.d(TAG, "prepareAndStartExerciseStep: Estado ENTRADA: ${currentStateBeforeUpdate.estado}, Ej: ${currentEjercicio?.nombre}, Serie: ${currentStateBeforeUpdate.serieActualEjercicio}, TiempoRest: ${currentStateBeforeUpdate.tiempoRestante}, PrevSt: ${currentStateBeforeUpdate.previousState}")
 
         if (currentEjercicio == null) {
+            Log.e(TAG, "prepareAndStartExerciseStep: Error - Ejercicio nulo. Estado de entrada: ${currentStateBeforeUpdate.estado}")
             finishRoutineWithError("Error: Ejercicio nulo al preparar el paso del ejercicio.")
             return
         }
@@ -425,39 +482,49 @@ class RoutineViewModel : ViewModel() {
         var tiempoParaEjercicio: Int
         var isResumingTimedExercise = false
 
-        // Lógica para determinar el tiempo del ejercicio y si se está reanudando
-        if (currentState.previousState == RoutineExecutionState.EXERCISE_ACTIVE && // Estábamos en un ejercicio antes de pausar
-            _uiState.value.estado == RoutineExecutionState.EXERCISE_ACTIVE &&    // togglePausa nos devolvió a EXERCISE_ACTIVE
-            currentEjercicio.duracionSegundos > 0 && currentEjercicio.repeticiones <= 0 && // Es por tiempo
-            currentState.tiempoRestante > 0) { // Y hay tiempo restante guardado de la pausa
-
-            Log.d(TAG, "prepareAndStartExerciseStep: Reanudando ejercicio por tiempo '${currentEjercicio.nombre}' con ${currentState.tiempoRestante}s restantes.")
-            tiempoParaEjercicio = currentState.tiempoRestante
+        // Lógica para determinar el tiempo del ejercicio
+        // Esta condición es para cuando se REANUDA un ejercicio por tiempo desde PAUSA
+        if (currentStateBeforeUpdate.previousState == RoutineExecutionState.EXERCISE_ACTIVE &&
+            _uiState.value.estado == RoutineExecutionState.EXERCISE_ACTIVE && // El estado actual ya es EXERCISE_ACTIVE (restaurado por togglePausa)
+            currentEjercicio.duracionSegundos > 0 && currentEjercicio.repeticiones <= 0 &&
+            currentStateBeforeUpdate.tiempoRestante > 0) {
+            Log.d(TAG, "prepareAndStartExerciseStep: Reanudando ejercicio POR TIEMPO '${currentEjercicio.nombre}' con ${currentStateBeforeUpdate.tiempoRestante}s.")
+            tiempoParaEjercicio = currentStateBeforeUpdate.tiempoRestante
             isResumingTimedExercise = true
         } else if (currentEjercicio.duracionSegundos > 0 && currentEjercicio.repeticiones <= 0) { // Ejercicio por tiempo (nuevo inicio)
-            Log.d(TAG, "prepareAndStartExerciseStep: Iniciando NUEVO ejercicio por tiempo '${currentEjercicio.nombre}'. Duración: ${currentEjercicio.duracionSegundos}s")
+            Log.d(TAG, "prepareAndStartExerciseStep: Iniciando NUEVO ejercicio POR TIEMPO '${currentEjercicio.nombre}'. Duración: ${currentEjercicio.duracionSegundos}s.")
             tiempoParaEjercicio = currentEjercicio.duracionSegundos
         } else { // Ejercicio por repeticiones
-            Log.d(TAG, "prepareAndStartExerciseStep: Preparando ejercicio por repeticiones '${currentEjercicio.nombre}'.")
-            tiempoParaEjercicio = 0 // Para ejercicios por repeticiones, no hay cuenta atrás.
+            Log.d(TAG, "prepareAndStartExerciseStep: Preparando ejercicio POR REPETICIONES '${currentEjercicio.nombre}'. Reps: ${currentEjercicio.repeticiones}.")
+            tiempoParaEjercicio = 0
         }
 
-        _uiState.update {
-            it.copy(
-                estado = RoutineExecutionState.EXERCISE_ACTIVE, // Cambiar a estado de ejercicio activo
-                tiempoRestante = tiempoParaEjercicio
-                // ejercicioActual ya está seteado
-                // previousState se limpia para evitar confusiones en la próxima pausa
-                // previousState = RoutineExecutionState.IDLE (Opcional, pero puede ser bueno)
+        Log.d(TAG, "prepareAndStartExerciseStep: Calculado: tiempoParaEjercicio=$tiempoParaEjercicio, isResuming=$isResumingTimedExercise")
+
+        _uiState.update { prevState ->
+            Log.d(TAG, "prepareAndStartExerciseStep: DENTRO de _uiState.update: prevState.estado=${prevState.estado}, prevState.serie=${prevState.serieActualEjercicio}")
+            Log.d(TAG, "prepareAndStartExerciseStep:                                 NUEVO estado=EXERCISE_ACTIVE, NUEVO tiempoRestante=$tiempoParaEjercicio")
+            prevState.copy(
+                estado = RoutineExecutionState.EXERCISE_ACTIVE,
+                tiempoRestante = tiempoParaEjercicio,
+                ejercicioActual = currentEjercicio, // Asegurar que es el que hemos estado evaluando
+                // serieActualEjercicio ya debería estar correcta desde moveToNextRoutineStep o inicio de rutina
+                previousState = RoutineExecutionState.IDLE // Limpiar previousState para la próxima pausa
             )
         }
 
-        // Emitir sonido de inicio de ejercicio solo si no estamos reanudando un ejercicio por tiempo ya iniciado
-        // o si es un ejercicio por repeticiones (que siempre es un "nuevo inicio" en términos de sonido)
+        val stateAfterUpdate = _uiState.value
+        Log.d(TAG, "prepareAndStartExerciseStep: Estado DESPUÉS de _uiState.update: ${stateAfterUpdate.estado}, Ej: ${stateAfterUpdate.ejercicioActual?.nombre}, Serie: ${stateAfterUpdate.serieActualEjercicio}, TiempoRest: ${stateAfterUpdate.tiempoRestante}")
+
         if (!isResumingTimedExercise) {
+            Log.d(TAG, "prepareAndStartExerciseStep: Emitiendo sonido 'exercise_start'.")
             viewModelScope.launch { _soundEvents.emit("exercise_start") }
+        } else {
+            Log.d(TAG, "prepareAndStartExerciseStep: NO emitiendo sonido 'exercise_start' (reanudando).")
         }
 
+        Log.d(TAG, "prepareAndStartExerciseStep: Llamando a startActiveTimerForCurrentStep().")
+        Log.d(TAG, "prepareAndStartExerciseStep: =================== FIN ====================")
         startActiveTimerForCurrentStep()
     }
 
