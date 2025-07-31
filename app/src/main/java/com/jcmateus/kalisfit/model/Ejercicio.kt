@@ -8,58 +8,79 @@ enum class LugarEntrenamiento {
 // Define los grupos musculares, incluyendo los del JSON
 enum class GrupoMuscular {
     PECHO, ESPALDA, PIERNAS, BRAZOS, ABDOMEN, HOMBROS, FULL_BODY,
-    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS, BICEPS, CORE // Manteniendo los añadidos
+    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS, BICEPS, CORE,
+    ANTEBRAZOS, // Añadido de tu JSON
+    CARDIO // Añadido de tu JSON
 }
 
-// Estructura de datos para un ejercicio
+// NUEVO: Define los tipos de ejecución de los ejercicios
+enum class TipoDeEjercicio {
+    SIMPLE,                 // Ejercicio estándar: una métrica de tiempo o repeticiones.
+    SUPERSET_SEQUENCIAL,    // Múltiples movimientos uno tras otro sin descanso entre ellos. (Ej: "12 + 15")
+    POR_LADO_ALTERNADO,     // Se realiza para un lado y luego para el otro. (Ej: "10 por pierna")
+    COMBINADO_TEMPORIZADO,  // Múltiples acciones dentro de un mismo bloque de tiempo. (Ej: "30s wall sit + 25 talones")
+    CIRCUITO_TEMPORIZADO,   // Componentes por tiempo, con duración total definida. (Ej: "2 x 30s", total 60s)
+    CON_TEMPO               // Ejercicio simple pero con una cadencia específica.
+}
+
+// NUEVO: Define un componente de un ejercicio complejo (parte de un superset, circuito, etc.)
+data class ComponenteEjercicio(
+    val nombreEspecifico: String? = null, // Ej: "Curl Martillo", "Curl con Banda", "Wall Sit"
+    val repeticiones: String? = null,     // Ej: "12", "25". String para mantener "AMRAP" o similares si fuera necesario.
+    val duracionSegundos: Int? = null,    // Ej: 30 (para "30s")
+    val imagenUrl: String? = null,        // Si este componente tiene una imagen específica.
+    val orden: Int = 0                    // Orden del componente dentro del ejercicio padre.
+)
+
+// Estructura de datos para un ejercicio (ACTUALIZADA)
 data class Ejercicio(
     val id: String = "",
     val nombre: String = "",
     val descripcion: String = "",
     val imagenUrl: String? = null,
+    val imagenUrl1: String? = null, // Para soportar múltiples imágenes como en tu JSON
+    val imagenUrl2: String? = null, // Para soportar múltiples imágenes como en tu JSON
     val videoUrl: String? = null,
-    val duracionSegundos: Int = 0,       // Duración si el ejercicio es por tiempo (por serie)
-    val repeticiones: Int = 0,          // Repeticiones si el ejercicio es por cantidad (por serie)
 
-    // NUEVOS CAMPOS PARA SERIES POR EJERCICIO
-    val numeroDeSeries: Int = 1
-    ,        // Cuántas series de ESTE ejercicio se realizarán
-    // Si es 1, se comporta como antes dentro de una ronda de rutina.
-    val descansoEntreSeriesSegundos: Int = 0, // Descanso después de cada serie de ESTE ejercicio
-    // (excepto la última, antes de pasar al siguiente ejercicio o ronda)
+    // Campos originales de duración y repeticiones del JSON.
+    // Serán la base para el parseo o para ejercicios simples.
+    val duracionSegundosOriginal: Int = 0,    // Renombrado para claridad (antes duracionSegundos)
+    val repeticionesOriginal: String = "0", // Renombrado y cambiado a String para parsear "6-8", "12 + 15", "10 por pierna" (antes repeticiones: Int)
+
+    val numeroDeSeries: Int = 1,
+    val descansoEntreSeriesSegundos: Int = 0,
     val descansoDespuesEjercicioSegundos: Int = 0,
 
     val grupoMuscular: List<GrupoMuscular> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),
-    // lugarEntrenamiento en Ejercicio podría ser útil si un ejercicio específico de una rutina
-    // SOLO se puede hacer en un lugar, aunque la rutina sea más general.
-    // Si la rutina define el lugar, quizás no lo necesitas aquí o lo usas como override.
-    val lugarEntrenamiento: List<LugarEntrenamiento> = emptyList(), // Cambiado a List<LugarEntrenamiento> para consistencia y flexibilidad
-    val orden: Int = 0                  // Orden del ejercicio dentro de la secuencia de la rutina/ronda
+    val lugarEntrenamiento: List<LugarEntrenamiento> = emptyList(),
+    val orden: Double = 0.0, // Cambiado a Double para permitir sub-órdenes decimales si es necesario para el parseador o lógica futura
+
+    // NUEVOS CAMPOS PROCESADOS/DERIVADOS
+    val tipoEjercicio: TipoDeEjercicio = TipoDeEjercicio.SIMPLE,
+    val componentes: List<ComponenteEjercicio> = emptyList(),
+    val notaTempo: String? = null,      // Ej: "3-1-2"
+    val esUnilateral: Boolean = false,  // True si es "por pierna", "por brazo", etc.
+
+    // Podrías añadir campos para repeticiones/duración calculadas para el ejercicio simple o como guía:
+    // val repeticionesMin: Int? = null,
+    // val repeticionesMax: Int? = null, // Para rangos como "6-8"
+    // val duracionCalculadaSegundos: Int? = null // Podría ser igual a duracionSegundosOriginal o la suma de componentes
 )
 
-// Estructura de datos para una rutina
+// Estructura de datos para una rutina (sin cambios directos aquí, pero los Ejercicio internos se actualizarán)
 data class Rutina(
     val id: String = "",
-    val slug: String = "", // Campo slug añadido
+    val slug: String = "",
     val nombre: String = "",
     val descripcion: String = "",
-    val imagenUrl: String? = null, // Campo imagenUrl añadido para la rutina en general
+    val imagenUrl: String? = null,
 
-    // NUEVOS CAMPOS PARA RONDAS DE LA RUTINA COMPLETA (CIRCUITOS)
-    val numeroDeRondas: Int = 1,        // Cuántas veces se repetirá la secuencia completa de ejercicios.
-    // Si es 1, la rutina se hace una vez (cada ejercicio con sus series).
-    // Si los ejercicios tienen numeroDeSeries > 1, esto crea un efecto de circuito de series.
-    val descansoEntreRondasSegundos: Int = 0, // Descanso después de completar una ronda completa de todos los ejercicios
+    val numeroDeRondas: Int = 1,
+    val descansoEntreRondasSegundos: Int = 0,
 
-    val nivelRecomendado: List<String> = emptyList(), // Puedes considerar un enum NivelDificultad si tienes niveles fijos
-    val objetivos: List<String> = emptyList(),      // Puedes considerar un enum ObjetivoEntrenamiento
-    val lugarEntrenamiento: List<LugarEntrenamiento> = emptyList(), // Cambiado a List<LugarEntrenamiento>
-    // Representa dónde se puede realizar la rutina en general.
-    // Los ejercicios se cargarán como una subcolección en Firestore,
-    // pero para la lógica de la pantalla de rutina, los tendremos aquí una vez cargados.
-    val ejercicios: List<Ejercicio> = emptyList()
-    // Nota: Cuando cargas desde Firestore, típicamente cargas el documento Rutina
-    // y LUEGO haces una consulta separada para la subcolección de 'ejercicios'.
-    // El campo 'ejercicios' aquí sería poblado en tu ViewModel después de ambas cargas.
+    val nivelRecomendado: List<String> = emptyList(),
+    val objetivos: List<String> = emptyList(),
+    val lugarEntrenamiento: List<LugarEntrenamiento> = emptyList(),
+    val ejercicios: List<Ejercicio> = emptyList() // Esta lista contendrá los objetos Ejercicio actualizados
 )

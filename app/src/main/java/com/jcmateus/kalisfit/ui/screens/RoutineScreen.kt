@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,10 +35,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -89,7 +95,9 @@ import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.R
+import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
+import com.jcmateus.kalisfit.model.TipoDeEjercicio
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineExecutionState
 import com.jcmateus.kalisfit.viewmodel.RoutineUiState
@@ -109,9 +117,9 @@ fun RoutineScreen(
     userProfileViewModel: UserProfileViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val userProfileState by userProfileViewModel.user.collectAsState()
     val context = LocalContext.current
 
-    // ImageLoader configurado para GIFs y versiones de Android
     val imageLoader = remember {
         ImageLoader.Builder(context)
             .components {
@@ -126,9 +134,15 @@ fun RoutineScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(rutinaId) {
+    LaunchedEffect(rutinaId, userProfileState) {
         if (rutinaId != null && uiState.rutina == null && uiState.estado == RoutineExecutionState.IDLE) {
-            viewModel.startRoutine(rutinaId)
+            val currentUserProfile = userProfileState
+            if (currentUserProfile != null) {
+                Log.d("RoutineScreen", "Iniciando rutina con ID: $rutinaId y perfil de usuario.")
+                viewModel.startRoutine(rutinaId, currentUserProfile)
+            } else {
+                Log.w("RoutineScreen", "Intento de iniciar rutina $rutinaId pero UserProfile es nulo. ViewModel lo manejará.")
+            }
         }
     }
 
@@ -255,9 +269,25 @@ fun RoutineScreen(
                     )
                 }
                 RoutineExecutionState.EXERCISE_ACTIVE -> {
-                    Log.d("RoutineScreen", "EXERCISE_ACTIVE: ${uiState.ejercicioActual?.nombre}, tiempoRestante UI: ${uiState.tiempoRestante}, duracionSegundos Modelo: ${uiState.ejercicioActual?.duracionSegundos}")
                     uiState.rutina?.let { rutina ->
                         uiState.ejercicioActual?.let { currentEjercicio ->
+                            // --- MODIFICACIÓN AQUÍ para isButtonEnabled ---
+                            val repeticionesNumericas = currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
+                            val esEjercicioSimplePrincipalmentePorTiempo =
+                                currentEjercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
+                                        currentEjercicio.duracionSegundosOriginal > 0 &&
+                                        repeticionesNumericas <= 0
+
+                            val isButtonEnabledCondition = if (esEjercicioSimplePrincipalmentePorTiempo) {
+                                uiState.tiempoRestante <= 0
+                            } else {
+                                // Para otros tipos de ejercicios o ejercicios por repeticiones,
+                                // el botón está generalmente habilitado.
+                                // La lógica de si realmente se puede "saltar" o "finalizar"
+                                // se manejará en el ViewModel al recibir el evento.
+                                true
+                            }
+
                             ExerciseContent(
                                 currentEjercicio = currentEjercicio,
                                 rondaActual = uiState.rondaActual,
@@ -265,9 +295,9 @@ fun RoutineScreen(
                                 ejercicioActualNum = uiState.indiceEjercicioActual + 1,
                                 totalEjercicios = rutina.ejercicios.size,
                                 serieActual = uiState.serieActualEjercicio,
-                                totalSeries = currentEjercicio.numeroDeSeries,
+                                totalSeries = currentEjercicio.numeroDeSeries, // Sigue usando numeroDeSeries del Ejercicio
                                 segundosRestantes = uiState.tiempoRestante,
-                                imageLoader = imageLoader, // <--- PASAR EL IMAGE LOADER
+                                imageLoader = imageLoader,
                                 onWatchVideoClick = { videoUrl ->
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))
                                     if (intent.resolveActivity(context.packageManager) != null) {
@@ -281,7 +311,7 @@ fun RoutineScreen(
                                         viewModel.saltarSiguientePaso()
                                     }
                                 },
-                                isButtonEnabled = if (currentEjercicio.duracionSegundos > 0 && currentEjercicio.repeticiones <= 0) uiState.tiempoRestante <= 0 else true, // <= 0 para habilitar cuando llega a cero
+                                isButtonEnabled = isButtonEnabledCondition, // --- Usar la condición calculada ---
                                 buttonText = getNextButtonText(uiState, context)
                             )
                         } ?: Text(stringResource(R.string.error_exercise_not_found))
@@ -305,7 +335,7 @@ fun RoutineScreen(
                     val nextUpMessage = getNextUpMessage(uiState, context)
                     IntegratedRestDialog(
                         visible = true,
-                        onDismissRequest = { viewModel.setShowExitConfirmation(true) },
+                        onDismissRequest = { viewModel.setShowExitConfirmation(true) }, // O manejar de otra forma
                         title = title,
                         secondsRemaining = uiState.tiempoRestante,
                         totalRestSeconds = totalRestSeconds,
@@ -318,122 +348,139 @@ fun RoutineScreen(
                     )
                 }
                 RoutineExecutionState.PAUSED -> {
-                    uiState.rutina?.let { rutina ->
-                        uiState.ejercicioActual?.let { currentEjercicio ->
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                when (uiState.previousState) {
-                                    RoutineExecutionState.EXERCISE_ACTIVE -> {
-                                        ExerciseContent(
-                                            currentEjercicio = currentEjercicio,
-                                            rondaActual = uiState.rondaActual,
-                                            totalRondas = rutina.numeroDeRondas,
-                                            ejercicioActualNum = uiState.indiceEjercicioActual + 1,
-                                            totalEjercicios = rutina.ejercicios.size,
-                                            serieActual = uiState.serieActualEjercicio,
-                                            totalSeries = currentEjercicio.numeroDeSeries,
-                                            segundosRestantes = uiState.tiempoRestante,
-                                            imageLoader = imageLoader, // <--- PASAR EL IMAGE LOADER
-                                            onWatchVideoClick = { /* No-op o mostrar mensaje */ },
-                                            onNextClick = { /* No se puede saltar en pausa */ },
-                                            isButtonEnabled = false,
-                                            buttonText = getNextButtonText(uiState, context)
-                                        )
-                                    }
-                                    RoutineExecutionState.REST_BETWEEN_SETS,
-                                    RoutineExecutionState.REST_BETWEEN_EXERCISES,
-                                    RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                                        val title = when (uiState.previousState) {
-                                            RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(R.string.rest_between_sets_title)
-                                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(R.string.rest_between_exercises_title)
-                                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(R.string.rest_between_rounds_title)
-                                            else -> ""
-                                        }
-                                        val totalRestSeconds = when (uiState.previousState) {
-                                            RoutineExecutionState.REST_BETWEEN_SETS -> uiState.rutina?.ejercicios?.getOrNull(uiState.indiceEjercicioActual)?.descansoEntreSeriesSegundos ?: 0
-                                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> uiState.rutina?.ejercicios?.getOrNull(uiState.indiceEjercicioActual)?.descansoDespuesEjercicioSegundos ?: 0
-                                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> uiState.rutina?.descansoEntreRondasSegundos ?: 0
-                                            else -> 0
-                                        }
-                                        val nextUpMessage = getNextUpMessage(uiState, context)
-                                        IntegratedRestDialog(
-                                            visible = true,
-                                            onDismissRequest = { viewModel.setShowExitConfirmation(true) },
-                                            title = title,
-                                            secondsRemaining = uiState.tiempoRestante,
-                                            totalRestSeconds = totalRestSeconds,
-                                            nextUpMessage = nextUpMessage,
-                                            onSkip = { /* No se puede saltar en pausa */ }
-                                        )
-                                    }
-                                    else -> {}
-                                }
+                    // uiState.rutina?.let { rutina -> // No es estrictamente necesario aquí si accedes a uiState.ejercicioActual
+                    val currentEjercicio = uiState.ejercicioActual
+                    val previousState = uiState.previousState
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            text = stringResource(R.string.routine_paused),
-                                            style = MaterialTheme.typography.displaySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Button(onClick = { viewModel.togglePausa() }) {
-                                            Text(stringResource(R.string.resume_routine))
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Button(onClick = {
-                                            viewModel.setShowExitConfirmation(false) // Cerrar diálogo de confirmación si estaba abierto
-                                            viewModel.reiniciarRutina()
-                                            navController.popBackStack()
-                                        }) {
-                                            Text(stringResource(R.string.exit_routine))
-                                        }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (currentEjercicio != null && uiState.rutina != null) { // Asegurar que rutina no es nulo también
+                            val rutina = uiState.rutina!! // Smart cast
+                            when (previousState) {
+                                RoutineExecutionState.EXERCISE_ACTIVE -> {
+                                    ExerciseContent(
+                                        currentEjercicio = currentEjercicio,
+                                        rondaActual = uiState.rondaActual,
+                                        totalRondas = rutina.numeroDeRondas,
+                                        ejercicioActualNum = uiState.indiceEjercicioActual + 1,
+                                        totalEjercicios = rutina.ejercicios.size,
+                                        serieActual = uiState.serieActualEjercicio,
+                                        totalSeries = currentEjercicio.numeroDeSeries,
+                                        segundosRestantes = uiState.tiempoRestante, // El tiempo se detiene en pausa
+                                        imageLoader = imageLoader,
+                                        onWatchVideoClick = { /* No-op o mostrar mensaje */ },
+                                        onNextClick = { /* No se puede saltar en pausa */ },
+                                        isButtonEnabled = false, // Botón deshabilitado en pausa
+                                        buttonText = getNextButtonText(uiState, context)
+                                    )
+                                }
+                                RoutineExecutionState.REST_BETWEEN_SETS,
+                                RoutineExecutionState.REST_BETWEEN_EXERCISES,
+                                RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
+                                    val title = when (previousState) {
+                                        RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(R.string.rest_between_sets_title)
+                                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(R.string.rest_between_exercises_title)
+                                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(R.string.rest_between_rounds_title)
+                                        else -> ""
                                     }
+                                    val totalRestSeconds = when (previousState) {
+                                        RoutineExecutionState.REST_BETWEEN_SETS -> rutina.ejercicios.getOrNull(uiState.indiceEjercicioActual)?.descansoEntreSeriesSegundos ?: 0
+                                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> rutina.ejercicios.getOrNull(uiState.indiceEjercicioActual)?.descansoDespuesEjercicioSegundos ?: 0
+                                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> rutina.descansoEntreRondasSegundos
+                                        else -> 0
+                                    }
+                                    val nextUpMessage = getNextUpMessage(uiState, context)
+                                    IntegratedRestDialog(
+                                        visible = true,
+                                        onDismissRequest = { /* No hacer nada al deslizar o tocar fuera en pausa, el usuario debe reanudar */ },
+                                        title = title,
+                                        secondsRemaining = uiState.tiempoRestante, // El tiempo se detiene
+                                        totalRestSeconds = totalRestSeconds,
+                                        nextUpMessage = nextUpMessage,
+                                        onSkip = { /* No se puede saltar en pausa */ }
+                                    )
+                                }
+                                else -> {
+                                    Log.d("RoutineScreen PAUSED", "Estado previo no manejado para mostrar contenido de fondo: $previousState")
+                                    // Podrías mostrar un fondo genérico o el último frame del ejercicio si es posible
+                                }
+                            }
+                        } else if (previousState == RoutineExecutionState.INITIAL_COUNTDOWN) {
+                            InitialCountdown(
+                                countdownInicial = uiState.tiempoRestante, // Tiempo detenido
+                                routineName = uiState.rutina?.nombre ?: ""
+                            )
+                        }
+
+                        // Overlay de Pausa
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)), // Un poco más opaco
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.routine_paused),
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Button(
+                                    onClick = { viewModel.togglePausa() },
+                                    modifier = Modifier.sizeIn(minWidth = 150.dp, minHeight = 48.dp)
+                                ) {
+                                    Text(stringResource(R.string.resume_routine))
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.setShowExitConfirmation(true) },
+                                    modifier = Modifier.sizeIn(minWidth = 150.dp, minHeight = 48.dp)
+                                ) {
+                                    Text(stringResource(R.string.exit_routine))
                                 }
                             }
                         }
                     }
+                    // } // Fin del uiState.rutina?.let si lo usaras
                 }
                 RoutineExecutionState.FINISHED -> {
                     LaunchedEffect(Unit) {
                         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-                        val userProfileVal = userProfileViewModel.user.value
-                        if (currentUserId != null && userProfileVal != null && uiState.rutina != null) {
-                            // No es necesario verificar Build.VERSION.SDK_INT >= Build.VERSION_CODES.O para esta lógica
+                        val userProfileForSaving = uiState.userProfile
+                        val currentRutina = uiState.rutina
+
+                        if (currentUserId != null && userProfileForSaving != null && currentRutina != null) {
                             viewModel.saveRoutineProgress(
                                 userId = currentUserId,
-                                userProfile = userProfileVal,
-                                rutinaId = uiState.rutina!!.id,
+                                userProfile = userProfileForSaving,
+                                rutinaId = currentRutina.id,
                                 onSuccess = {
                                     scope.launch {
-                                        navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
+                                        navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) { // Asegúrate que esta ruta existe
                                             popUpTo(Routes.routineDetail(rutinaId ?: "")) { inclusive = true }
-                                            popUpTo(navController.graph.startDestinationId) { inclusive = false } // Opcional: limpiar más stack
                                         }
                                     }
                                 },
                                 onError = { errorMsg ->
                                     scope.launch {
                                         snackbarHostState.showSnackbar(errorMsg, duration = SnackbarDuration.Long)
-                                        // Aún navegar a la pantalla de éxito o a una de error específica
                                         navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
                                             popUpTo(Routes.routineDetail(rutinaId ?: "")) { inclusive = true }
-                                            popUpTo(navController.graph.startDestinationId) { inclusive = false }
                                         }
                                     }
                                 }
                             )
                         } else {
                             scope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.error_cannot_save_progress_user_data), duration = SnackbarDuration.Long)
+                                var reason = context.getString(R.string.error_cannot_save_progress_user_data)
+                                if (currentUserId == null) reason += " (UID de usuario no disponible)"
+                                if (userProfileForSaving == null) reason += " (Perfil de usuario no disponible en estado)"
+                                if (currentRutina == null) reason += " (Rutina no disponible en estado)"
+                                Log.e("RoutineScreen FINISHED", "No se puede guardar progreso: $reason")
+                                snackbarHostState.showSnackbar(reason, duration = SnackbarDuration.Long)
                                 navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
                                     popUpTo(Routes.routineDetail(rutinaId ?: "")) { inclusive = true }
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = false }
                                 }
                             }
                         }
@@ -443,7 +490,7 @@ fun RoutineScreen(
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = stringResource(R.string.routine_finishing_and_saving), // Mensaje más descriptivo
+                                text = stringResource(R.string.routine_finishing_and_saving),
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
@@ -463,9 +510,10 @@ fun RoutineScreen(
                 Button(
                     onClick = {
                         viewModel.setShowExitConfirmation(false)
-                        viewModel.reiniciarRutina()
-                        navController.popBackStack()
-                    }
+                        viewModel.exitAndCleanUpRoutine() // Considera una función más explícita para salir
+                        navController.popBackStack() // O navega a una pantalla específica post-salida
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text(stringResource(R.string.dialog_exit_confirm)) }
             },
             dismissButton = {
@@ -477,6 +525,265 @@ fun RoutineScreen(
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
+@Composable
+fun ExerciseContent(
+    currentEjercicio: Ejercicio,
+    rondaActual: Int,
+    totalRondas: Int,
+    ejercicioActualNum: Int,
+    totalEjercicios: Int,
+    serieActual: Int,
+    totalSeries: Int,
+    segundosRestantes: Int,
+    imageLoader: ImageLoader,
+    onWatchVideoClick: (String) -> Unit,
+    onNextClick: () -> Unit,
+    isButtonEnabled: Boolean,
+    buttonText: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Indicadores de progreso
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            InfoBox(
+                label = stringResource(R.string.routine_round),
+                value = "$rondaActual / $totalRondas",
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            InfoBox(
+                label = stringResource(R.string.routine_exercise),
+                value = "$ejercicioActualNum / $totalEjercicios",
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            InfoBox(
+                label = stringResource(R.string.routine_series),
+                value = if (totalSeries > 0) "$serieActual / $totalSeries" else "-",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Nombre del ejercicio y descripción
+        Text(
+            text = currentEjercicio.nombre,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        if (currentEjercicio.descripcion.isNotBlank()) {
+            Text(
+                text = currentEjercicio.descripcion,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
+
+        // Carrusel de Imágenes del Ejercicio
+        val imageUrList = buildList {
+            currentEjercicio.imagenUrl?.takeIf { it.isNotBlank() }?.let { add(it) }
+            currentEjercicio.imagenUrl1?.takeIf { it.isNotBlank() }?.let { add(it) }
+            currentEjercicio.imagenUrl2?.takeIf { it.isNotBlank() }?.let { add(it) }
+            // Añade más campos de imagen si los tienes (ej: imagenUrl3, imagenUrl4)
+            // currentEjercicio.imagenUrl3?.takeIf { it.isNotBlank() }?.let { add(it) }
+        }
+
+        if (imageUrList.isNotEmpty()) {
+            val pagerState = rememberPagerState(pageCount = { imageUrList.size })
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f) // Ratio 1:1, ideal para GIFs/imágenes cuadradas.
+                    .clip(RoundedCornerShape(12.dp)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { pageIndex ->
+                    AsyncImage(
+                        model = imageUrList[pageIndex],
+                        imageLoader = imageLoader,
+                        contentDescription = stringResource(
+                            R.string.exercise_image_content_desc, // Necesitarás este string
+                            currentEjercicio.nombre,
+                            pageIndex + 1
+                        ),
+                        contentScale = ContentScale.Fit, // 'Fit' para asegurar que todo el GIF/imagen es visible
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // Indicadores de página (dots) para el Pager
+            if (imageUrList.size > 1) {
+                Row(
+                    Modifier
+                        .height(24.dp) // Aumenté un poco para más espacio
+                        .fillMaxWidth()
+                        .padding(top = 8.dp), // Espacio arriba de los puntos
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(pagerState.pageCount) { iteration ->
+                        val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp) // Espacio entre puntos
+                                .clip(CircleShape)
+                                .background(color)
+                                .size(8.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            // Opcional: Mostrar un placeholder si no hay imágenes
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(stringResource(R.string.no_image_available)) // Necesitarás este string
+            }
+        }
+
+
+        // --- Mostrar información según TipoDeEjercicio ---
+        when (currentEjercicio.tipoEjercicio) {
+            TipoDeEjercicio.SIMPLE -> {
+                if (currentEjercicio.duracionSegundosOriginal > 0) {
+                    DisplayTime(
+                        currentTime = segundosRestantes,
+                        label = stringResource(R.string.routine_time)
+                    )
+                }
+                if (currentEjercicio.repeticionesOriginal.isNotBlank() && currentEjercicio.repeticionesOriginal != "0") {
+                    DisplayRepetitions(
+                        repetitions = currentEjercicio.repeticionesOriginal,
+                        isUnilateral = currentEjercicio.esUnilateral
+                    )
+                }
+                currentEjercicio.notaTempo?.takeIf { it.isNotBlank() }?.let { DisplayTempo(it) }
+            }
+            TipoDeEjercicio.CON_TEMPO -> {
+                if (currentEjercicio.duracionSegundosOriginal > 0) {
+                    DisplayTime(
+                        currentTime = segundosRestantes,
+                        label = stringResource(R.string.routine_time)
+                    )
+                }
+                if (currentEjercicio.repeticionesOriginal.isNotBlank() && currentEjercicio.repeticionesOriginal != "0") {
+                    DisplayRepetitions(
+                        repetitions = currentEjercicio.repeticionesOriginal,
+                        isUnilateral = currentEjercicio.esUnilateral
+                    )
+                }
+                DisplayTempo(currentEjercicio.notaTempo?.takeIf { it.isNotBlank() } ?: stringResource(R.string.tempo_not_specified))
+            }
+            TipoDeEjercicio.SUPERSET_SEQUENCIAL,
+            TipoDeEjercicio.COMBINADO_TEMPORIZADO,
+            TipoDeEjercicio.CIRCUITO_TEMPORIZADO,
+            TipoDeEjercicio.POR_LADO_ALTERNADO -> {
+                if (currentEjercicio.componentes.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.exercise_components_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    currentEjercicio.componentes.sortedBy { it.orden }.forEach { componente ->
+                        DisplayComponent(componente) // Asume que DisplayComponent está definido
+                    }
+                    if (currentEjercicio.duracionSegundosOriginal > 0 && currentEjercicio.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) {
+                        DisplayTime(
+                            currentTime = segundosRestantes,
+                            label = stringResource(R.string.total_circuit_time)
+                        )
+                    }
+                } else {
+                    Text(stringResource(R.string.exercise_detail_not_available), textAlign = TextAlign.Center)
+                }
+                if (currentEjercicio.esUnilateral && currentEjercicio.componentes.isEmpty()){
+                    Text(stringResource(R.string.perform_for_each_side), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Botón para ver video
+        currentEjercicio.videoUrl?.let { videoUrl ->
+            if (videoUrl.isNotBlank()) {
+                OutlinedButton(
+                    onClick = { onWatchVideoClick(videoUrl) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.watch_exercise_video_icon_desc),
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(stringResource(R.string.watch_exercise_video))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f, fill = false))
+
+        // Botón de Siguiente/Finalizar
+        Button(
+            onClick = onNextClick,
+            enabled = isButtonEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            AnimatedContent(
+                targetState = buttonText,
+                transitionSpec = {
+                    ContentTransform(
+                        targetContentEnter = slideInHorizontally { width -> width } + fadeIn(),
+                        initialContentExit = slideOutHorizontally { width -> -width } + fadeOut()
+                    )
+                },
+                label = "buttonTextAnimation"
+            ) { text ->
+                Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
 @Composable
 fun InitialCountdown(countdownInicial: Int, routineName: String) {
     Column(
@@ -515,181 +822,6 @@ fun InitialCountdown(countdownInicial: Int, routineName: String) {
         }
     }
 }
-
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun ExerciseContent(
-    currentEjercicio: Ejercicio,
-    rondaActual: Int,
-    totalRondas: Int,
-    ejercicioActualNum: Int,
-    totalEjercicios: Int,
-    serieActual: Int,
-    totalSeries: Int,
-    segundosRestantes: Int,
-    imageLoader: ImageLoader, // <--- CAMBIO: Recibe ImageLoader
-    onWatchVideoClick: (String) -> Unit,
-    onNextClick: () -> Unit,
-    isButtonEnabled: Boolean,
-    buttonText: String
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically) // Ajuste para espaciado y centrado
-    ) {
-        // Indicadores de progreso
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround, // O Arrangement.spacedBy(8.dp)
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            InfoBox(
-                label = stringResource(R.string.routine_round),
-                value = "$rondaActual / $totalRondas",
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            InfoBox(
-                label = stringResource(R.string.routine_exercise),
-                value = "$ejercicioActualNum / $totalEjercicios",
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Log.d("ExerciseContent", "Ejercicio: ${currentEjercicio.nombre}, Serie Actual: $serieActual, Total Series (recibido): $totalSeries, Desde currentEjercicio: ${currentEjercicio.numeroDeSeries}")
-            InfoBox(
-                label = stringResource(R.string.routine_series),
-                value = if (totalSeries > 0) "$serieActual / $totalSeries" else "-", // Manejar caso de 0 series
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Nombre del ejercicio y descripción
-        Text(
-            text = currentEjercicio.nombre,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            text = currentEjercicio.descripcion,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        // Imagen del ejercicio
-        currentEjercicio.imagenUrl?.let { url ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(3f / 3f) // Proporción para la imagen (ej. 16:10 o 16:9), ajusta según tus GIFs
-                    .clip(RoundedCornerShape(12.dp)), // Bordes más redondeados
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                AsyncImage(
-                    model = url, // <--- Solo la URL
-                    imageLoader = imageLoader, // <--- Usar el ImageLoader pasado
-                    contentDescription = currentEjercicio.nombre,
-                    contentScale = ContentScale.Fit, // Para asegurar que todo el GIF es visible. Cambia a Crop si prefieres llenar.
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        // Repeticiones o tiempo
-        if (currentEjercicio.repeticiones > 0) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = stringResource(R.string.routine_repetitions, currentEjercicio.repeticiones),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    text = stringResource(R.string.routine_do_it_at_your_pace),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else if (currentEjercicio.duracionSegundos > 0) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = stringResource(R.string.routine_hold_for),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                AnimatedContent(
-                    targetState = segundosRestantes.coerceAtLeast(0),
-                    transitionSpec = {
-                        slideInVertically { height -> height } + fadeIn() togetherWith
-                                slideOutVertically { height -> -height } + fadeOut()
-                    }, label = "ExerciseTimeAnimation"
-                ) { targetTime ->
-                    Text(
-                        // text = stringResource(R.string.routine_seconds_remaining, targetTime),
-                        text = formatTime(targetTime), // Usa una función de formato si quieres MM:SS
-                        style = MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
-
-        // Botón para ver video (si hay URL)
-        currentEjercicio.videoUrl?.let { videoUrl ->
-            if (videoUrl.isNotBlank()) {
-                OutlinedButton( // Usar OutlinedButton para diferenciarlo del botón principal
-                    onClick = { onWatchVideoClick(videoUrl) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.watch_exercise_video_icon_desc), modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.watch_exercise_video))
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f, fill = false)) // Empuja el botón hacia abajo pero permite que la columna se encoja si el contenido es poco
-
-        // Botón de Siguiente/Finalizar
-        Button(
-            onClick = onNextClick,
-            enabled = isButtonEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = MaterialTheme.shapes.medium, // Un poco menos redondeado para consistencia
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
-        ) {
-            AnimatedContent(
-                targetState = buttonText,
-                transitionSpec = {
-                    ContentTransform(
-                        targetContentEnter = slideInHorizontally { width -> width } + fadeIn(),
-                        initialContentExit = slideOutHorizontally { width -> -width } + fadeOut()
-                    )
-                },
-                label = "buttonTextAnimation"
-            ) { text ->
-                Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
 
 @Composable
 fun InfoBox(label: String, value: String, modifier: Modifier = Modifier) {
@@ -909,5 +1041,118 @@ fun playSound(context: Context, type: String) {
         mediaPlayer?.start()
     } catch (e: Exception) {
         Log.e("playSound", "Error playing sound $soundId: ${e.message}")
+    }
+}
+@Composable
+private fun DisplayTime(currentTime: Int, label: String = "") {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+        if (label.isNotBlank()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleLarge, // Anteriormente titleMedium
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            // text = formatTime(currentTime.coerceAtLeast(0)), // Ya tienes tu propia función formatTime
+            text = formatTime(currentTime.coerceAtLeast(0)),
+            style = MaterialTheme.typography.displayMedium, // Más grande para el tiempo
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+private fun DisplayRepetitions(repetitions: String, isUnilateral: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(
+            text = stringResource(R.string.routine_repetitions_label), // "REPETICIONES"
+            style = MaterialTheme.typography.titleLarge, // Anteriormente titleMedium
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = repetitions,
+            style = MaterialTheme.typography.displayMedium, // Anteriormente headlineSmall
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.ExtraBold
+        )
+        if (isUnilateral) {
+            Text(
+                text = stringResource(R.string.routine_per_side), // "(por lado)"
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text( // Podrías tener un string diferente si no es unilateral y quieres indicar algo más
+                text = stringResource(R.string.routine_do_it_at_your_pace), // Ejemplo: "A tu ritmo"
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DisplayTempo(tempoNote: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(
+            text = stringResource(R.string.routine_tempo_label), // "TEMPO"
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = tempoNote,
+            style = MaterialTheme.typography.headlineSmall, // Anteriormente titleLarge
+            color = MaterialTheme.colorScheme.secondary, // Un color diferente para destacar
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun DisplayComponent(component: ComponenteEjercicio) { // Asegúrate de que el path sea correcto
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)) // Ligera transparencia
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = component.nombreEspecifico ?: stringResource(R.string.unnamed_component),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp) // Añade padding al final para evitar que se pegue
+            )
+            Column(horizontalAlignment = Alignment.End) {
+                component.repeticiones?.takeIf { it.isNotBlank() }?.let { // Mostrar solo si no está vacío
+                    Text(
+                        text = it, // "12 reps", "AMRAP"
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                component.duracionSegundos?.let { // Mostrar solo si no es nulo
+                    if (it > 0) { // Y si es mayor a 0
+                        Text(
+                            // text = formatTime(it), // Usa tu función formatTime
+                            text = formatTime(it),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
     }
 }

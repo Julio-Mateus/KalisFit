@@ -323,6 +323,21 @@
     <string name="tap_to_select_placeholder">Toca para seleccionar</string>
     <string name="title_store">Tienda</string>
     <string name="desc_cart">Ver carrito de compras</string>
+    <!-- Para ExerciseContent y funciones auxiliares -->
+    <string name="routine_time">TIEMPO</string>
+    <string name="routine_repetitions_label">REPETICIONES</string>
+    <string name="routine_tempo_label">TEMPO</string>
+    <string name="routine_per_side">(por lado)</string>
+    <string name="tempo_not_specified">Tempo no especificado</string>
+    <string name="exercise_components_title">COMPONENTES DEL EJERCICIO</string>
+    <string name="total_circuit_time">TIEMPO TOTAL DEL CIRCUITO</string>
+    <string name="exercise_detail_not_available">Detalles del ejercicio no disponibles.</string>
+    <string name="perform_for_each_side">Realizar por cada lado</string>
+    <string name="unnamed_component">Componente sin nombre</string>
+    <string name="exercise_image_content_desc">Imagen del ejercicio %1$s - %2$d</string> // Ejemplo: "Imagen del ejercicio Flexiones - 1"
+    <string name="no_image_available">No hay imagen disponible</string>
+
+
 </resources>
 
 

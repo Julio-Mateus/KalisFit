@@ -8,6 +8,7 @@ import androidx.annotation.RequiresApi
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.ExerciseLevel
 import com.jcmateus.kalisfit.model.GrupoMuscular
@@ -15,6 +16,7 @@ import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.Progression
 import com.jcmateus.kalisfit.model.Rutina
+import com.jcmateus.kalisfit.model.TipoDeEjercicio
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
@@ -23,20 +25,23 @@ import kotlin.text.uppercase
 
 // Estructura de datos para un ejercicio TAL COMO SE GUARDARÁ EN FIRESTORE
 data class EjercicioFirestore(
-    var id: String = "", // Hacerlo var para poder asignarle el ID del documento
+    var id: String = "",
     val nombre: String = "",
     val descripcion: String = "",
     val imagenUrl: String? = null,
+    // AÑADE imagenUrl1 y imagenUrl2 si existen en tu Firestore/JSON
+    val imagenUrl1: String? = null,
+    val imagenUrl2: String? = null,
     val videoUrl: String? = null,
-    val duracionSegundos: Int = 0,
-    val repeticiones: Int = 0,
-    val numeroDeSeries: Int = 0, // ESTE ES EL NÚMERO DE SERIES PLANIFICADAS
-    val descansoEntreSeriesSegundos: Int = 0, // Añadido para mapear
+    val duracionSegundos: Int = 0, // Este es el que usaremos como duracionSegundosOriginal
+    val repeticiones: String = "0", // CAMBIADO A STRING
+    val numeroDeSeries: Int = 0,
+    val descansoEntreSeriesSegundos: Int = 0,
     val descansoDespuesEjercicioSegundos: Int = 0,
     val grupoMuscular: List<String> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),
-    val lugarEntrenamiento: List<String> = emptyList(), // GUARDADO COMO LISTA DE STRINGS
-    val orden: Int = 0
+    val lugarEntrenamiento: List<String> = emptyList(),
+    val orden: Double = 0.0 // CAMBIADO A DOUBLE para consistencia con el modelo de app Ejercicio
 )
 
 // Representa cómo se guardará un ejercicio individual dentro del progreso de una rutina
@@ -106,29 +111,36 @@ data class CalisthenicsProgressionFirestore(
 private const val TAG = "FirestoreUtils"
 @RequiresApi(Build.VERSION_CODES.O)
 fun guardarProgresoRutina(
-    userIdAuth: String, // ID del usuario autenticado
-    rutinaRealizada: Rutina, // El objeto Rutina de tu app que se completó
-    perfilUsuarioActual: UserProfile, // El perfil del usuario en el momento de completar la rutina
+    userIdAuth: String,
+    rutinaRealizada: Rutina, // Tu modelo de app Rutina
+    perfilUsuarioActual: UserProfile,
     rondasCompletadasEnSesion: Int,
     tiempoTotalDeLaSesionSegundos: Int,
-    // Aquí podrías necesitar un mapa o una lista especial si las series completadas
-    // por ejercicio no siempre son 'ejercicio.numeroDeSeries'.
-    // Por ahora, asumiremos que si un ejercicio está en 'rutinaRealizada.ejercicios'
-    // y la rutina se completa, todas sus series planificadas se hicieron.
     onSuccess: () -> Unit,
     onError: (String) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
 
-    // Mapea de tu Ejercicio (modelo de app) a EjercicioProgresoFirestore
     val ejerciciosParaProgresoFirestore = rutinaRealizada.ejercicios.mapIndexed { index, ejercicioApp ->
+        // ejercicioApp es de tipo com.jcmateus.kalisfit.model.Ejercicio
+
+        // Lógica para convertir repeticionesOriginal (String) a un Int para el progreso
+        // Esto toma la primera secuencia de dígitos. Si es "12 + 15", toma 12. Si "AMRAP", toma 0.
+        val repeticionesNumericas = ejercicioApp.repeticionesOriginal
+            .substringBefore(" ") // Toma la parte antes del primer espacio (si hay)
+            .filter { it.isDigit() } // Toma solo los dígitos
+            .toIntOrNull() ?: 0 // Convierte a Int, o 0 si falla
+
         EjercicioProgresoFirestore(
             ejercicioIdOriginal = ejercicioApp.id,
             nombre = ejercicioApp.nombre,
-            duracionPorSerieSegundos = ejercicioApp.duracionSegundos, // Duración objetivo por serie
-            repeticionesPorSerie = ejercicioApp.repeticiones,    // Reps objetivo por serie
-            seriesRealizadas = ejercicioApp.numeroDeSeries, // Asume que se completaron todas las series planificadas para este ejercicio
-            orden = index // Mantenemos el orden en que se presentaron
+            // Usar los campos renombrados de tu modelo de app Ejercicio
+            duracionPorSerieSegundos = ejercicioApp.duracionSegundosOriginal, // CORREGIDO
+            repeticionesPorSerie = repeticionesNumericas,                  // CORREGIDO y CONVERTIDO
+            seriesRealizadas = ejercicioApp.numeroDeSeries,
+            orden = index // Aquí usas el índice, pero ejercicioApp.orden (que es Double) también existe
+            // Decide cuál es más apropiado para el orden en Progreso.
+            // Si ejercicioApp.orden es fiable, usa ejercicioApp.orden.toInt() o similar.
         )
     }
 
@@ -136,9 +148,9 @@ fun guardarProgresoRutina(
         userId = userIdAuth,
         rutinaIdOriginal = rutinaRealizada.id,
         nombreRutina = rutinaRealizada.nombre,
-        fecha = Timestamp.now(), // Firestore Timestamp para mejor manejo de fechas
-        nivelUsuarioAlCompletar = perfilUsuarioActual.nivel,
-        objetivosUsuarioAlCompletar = perfilUsuarioActual.objetivos,
+        fecha = Timestamp.now(),
+        nivelUsuarioAlCompletar = perfilUsuarioActual.nivel, // Asegúrate que UserProfile tiene 'nivel'
+        objetivosUsuarioAlCompletar = perfilUsuarioActual.objetivos, // Asegúrate que UserProfile tiene 'objetivos'
         ejerciciosCompletados = ejerciciosParaProgresoFirestore,
         rondasRealizadas = rondasCompletadasEnSesion,
         tiempoTotalSesionSegundos = tiempoTotalDeLaSesionSegundos
@@ -146,7 +158,7 @@ fun guardarProgresoRutina(
 
     db.collection("users")
         .document(userIdAuth)
-        .collection("progresoRutinas") // Usar un nombre de subcolección específico
+        .collection("progresoRutinas")
         .add(progresoFirestore)
         .addOnSuccessListener { documentReference ->
             Log.d(TAG, "Progreso de rutina guardado con ID: ${documentReference.id}")
@@ -429,7 +441,124 @@ fun obtenerRutinas(
             onError(it.message ?: "Error al obtener rutinas filtradas")
         }
 }
-suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
+
+private fun parsearEjercicioFirestore(
+    ef: EjercicioFirestore,
+    gruposMuscularesEnum: List<GrupoMuscular>,
+    lugaresEntrenamientoEnum: List<LugarEntrenamiento>
+): Ejercicio {
+
+    var tipo = TipoDeEjercicio.SIMPLE
+    val componentes = mutableListOf<ComponenteEjercicio>()
+    var notaTempoDetectada: String? = null
+    var esEjercicioUnilateral = false
+
+    val nombreLimpio = ef.nombre // Guardar una copia por si modificas ef.nombre
+    val repeticionesOriginalString = ef.repeticiones.trim()
+
+    // 1. Detectar Tempo en el nombre
+    val tempoRegex = """\(Tempo\s*([\d-]+)\)""".toRegex(RegexOption.IGNORE_CASE)
+    tempoRegex.find(nombreLimpio)?.let { matchResult ->
+        notaTempoDetectada = matchResult.groupValues[1]
+        tipo = TipoDeEjercicio.CON_TEMPO
+        // ef.nombre = nombreLimpio.replace(tempoRegex, "").trim() // Opcional: limpiar el nombre en el objeto 'ef' si es var
+    }
+
+    // 2. Analizar repeticionesOriginalString
+    if (repeticionesOriginalString.contains(" + ")) {
+        tipo = TipoDeEjercicio.SUPERSET_SEQUENCIAL
+        val partesRepeticiones = repeticionesOriginalString.split("+").map { it.trim() }
+        val nombresComponentesSugeridos = if (nombreLimpio.contains(" + ")) {
+            nombreLimpio.split(" + ").map { it.trim() }
+        } else if (nombreLimpio.contains(" / ")) {
+            nombreLimpio.split(" / ").map { it.trim() }
+        } else {
+            emptyList()
+        }
+
+        partesRepeticiones.forEachIndexed { index, parteRep ->
+            var duracionComp: Int? = null
+            var repComp: String? = parteRep
+
+            if (parteRep.endsWith("s", ignoreCase = true)) {
+                duracionComp = parteRep.dropLast(1).toIntOrNull()
+                repComp = null
+            }
+
+            val nombreEspecificoComp = nombresComponentesSugeridos.getOrNull(index)
+                ?: ef.descripcion.split("\n").getOrNull(index)?.trim()
+                ?: "Parte ${index + 1}"
+
+            componentes.add(
+                ComponenteEjercicio(
+                    nombreEspecifico = nombreEspecificoComp,
+                    repeticiones = repComp,
+                    duracionSegundos = duracionComp, // CORREGIDO
+                    orden = index
+                )
+            )
+        }
+
+        if (componentes.all { it.duracionSegundos != null && it.duracionSegundos!! > 0 } && ef.duracionSegundos > 0) { // CORREGIDO y añadido !! para non-null
+            tipo = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
+        } else if (ef.duracionSegundos > 0 && componentes.isNotEmpty() && componentes.first().duracionSegundos != null) { // CORREGIDO
+            tipo = TipoDeEjercicio.COMBINADO_TEMPORIZADO
+        }
+
+    } else if (repeticionesOriginalString.contains(" por pierna", ignoreCase = true) ||
+        repeticionesOriginalString.contains(" por lado", ignoreCase = true) ||
+        ef.descripcion.contains(" cada lado", ignoreCase = true) ||
+        repeticionesOriginalString.contains(" unilateral", ignoreCase = true)
+    ) {
+        esEjercicioUnilateral = true
+        tipo = TipoDeEjercicio.POR_LADO_ALTERNADO
+    } else if (repeticionesOriginalString.matches("""\d+\s*x\s*\d+s.*""".toRegex(RegexOption.IGNORE_CASE))) {
+        if (ef.duracionSegundos > 0 && (nombreLimpio.contains("+") || nombreLimpio.contains("/"))) {
+            val partesNombre = nombreLimpio.split(Regex("[+/]")).map { it.trim() }
+            val matchRep = """(\d+)\s*x\s*(\d+)s.*""".toRegex(RegexOption.IGNORE_CASE).find(repeticionesOriginalString)
+            if (matchRep != null && partesNombre.isNotEmpty()) { // Cambiado de partesNombre.size >=1 a isNotEmpty
+                val duracionPorComponente = matchRep.groupValues[2].toIntOrNull()
+
+                if (duracionPorComponente != null) {
+                    tipo = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
+                    componentes.clear()
+                    partesNombre.forEachIndexed { index, nombreParte ->
+                        componentes.add(ComponenteEjercicio(
+                            nombreEspecifico = nombreParte,
+                            duracionSegundos = duracionPorComponente, // CORREGIDO
+                            orden = index
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    return Ejercicio(
+        id = ef.id,
+        nombre = nombreLimpio.replace(tempoRegex, "").trim(), // Limpiar el nombre al final si se detectó tempo
+        descripcion = ef.descripcion,
+        imagenUrl = ef.imagenUrl,
+        imagenUrl1 = ef.imagenUrl1,
+        imagenUrl2 = ef.imagenUrl2,
+        videoUrl = ef.videoUrl,
+        duracionSegundosOriginal = ef.duracionSegundos,
+        repeticionesOriginal = repeticionesOriginalString,
+        numeroDeSeries = ef.numeroDeSeries,
+        descansoEntreSeriesSegundos = ef.descansoEntreSeriesSegundos,
+        descansoDespuesEjercicioSegundos = ef.descansoDespuesEjercicioSegundos,
+        grupoMuscular = gruposMuscularesEnum,
+        equipamientoNecesario = ef.equipamientoNecesario,
+        lugarEntrenamiento = lugaresEntrenamientoEnum,
+        orden = ef.orden, // Asumiendo que ef.orden ya es Double según tu EjercicioFirestore
+
+        tipoEjercicio = tipo,
+        componentes = componentes,
+        notaTempo = notaTempoDetectada,
+        esUnilateral = esEjercicioUnilateral
+    )
+}
+suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? { // Asegúrate que devuelve tu modelo de app
     val db = FirebaseFirestore.getInstance()
     return try {
         val rutinaDocumentSnapshot = db.collection("rutinas")
@@ -443,7 +572,7 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
         }
 
         val rutinaFirestore = rutinaDocumentSnapshot.toObject(RutinaFirestore::class.java)
-            ?.apply { id = rutinaDocumentSnapshot.id } // Asignar ID
+            ?.apply { id = rutinaDocumentSnapshot.id }
             ?: run {
                 Log.e(TAG, "Error al mapear documento de rutina $rutinaId a RutinaFirestore.")
                 return null
@@ -452,58 +581,45 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
         val ejerciciosSnapshot = db.collection("rutinas")
             .document(rutinaId)
             .collection("ejercicios")
-            .orderBy("orden", Query.Direction.ASCENDING)
+            .orderBy("orden", Query.Direction.ASCENDING) // Ordenar por Double ahora
             .get()
             .await()
 
         val ejerciciosFirestoreList = ejerciciosSnapshot.documents.mapNotNull { doc ->
-            doc.toObject(EjercicioFirestore::class.java)?.apply { id = doc.id } // Asignar ID al EjercicioFirestore
+            // Asegúrate que EjercicioFirestore tiene imagenUrl1, imagenUrl2, repeticiones como String y orden como Double
+            doc.toObject(EjercicioFirestore::class.java)?.apply { id = doc.id }
         }
 
-        val ejerciciosAppModel = ejerciciosFirestoreList.map { ef ->
+        val ejerciciosAppModel = ejerciciosFirestoreList.map { ef -> // ef es EjercicioFirestore
             // Mapeo de List<String> a List<GrupoMuscular> (enum)
             val gruposMuscularesEnum = ef.grupoMuscular.mapNotNull { str ->
                 try {
-                    GrupoMuscular.valueOf(str.uppercase()) // Asume que los strings en Firestore coinciden con los nombres del enum
+                    GrupoMuscular.valueOf(str.trim().uppercase().replace(" ", "_")) // Manejar espacios y asegurar mayúsculas
                 } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "Grupo muscular desconocido en Firestore: $str para ejercicio ${ef.id}")
+                    Log.w(TAG, "Grupo muscular desconocido en Firestore: '$str' para ejercicio ${ef.id}")
                     null
                 }
             }
             // Mapeo de List<String> a List<LugarEntrenamiento> (enum)
             val lugaresEntrenamientoEnum = ef.lugarEntrenamiento.mapNotNull { str ->
                 try {
-                    LugarEntrenamiento.valueOf(str.uppercase())
+                    LugarEntrenamiento.valueOf(str.trim().uppercase())
                 } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "Lugar de entrenamiento desconocido en Firestore: $str para ejercicio ${ef.id}")
+                    Log.w(TAG, "Lugar de entrenamiento desconocido en Firestore: '$str' para ejercicio ${ef.id}")
                     null
                 }
             }
 
-            Ejercicio( // Modelo de tu app
-                id = ef.id,
-                nombre = ef.nombre,
-                descripcion = ef.descripcion,
-                imagenUrl = ef.imagenUrl,
-                videoUrl = ef.videoUrl,
-                duracionSegundos = ef.duracionSegundos,
-                repeticiones = ef.repeticiones,
-                numeroDeSeries = ef.numeroDeSeries, // Mapear 'series' de Firestore a 'numeroDeSeries'
-                descansoEntreSeriesSegundos = ef.descansoEntreSeriesSegundos, // Mapear desde EjercicioFirestore
-                descansoDespuesEjercicioSegundos = ef.descansoDespuesEjercicioSegundos,
-                grupoMuscular = gruposMuscularesEnum,
-                equipamientoNecesario = ef.equipamientoNecesario,
-                lugarEntrenamiento = lugaresEntrenamientoEnum, // Usar la lista de Enums mapeada
-                orden = ef.orden
-            )
+            // AQUÍ LA LLAMADA A LA NUEVA FUNCIÓN DE PARSEO
+            parsearEjercicioFirestore(ef, gruposMuscularesEnum, lugaresEntrenamientoEnum)
         }
 
         // Mapeo de List<String> a List<LugarEntrenamiento> (enum) para la Rutina principal
         val lugaresRutinaEnum = rutinaFirestore.lugarEntrenamiento.mapNotNull { lugarStr ->
             try {
-                LugarEntrenamiento.valueOf(lugarStr.uppercase())
+                LugarEntrenamiento.valueOf(lugarStr.trim().uppercase())
             } catch (e: IllegalArgumentException) {
-                Log.w(TAG, "Lugar de entrenamiento desconocido en Firestore: $lugarStr para rutina ${rutinaFirestore.id}")
+                Log.w(TAG, "Lugar de entrenamiento desconocido en Firestore: '$lugarStr' para rutina ${rutinaFirestore.id}")
                 null
             }
         }
@@ -516,10 +632,10 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? {
             imagenUrl = rutinaFirestore.imagenUrl,
             nivelRecomendado = rutinaFirestore.nivelRecomendado,
             objetivos = rutinaFirestore.objetivos,
-            lugarEntrenamiento = lugaresRutinaEnum, // Usar la lista de Enums mapeada
-            ejercicios = ejerciciosAppModel,
-            numeroDeRondas = rutinaFirestore.numeroDeRondas, // Mapear desde RutinaFirestore
-            descansoEntreRondasSegundos = rutinaFirestore.descansoEntreRondasSegundos // Mapear
+            lugarEntrenamiento = lugaresRutinaEnum,
+            ejercicios = ejerciciosAppModel, // ¡Lista de ejercicios procesados!
+            numeroDeRondas = rutinaFirestore.numeroDeRondas,
+            descansoEntreRondasSegundos = rutinaFirestore.descansoEntreRondasSegundos
         )
 
     } catch (e: Exception) {
