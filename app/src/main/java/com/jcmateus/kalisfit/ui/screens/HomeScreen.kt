@@ -1,9 +1,14 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 //import android.icu.util.TimeUnit
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,9 +28,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,9 +54,10 @@ import kotlin.random.Random
 import java.util.concurrent.TimeUnit
 
 
-
 @SuppressLint("RememberReturnType")
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class,
+    ExperimentalFoundationApi::class
+)
 @Composable
 fun HomeScreen(
     mainNavController: NavHostController,
@@ -89,7 +97,8 @@ fun HomeScreen(
     val tipDelDia = remember(tipsGenerales, user?.uid) { // Cambia con el usuario para nueva semilla
         if (tipsGenerales.isNotEmpty()) {
             // Usar una semilla basada en el día actual y el UID para que el tip sea el mismo durante el día para ese usuario
-            val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()?.toLong() ?: 0L)
+            val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()
+                ?.toLong() ?: 0L)
             tipsGenerales.random(Random(seed))
         } else {
             "¡Recuerda mantenerte activo hoy!"
@@ -148,101 +157,130 @@ fun HomeScreen(
                         top = 16.dp,
                         bottom = 16.dp + 56.dp + 16.dp // Espacio para BottomNav y algo más
                     ),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // --- SECCIÓN BIENVENIDA ---
-                    item {
-                        WelcomeSection(currentUser)
-                    }
-                    // --- TIP DEL DÍA ---
-                    item {
-                        SectionTitle("💡 Tip del Día",
-                            //icon = Icons.Filled.Lightbulb
+                    stickyHeader(key = "header") {
+                        // El HeaderCard se coloca dentro del stickyHeader.
+                        // Es importante darle un fondo propio para que no se
+                        // vuelva transparente al "pegarse".
+                        HeaderCard(
+                            user = currentUser,
+                            tipDelDia = tipDelDia,
+                            modifier = Modifier
+                                .animateItemPlacement(tween(durationMillis = 500))
+                                .background(MaterialTheme.colorScheme.background)
+                                .padding(bottom = 8.dp) // Un pequeño espacio antes de que empiece la lista
                         )
-                        TipCard(tipDelDia = tipDelDia)
                     }
                     // --- RESUMEN SEMANAL ---
-                    item {
-                        SectionTitle("📈 Tu Semana",
-                            //icon = Icons.AutoMirrored.Filled.TrendingUp
-                        )
-                        when {
-                            isLoadingHomeScreenData && homeScreenSummary == null -> LoadingCard(text = "Cargando resumen...")
-                            homeScreenError != null && homeScreenSummary == null -> ErrorCard(
-                                message = homeScreenError ?: "Error al cargar resumen.",
-                                onRetry = { userViewModel.refreshHomeScreenData() }
+                    item(key = "summary") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            SectionTitle1(
+                                "📈 Tu Semana",
+                                //icon = Icons.AutoMirrored.Filled.TrendingUp
                             )
-                            homeScreenSummary != null -> WeeklySummaryCard(summary = homeScreenSummary!!)
-                            else -> NoDataCard(message = "Aún no hay datos para tu resumen semanal. ¡Empieza a entrenar!")
+                            when {
+                                isLoadingHomeScreenData && homeScreenSummary == null -> LoadingCard(
+                                    text = "Cargando resumen..."
+                                )
+
+                                homeScreenError != null && homeScreenSummary == null -> ErrorCard(
+                                    message = homeScreenError ?: "Error al cargar resumen.",
+                                    onRetry = { userViewModel.refreshHomeScreenData() }
+                                )
+
+                                homeScreenSummary != null -> WeeklySummaryCard(summary = homeScreenSummary!!)
+                                else -> NoDataCard(message = "Aún no hay datos para tu resumen semanal. ¡Empieza a entrenar!")
+                            }
                         }
                     }
-
                     // --- ÚLTIMA ACTIVIDAD ---
-                    item {
-                        SectionTitle("⏱️ Última Actividad",
-                            //icon = Icons.Filled.Timelapse
-                        )
-                        when (val activity = lastActivity) {
-                            is LastActivityItem.Loading -> LoadingCard(text = "Cargando última actividad...")
-                            is LastActivityItem.None -> NoDataCard(message = "No has registrado actividades recientemente.")
-                            is LastActivityItem.Routine -> LastActivityRoutineCard(activity.progreso, mainNavController)
-                            is LastActivityItem.FreeActivity -> LastActivityFreeCard(activity.activity, mainNavController)
-                            // El caso de error para lastActivity se maneja a través de homeScreenError
-                            // si es un error general de carga de datos del home.
-                            // Si quisieras un error específico para lastActivity, necesitarías otro StateFlow.
-                        }
-                        if (homeScreenError != null && lastActivity is LastActivityItem.None) { // Mostrar error si no hay datos Y hubo error
-                            Spacer(Modifier.height(8.dp))
-                            ErrorCard(message = homeScreenError ?: "Error al cargar última actividad.", onRetry = {userViewModel.refreshHomeScreenData()})
-                        }
-                    }
-
-                    // --- RUTINAS RECOMENDADAS ---
-                    item {
-                        SectionTitle("🏋️‍♂️ Tus Rutinas Recomendadas",
-                            //icon = Icons.Filled.FitnessCenter
-                        )
-                        when {
-                            isLoadingRoutines && recommendedRoutines.isEmpty() -> LoadingCard(text = "Buscando recomendaciones...")
-                            routinesError != null && recommendedRoutines.isEmpty() -> ErrorCard(
-                                message = routinesError ?: "Error al cargar rutinas.",
-                                onRetry = { userViewModel.refreshRecommendations() }
+                    item(key = "last_activity") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            SectionTitle1(
+                                "⏱️ Última Actividad",
+                                //icon = Icons.Filled.Timelapse
                             )
+                            when (val activity = lastActivity) {
+                                is LastActivityItem.Loading -> LoadingCard(text = "Cargando última actividad...")
+                                is LastActivityItem.None -> NoDataCard(message = "No has registrado actividades recientemente.")
+                                is LastActivityItem.Routine -> LastActivityRoutineCard(
+                                    activity.progreso,
+                                    mainNavController
+                                )
 
-                            recommendedRoutines.isEmpty() && !isLoadingRoutines -> {
-                                NoDataCard(message = "No hay rutinas recomendadas ahora. ¡Explora y encuentra la tuya!") {
-                                    Button(
-                                        onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Text("Explorar Todas las Rutinas")
+                                is LastActivityItem.FreeActivity -> LastActivityFreeCard(
+                                    activity.activity,
+                                    mainNavController
+                                )
+                                // El caso de error para lastActivity se maneja a través de homeScreenError
+                                // si es un error general de carga de datos del home.
+                                // Si quisieras un error específico para lastActivity, necesitarías otro StateFlow.
+                            }
+                            if (homeScreenError != null && lastActivity is LastActivityItem.None) { // Mostrar error si no hay datos Y hubo error
+                                Spacer(Modifier.height(8.dp))
+                                ErrorCard(
+                                    message = homeScreenError
+                                        ?: "Error al cargar última actividad.",
+                                    onRetry = { userViewModel.refreshHomeScreenData() })
+                            }
+                        }
+                    }
+                    // --- RUTINAS RECOMENDADAS ---
+                    item(key = "recommendations") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            SectionTitle1(
+                                "🏋️‍♂️ Tus Rutinas Recomendadas",
+                                //icon = Icons.Filled.FitnessCenter
+                            )
+                            when {
+                                isLoadingRoutines && recommendedRoutines.isEmpty() -> LoadingCard(
+                                    text = "Buscando recomendaciones..."
+                                )
+
+                                routinesError != null && recommendedRoutines.isEmpty() -> ErrorCard(
+                                    message = routinesError ?: "Error al cargar rutinas.",
+                                    onRetry = { userViewModel.refreshRecommendations() }
+                                )
+
+                                recommendedRoutines.isEmpty() && !isLoadingRoutines -> {
+                                    NoDataCard(message = "No hay rutinas recomendadas ahora. ¡Explora y encuentra la tuya!") {
+                                        Button(
+                                            onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            Text("Explorar Todas las Rutinas")
+                                        }
                                     }
                                 }
-                            }
 
-                            else -> {
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 2.dp) // Pequeño padding para sombras de card
-                                ) {
-                                    items(items = recommendedRoutines, key = { it.id }) { rutina ->
-                                        RoutineCard(
-                                            rutina = rutina,
-                                            navController = mainNavController,
-                                            modifier = Modifier.width(280.dp) // Ancho fijo para consistencia en LazyRow
-                                        )
+                                else -> {
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp) // Pequeño padding para sombras de card
+                                    ) {
+                                        items(
+                                            items = recommendedRoutines,
+                                            key = { it.id }) { rutina ->
+                                            RoutineCard(
+                                                rutina = rutina,
+                                                navController = mainNavController,
+                                                modifier = Modifier.width(280.dp) // Ancho fijo para consistencia en LazyRow
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-
                     // --- BOTONES DE ACCIÓN PRINCIPALES ---
-                    item {
-                        ActionButtonsSection(
-                            navController = mainNavController,
-                            userIsPresent = user != null
-                        )
+                    item(key = "actions") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            ActionButtonsSection(
+                                navController = mainNavController,
+                                userIsPresent = user != null
+                            )
+                        }
                     }
                 }
             }
@@ -261,107 +299,85 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WelcomeSection(user: UserProfile) {
-    Column {
-        Text(
-            text = "Hola, ${user.nombre.takeIf { it.isNotBlank() } ?: "Usuario"} 👋",
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        if (user.nivel.isNotBlank()) {
+fun HeaderCard(user: UserProfile, tipDelDia: String, modifier: Modifier = Modifier) {
+    // La card ya tiene su propio color, así que no se transparentará.
+    // El 'modifier' que le pasamos desde el stickyHeader se encargará del fondo.
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer, // Un color ligeramente distinto al fondo
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Saludo principal
             Text(
-                "Nivel: ${user.nivel}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                text = "Hola, ${user.nombre.takeIf { it.isNotBlank() } ?: "Usuario"} 👋",
+                style = MaterialTheme.typography.headlineSmall, // Ajustamos un poco el tamaño
+                fontWeight = FontWeight.Bold
             )
-        }
-        if (user.objetivos.isNotEmpty()) {
+
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                "Tus Objetivos:",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow( // Usando FlowRow de Accompanist para mejor manejo
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), // Para espaciado horizontal (equivalente a mainAxisSpacing en fila)
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                user.objetivos.forEach { objetivo ->
-                    Text(
-                        text = objetivo,
-                        modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+
+            // Separador con el Tip del Día
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Lightbulb,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = tipDelDia,
+                    style = MaterialTheme.typography.bodyMedium, // Ajustamos
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
-
 @Composable
-fun SectionTitle(title: String, icon: ImageVector? = null, modifier: Modifier = Modifier) {
+fun SectionTitle1(
+    title: String,
+    modifier: Modifier = Modifier,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null
+) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.padding(bottom = 8.dp, top = 8.dp) // Añadido padding superior
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp), // Un poco de espacio vertical extra
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null, // El título ya describe la sección
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-        }
+        // Título principal
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f) // Ocupa todo el espacio posible
         )
-    }
-}
 
-@Composable
-fun TipCard(tipDelDia: String) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Filled.Lightbulb,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(24.dp)
-                    .padding(end = 8.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-            )
-            Text(
-                tipDelDia,
-                style = MaterialTheme.typography.bodyLarge
-            )
+        // Botón de acción (si se proporciona)
+        if (actionText != null && onActionClick != null) {
+            TextButton(onClick = onActionClick) {
+                Text(
+                    text = actionText,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineCard(
@@ -369,12 +385,26 @@ fun RoutineCard(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    // 2. Observamos si el componente está siendo presionado
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+// 3. Definimos el estado de la animación (la escala de la tarjeta)
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "scaleAnimation"
+    )
     Card(
         onClick = {
             navController.navigate(Routes.routineDetail(rutina.slug.ifBlank { rutina.id })) // Usar slug si está disponible
         },
+        interactionSource = interactionSource,
         modifier = modifier
-            .height(IntrinsicSize.Min), // Para que la card se ajuste a su contenido si es más alto
+            .height(IntrinsicSize.Min) // Para que la card se ajuste a su contenido si es más alto
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant, // Ligeramente diferente para destacar
@@ -427,10 +457,12 @@ fun RoutineCard(
                     )
                 }
                 // Objetivos (opcional, si quieres mostrarlo en la card)
-                if (rutina.objetivos.isNotEmpty()){
+                if (rutina.objetivos.isNotEmpty()) {
                     DetailRow(
                         icon = Icons.Filled.FitnessCenter, // Cambiar icono
-                        text = "Objetivos: ${rutina.objetivos.take(2).joinToString(", ")}${if(rutina.objetivos.size > 2) "..." else ""}",
+                        text = "Objetivos: ${
+                            rutina.objetivos.take(2).joinToString(", ")
+                        }${if (rutina.objetivos.size > 2) "..." else ""}",
                         maxLines = 1
                     )
                 }
@@ -458,7 +490,6 @@ fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
         )
     }
 }
-
 
 @Composable
 fun WeeklySummaryCard(summary: ResumenSemanal) {
@@ -513,17 +544,31 @@ fun SummaryItem(value: String, label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostController) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "scaleAnimation"
+    )
     Card(
         onClick = { /* Podrías navegar al detalle del progreso si tienes esa pantalla */
             // navController.navigate(Routes.progressDetail(progreso.id))
         },
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier
-            .padding(16.dp)
-            .fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
             Text(
                 text = progreso.nombreRutina,
                 style = MaterialTheme.typography.titleMedium,
@@ -533,11 +578,20 @@ fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostCont
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
-            DetailRow(icon = Icons.Filled.CalendarToday, text = "Fecha: ${UserProfileViewModel.formatFirebaseTimestampForDisplay(progreso.fecha)}")
+            DetailRow(
+                icon = Icons.Filled.CalendarToday,
+                text = "Fecha: ${UserProfileViewModel.formatFirebaseTimestampForDisplay(progreso.fecha)}"
+            )
             Spacer(modifier = Modifier.height(4.dp))
-            DetailRow(icon = Icons.Filled.Timelapse, text = "Duración: ${formatDuration(progreso.tiempoTotalSesionSegundos)}")
+            DetailRow(
+                icon = Icons.Filled.Timelapse,
+                text = "Duración: ${formatDuration(progreso.tiempoTotalSesionSegundos)}"
+            )
             Spacer(modifier = Modifier.height(4.dp))
-            DetailRow(icon = Icons.Filled.FitnessCenter, text = "Rondas: ${progreso.rondasRealizadas}")
+            DetailRow(
+                icon = Icons.Filled.FitnessCenter,
+                text = "Rondas: ${progreso.rondasRealizadas}"
+            )
         }
     }
 }
@@ -553,9 +607,11 @@ fun LastActivityFreeCard(activity: UserActivity, navController: NavHostControlle
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier
-            .padding(16.dp)
-            .fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
             Text(
                 // UserActivity no tiene un "nombre" per se, usa la fecha o un título genérico
                 text = "Actividad Libre",
@@ -564,17 +620,25 @@ fun LastActivityFreeCard(activity: UserActivity, navController: NavHostControlle
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            DetailRow(icon = Icons.Filled.CalendarToday, text = "Fecha: ${UserProfileViewModel.formatDateForDisplay(activity.timestamp)}")
+            DetailRow(
+                icon = Icons.Filled.CalendarToday,
+                text = "Fecha: ${UserProfileViewModel.formatDateForDisplay(activity.timestamp)}"
+            )
             Spacer(modifier = Modifier.height(4.dp))
-            DetailRow(icon = Icons.Filled.Timelapse, text = "Duración: ${formatDuration(activity.elapsedTimeSeconds.toInt())}")
+            DetailRow(
+                icon = Icons.Filled.Timelapse,
+                text = "Duración: ${formatDuration(activity.elapsedTimeSeconds.toInt())}"
+            )
             if (activity.distanceKm > 0) {
                 Spacer(modifier = Modifier.height(4.dp))
-                DetailRow(icon = Icons.AutoMirrored.Filled.TrendingUp, text = "Distancia: ${String.format("%.2f", activity.distanceKm)} km")
+                DetailRow(
+                    icon = Icons.AutoMirrored.Filled.TrendingUp,
+                    text = "Distancia: ${String.format("%.2f", activity.distanceKm)} km"
+                )
             }
         }
     }
 }
-
 
 @Composable
 fun ActionButtonsSection(navController: NavHostController, userIsPresent: Boolean) {
@@ -637,9 +701,11 @@ fun LoadingCard(text: String = "Cargando...") {
             .fillMaxWidth()
             .height(100.dp)
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)) {
+        Box(
+            contentAlignment = Alignment.Center, modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
@@ -647,18 +713,23 @@ fun LoadingCard(text: String = "Cargando...") {
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(12.dp))
-                Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
-
 @Composable
 fun ErrorState(message: String, onRetry: () -> Unit) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp), contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 Icons.Filled.ErrorOutline,
@@ -725,7 +796,6 @@ fun ErrorCard(message: String, onRetry: () -> Unit) {
     }
 }
 
-
 @Composable
 fun NoDataCard(message: String, content: (@Composable () -> Unit)? = null) {
     Card(
@@ -754,7 +824,6 @@ fun NoDataCard(message: String, content: (@Composable () -> Unit)? = null) {
         }
     }
 }
-
 
 fun formatDuration(totalSeconds: Int): String {
     if (totalSeconds < 0) return "0s"

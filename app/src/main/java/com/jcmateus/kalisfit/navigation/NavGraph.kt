@@ -3,11 +3,12 @@ package com.jcmateus.kalisfit.navigation
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -18,7 +19,6 @@ import com.jcmateus.kalisfit.ui.screens.CartScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HistorialScreen
-import com.jcmateus.kalisfit.ui.screens.HomeScreen
 import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
@@ -31,20 +31,46 @@ import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
-import com.jcmateus.kalisfit.ui.screens.StoicismContentScreen
 import com.jcmateus.kalisfit.ui.screens.TipsScreen
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
-import com.jcmateus.kalisfit.viewmodel.UserProfile
-import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsViewModel) {
-    NavHost(navController = navController, startDestination = Routes.SPLASH) {
+    // NavHost se queda, pero ahora le añadimos animaciones por defecto.
+    NavHost(
+        navController = navController,
+        startDestination = Routes.SPLASH,
+        // Animaciones por defecto para TODAS las transiciones en este NavHost
+        enterTransition = {
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(500)
+            )
+        },
+        exitTransition = {
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(500)
+            )
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(500)
+            )
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(500)
+            )
+        }
+    ) {
 
         // --- Rutas de Autenticación y Onboarding ---
-        composable(Routes.SPLASH) {
+        composable(Routes.SPLASH, enterTransition = { null }, exitTransition = { null }) {
             SplashScreen(
                 onUserLoggedIn = {
                     navController.navigate(Routes.MAIN_CONTENT) {
@@ -71,7 +97,13 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
         }
         composable(Routes.REGISTER) {
             RegisterScreen(
-                onRegisterSuccess = { navController.navigate(Routes.ONBOARDING){popUpTo(Routes.LOGIN) { inclusive = false } } },// O popUpTo(Routes.REGISTER) { inclusive = true } si prefieres
+                onRegisterSuccess = {
+                    navController.navigate(Routes.ONBOARDING) {
+                        popUpTo(Routes.LOGIN) {
+                            inclusive = false
+                        }
+                    }
+                },// O popUpTo(Routes.REGISTER) { inclusive = true } si prefieres
                 onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
             )
         }
@@ -91,13 +123,19 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             OnboardingSuccessScreen(
                 onContinue = {
                     navController.navigate(Routes.MAIN_CONTENT) {
-                        popUpTo(Routes.LOGIN) { inclusive = true } // O a MAIN_CONTENT popUpTo ONBOARDING_SUCCESS
+                        popUpTo(Routes.LOGIN) {
+                            inclusive = true
+                        } // O a MAIN_CONTENT popUpTo ONBOARDING_SUCCESS
                     }
                 })
         }
 
         // --- Contenedor Principal con Drawer, BottomNav y TopAppBar ---
-        composable(Routes.MAIN_CONTENT) {
+        composable(
+            Routes.MAIN_CONTENT, // Al entrar al contenido principal, usemos un Fade para que se sienta como un "inicio"
+            enterTransition = { fadeIn(animationSpec = tween(700)) },
+            // Al salir (logout), también un fade out
+            exitTransition = { fadeOut(animationSpec = tween(700)) }) {
             // KalisMainScreen contiene el NavHost interno para las pestañas (Home, Calisthenics, Stoicism, Running)
             KalisMainScreen(mainNavController = navController)
         }
@@ -115,10 +153,12 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             arguments = listOf(navArgument("place") {          //  <-- MODIFICACIÓN IMPORTANTE 2: Declara el argumento
                 type = NavType.StringType
                 nullable = true                                    // Es opcional
-                defaultValue = null                                // Valor por defecto si no se pasa
+                defaultValue =
+                    null                                // Valor por defecto si no se pasa
             })
         ) { backStackEntry ->                                    // backStackEntry contiene los argumentos
-            val placeArgument = backStackEntry.arguments?.getString("place") // <-- MODIFICACIÓN IMPORTANTE 3: Extrae el argumento
+            val placeArgument =
+                backStackEntry.arguments?.getString("place") // <-- MODIFICACIÓN IMPORTANTE 3: Extrae el argumento
 
             RoutineExplorerScreen(
                 navController = navController, // O el NavHostController relevante
@@ -144,7 +184,10 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             RoutineSuccessScreen(onFinish = {
                 // Decide a dónde navegar después del éxito de una rutina.
                 // Podría ser a la lista de rutinas, a home, o popBackStack.
-                navController.popBackStack(Routes.MAIN_CONTENT, inclusive = false) // Ejemplo: Volver a main sin incluir la pantalla de éxito
+                navController.popBackStack(
+                    Routes.MAIN_CONTENT,
+                    inclusive = false
+                ) // Ejemplo: Volver a main sin incluir la pantalla de éxito
                 // o navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) { popUpTo(Routes.MAIN_CONTENT) }
             })
         }
@@ -210,9 +253,12 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
         }
         composable(
             route = Routes.PRODUCT_DETAIL_SCREEN, // Asumiendo que Routes.PRODUCT_DETAIL_SCREEN ahora es algo como "productDetail/{productId}"
-            arguments = listOf(navArgument("productId") { type = NavType.StringType }) // <--- CAMBIO: "productId"
+            arguments = listOf(navArgument("productId") {
+                type = NavType.StringType
+            }) // <--- CAMBIO: "productId"
         ) { backStackEntry ->
-            val productId = backStackEntry.arguments?.getString("productId") // <--- CAMBIO: obtener "productId"
+            val productId =
+                backStackEntry.arguments?.getString("productId") // <--- CAMBIO: obtener "productId"
             if (productId != null) {
                 ProductDetailScreen(
                     navController = navController,

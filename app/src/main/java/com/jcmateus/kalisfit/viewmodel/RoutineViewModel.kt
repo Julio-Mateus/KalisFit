@@ -427,6 +427,12 @@ class RoutineViewModel : ViewModel() {
                     else if (currentUiState.indiceEjercicioActual < rutina.ejercicios.size - 1) {
                         Log.d(TAG, "Todas las series de '${ejercicioActualLoop.nombre}' completadas. Pasando al siguiente ejercicio.")
                         if (ejercicioActualLoop.descansoDespuesEjercicioSegundos > 0) {
+                            // LOGS ADICIONALES
+                            Log.d(TAG, "DEBUG: Ejercicio actual: ${ejercicioActualLoop.nombre}")
+                            Log.d(TAG, "DEBUG: descansoEntreSeriesSegundos REAL: ${ejercicioActualLoop.descansoEntreSeriesSegundos}")
+                            Log.d(TAG, "DEBUG: descansoDespuesEjercicioSegundos REAL: ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}")
+                            Log.d(TAG, "DEBUG: Se usará para tiempoRestante (REST_BETWEEN_EXERCISES): ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}")
+                            // FIN LOGS ADICIONALES
                             Log.d(TAG, "Iniciando REST_BETWEEN_EXERCISES de ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}s.")
                             viewModelScope.launch { _soundEvents.emit("rest_start") }
                             _uiState.update {

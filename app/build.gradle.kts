@@ -15,8 +15,8 @@ android {
         applicationId = "com.jcmateus.kalisfit"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -59,6 +59,8 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    implementation("com.google.firebase:firebase-appcheck-debug:17.1.1")
 
     // Navigation
     implementation(libs.navigation.compose)
@@ -104,4 +106,6 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.4.0")
 
     implementation("com.google.code.gson:gson:2.10.1")
+
+    implementation("com.valentinilk:compose-shimmer:1.2.0")
 }

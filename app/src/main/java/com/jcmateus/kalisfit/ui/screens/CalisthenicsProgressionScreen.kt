@@ -75,6 +75,7 @@ import com.jcmateus.kalisfit.model.UserProgressionState
 @Composable
 fun CalisthenicsProgressionScreen(
     mainNavController: NavHostController,
+    modifier: Modifier = Modifier,
     calisthenicsViewModel: CalisthenicsViewModel = viewModel()
 ) {
     // Observar los estados del ViewModel
@@ -101,72 +102,76 @@ fun CalisthenicsProgressionScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValuesDelScaffoldInterno ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValuesDelScaffoldInterno)
-        ) {
-            when {
-                isLoading && progressions.isEmpty() -> { // Mostrar cargando solo si las progresiones también están vacías inicialmente
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-                progressions.isEmpty() && !isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.calisthenics_no_progressions_found))
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            //.padding(horizontal = 16.dp, vertical = 8.dp),
-                            .padding(horizontal = 16.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(progressions, key = { it.id }) { progression ->
-                            // *** MODIFICACIÓN: Obtener el estado de esta progresión específica ***
-                            val currentProgressionState = userProgressionStatesMap[progression.id]
 
-                            ProgressionCard(
-                                progression = progression,
-                                isExpanded = expandedProgressionId == progression.id,
-                                // *** MODIFICACIÓN: Pasar el estado de la progresión ***
-                                userProgressionState = currentProgressionState,
-                                onHeaderClick = {
-                                    calisthenicsViewModel.onProgressionHeaderClick(progression.id)
-                                },
-                                onLevelClick = { levelId, progId -> // Nombre del parámetro corregido a progId
-                                    Log.d("NavigationDebug", "ProgID: $progId, LevelID: $levelId")
-                                    mainNavController.navigate(Routes.calisthenicsLevelDetail(progId, levelId))
-                                },
-                                viewModel = calisthenicsViewModel // Se sigue pasando por si se necesita para otras cosas
-                                // o si prefieres llamar a los métodos para isUnlocked/isCompleted.
-                                // Lo importante es que ProgressionCard se recomponga
-                                // cuando `userProgressionState` cambie.
-                            )
-                        }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        when {
+            isLoading && progressions.isEmpty() -> { // Mostrar cargando solo si las progresiones también están vacías inicialmente
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            progressions.isEmpty() && !isLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.calisthenics_no_progressions_found))
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        //.padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(progressions, key = { it.id }) { progression ->
+                        // *** MODIFICACIÓN: Obtener el estado de esta progresión específica ***
+                        val currentProgressionState = userProgressionStatesMap[progression.id]
+
+                        ProgressionCard(
+                            progression = progression,
+                            isExpanded = expandedProgressionId == progression.id,
+                            // *** MODIFICACIÓN: Pasar el estado de la progresión ***
+                            userProgressionState = currentProgressionState,
+                            onHeaderClick = {
+                                calisthenicsViewModel.onProgressionHeaderClick(progression.id)
+                            },
+                            onLevelClick = { levelId, progId -> // Nombre del parámetro corregido a progId
+                                Log.d("NavigationDebug", "ProgID: $progId, LevelID: $levelId")
+                                mainNavController.navigate(
+                                    Routes.calisthenicsLevelDetail(
+                                        progId,
+                                        levelId
+                                    )
+                                )
+                            },
+                            viewModel = calisthenicsViewModel // Se sigue pasando por si se necesita para otras cosas
+                            // o si prefieres llamar a los métodos para isUnlocked/isCompleted.
+                            // Lo importante es que ProgressionCard se recomponga
+                            // cuando `userProgressionState` cambie.
+                        )
                     }
-                    // Mostrar un indicador de carga más sutil si ya hay datos pero se está actualizando algo más
-                    if (isLoading && progressions.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                                .padding(top = 8.dp)
-                        ) {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        }
+                }
+                // Mostrar un indicador de carga más sutil si ya hay datos pero se está actualizando algo más
+                if (isLoading && progressions.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                    ) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
         }
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -274,7 +279,12 @@ fun ProgressionCard(
 
                     Spacer(Modifier.width(16.dp))
 
-                    Column(modifier = Modifier.weight(1f, fill = false)) { // No llenar excesivamente si el texto es corto
+                    Column(
+                        modifier = Modifier.weight(
+                            1f,
+                            fill = false
+                        )
+                    ) { // No llenar excesivamente si el texto es corto
                         Text(
                             text = progression.name,
                             style = MaterialTheme.typography.titleLarge,
@@ -295,15 +305,23 @@ fun ProgressionCard(
                 // Icono para expandir/colapsar
                 Icon(
                     imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (isExpanded) stringResource(R.string.calisthenics_collapse) else stringResource(R.string.calisthenics_expand),
+                    contentDescription = if (isExpanded) stringResource(R.string.calisthenics_collapse) else stringResource(
+                        R.string.calisthenics_expand
+                    ),
                     modifier = Modifier.size(30.dp)
                 )
             }
 
             AnimatedVisibility(visible = isExpanded) {
-                Log.d("ProgressionCard", "Progression ${progression.name} expanded. Levels: ${progression.levels.size}. UserState: $userProgressionState. IsEntirelyCompleted: $isEntireProgressionCompleted")
+                Log.d(
+                    "ProgressionCard",
+                    "Progression ${progression.name} expanded. Levels: ${progression.levels.size}. UserState: $userProgressionState. IsEntirelyCompleted: $isEntireProgressionCompleted"
+                )
                 if (progression.levels.isEmpty()) {
-                    Log.w("ProgressionCard", "Warning: Progression ${progression.name} has no levels to display.")
+                    Log.w(
+                        "ProgressionCard",
+                        "Warning: Progression ${progression.name} has no levels to display."
+                    )
                     Text(
                         text = stringResource(R.string.calisthenics_no_levels_in_progression),
                         modifier = Modifier
@@ -335,7 +353,10 @@ fun ProgressionCard(
                                     if (isUnlocked) {
                                         onLevelClick(level.id, progression.id)
                                     } else {
-                                        Log.d("ProgressionCard", "Level ${level.name} is locked. Click ignored.")
+                                        Log.d(
+                                            "ProgressionCard",
+                                            "Level ${level.name} is locked. Click ignored."
+                                        )
                                         // Considerar mostrar un Snackbar o Toast aquí
                                     }
                                 }

@@ -2,6 +2,10 @@ package com.jcmateus.kalisfit.ui.screens
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -389,7 +393,10 @@ fun KalisMainScreen(mainNavController: NavHostController) {
             NavHost(
                 navController = bottomNavController,
                 startDestination = BottomNavItem.Home.route,
-                modifier = Modifier.padding(contentPadding) // Aplicar el padding del Scaffold aquí
+                modifier = Modifier.padding(contentPadding), // Aplicar el padding del Scaffold aquí
+                // Animaciones de FADE para la navegación del BottomNav
+                enterTransition = { fadeIn(animationSpec = tween(300)) },
+                exitTransition = { fadeOut(animationSpec = tween(300)) }
             ) {
                 composable(BottomNavItem.Home.route) {
                     HomeScreen(
@@ -398,7 +405,9 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     )
                 }
                 composable(BottomNavItem.Calisthenics.route) {
-                    CalisthenicsProgressionScreen(mainNavController = mainNavController)
+                    CalisthenicsProgressionScreen(
+                        mainNavController = mainNavController
+                    )
                 }
                 composable(BottomNavItem.Stoicism.route) {
                     StoicismContentScreen(mainNavController = mainNavController)
