@@ -9,7 +9,12 @@ import android.widget.Toast
 //import androidx.activity.result.launch
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -53,12 +58,19 @@ import com.jcmateus.kalisfit.model.ProgresoRutina
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -79,12 +91,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 //import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -131,9 +146,7 @@ fun formatSecondsToHMS(totalSeconds: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d:%02d", hours, minutes, seconds)
 }
-
 // --- Funciones para compartir Actividad Libre ---
-
 fun buildActivityShareText(activity: UserActivity): String {
     val dateString = activity.timestamp?.let { activityDateFormatter.format(it) } ?: "Fecha desconocida"
     val activityType = if (activity.distanceKm > 2) "Carrera" else "Caminata"
@@ -151,7 +164,6 @@ fun buildActivityShareText(activity: UserActivity): String {
         #KalisFit #ActividadFisica #$activityType #Fitness
     """.trimIndent()
 }
-
 @Composable
 fun UserActivityVisualCard(
     activity: UserActivity,
@@ -350,7 +362,6 @@ fun UserActivityVisualCard(
         }
     }
 }
-
 // Actualiza InfoRowVisual para aceptar un color y así asegurar la consistencia del tema
 @Composable
 fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido textColor
@@ -372,13 +383,10 @@ fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido 
     }
     Spacer(modifier = Modifier.height(6.dp)) // Un poco más de espacio
 }
-
 // Formateador de fecha para UserActivity
 @SuppressLint("SimpleDateFormat")
 private val activityDateFormatter = SimpleDateFormat("EEE, d MMM yyyy HH:mm",
     Locale.getDefault())
-
-
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -469,7 +477,6 @@ fun HistorialScreen(navController: NavHostController) {
         }
     }
 }
-
 // Composable para el contenido de la pestaña "Rutinas"
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -543,95 +550,143 @@ fun HistorialRutinasContent(
         }
     }
 }
-
 // Composable para la Card de Resumen Semanal (Extraído para claridad)
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ResumenSemanalCard(
     resumen: ResumenSemanal,
-    historialRutinas: List<ProgresoRutina>, // Para los gráficos
+    historialRutinas: List<ProgresoRutina>,
     context: Context
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    var selectedChartTab by remember { mutableStateOf(0) } // Estado para las sub-pestañas del gráfico
+    var selectedChartTab by remember { mutableIntStateOf(0) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .animateContentSize(), // Para animar el cambio de tamaño al expandir/colapsar
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        onClick = { isExpanded = !isExpanded }
+        // No necesitamos onClick en toda la Card si el icono de expandir es claro
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("📊 Resumen semanal de Rutinas", style = MaterialTheme.typography.titleLarge)
-            Icon(
-                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = if (isExpanded) "Colapsar" else "Expandir"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("🏋️ Rutinas completadas: ${resumen.rutinas}", style = MaterialTheme.typography.bodyLarge)
-            Text("⏱ Tiempo total entrenado: ${formatSecondsToMinutesSeconds(resumen.tiempoTotal)}", style = MaterialTheme.typography.bodyLarge)
-            // Contenido expandible
-            AnimatedVisibility(visible = isExpanded) {
-                Column {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("🤸 Total ejercicios realizados: ${resumen.totalEjercicios}", style = MaterialTheme.typography.bodyLarge)
-                    if (resumen.ejerciciosPorTiempo > 0) {
-                        Text("⏱️ Ejercicios por tiempo: ${resumen.ejerciciosPorTiempo}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (resumen.ejerciciosPorRepeticiones > 0) {
-                        Text("🔄 Ejercicios por repeticiones: ${resumen.ejerciciosPorRepeticiones}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (resumen.objetivosRecurrentes.isNotEmpty()) {
-                        Text(
-                            "🎯 Objetivos más frecuentes: ${resumen.objetivosRecurrentes.joinToString(", ")}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-            // Gráficos (si tienes historial para ellos)
-            if (historialRutinas.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                TabRow(selectedTabIndex = selectedChartTab) {
-                    Tab(selected = selectedChartTab == 0, onClick = { selectedChartTab = 0 }) {
-                        Text("Rutinas/día", modifier = Modifier.padding(vertical = 12.dp))
-                    }
-                    Tab(selected = selectedChartTab == 1, onClick = { selectedChartTab = 1 }) {
-                        Text("Tiempo/día", modifier = Modifier.padding(vertical = 12.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    tonalElevation = 2.dp,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    when (selectedChartTab) {
-                        0 -> RutinasBarChart(historialRutinas, modifier = Modifier
-                            .height(150.dp)
-                            .padding(8.dp))
-                        1 -> TiempoBarChart(historialRutinas, modifier = Modifier
-                            .height(150.dp)
-                            .padding(8.dp))
-                    }
-                }
-            } else {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("No hay datos de historial de rutinas para mostrar gráficos.", textAlign = TextAlign.Center, modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp))
-            }
-
-
-            Spacer(modifier = Modifier.height(16.dp))
-            // Botones de compartir (como los tenías)
+            // --- CABECERA CON BOTÓN DE EXPANSIÓN ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Button(onClick = {
-                    val mensaje = buildString { /* ... tu lógica de mensaje ... */ }
+                Text(
+                    "📊 Resumen Semanal de Rutinas", // Podrías añadir fechas aquí si las tienes
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold // Un poco más de énfasis
+                )
+                IconButton(onClick = { isExpanded = !isExpanded }) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (isExpanded) "Colapsar" else "Expandir",
+                        tint = MaterialTheme.colorScheme.primary // Hacerlo más notorio
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp)) // Aumentar un poco el espacio
+            // --- MÉTRICAS PRINCIPALES ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround // Distribuye el espacio
+            ) {
+                MetricItem(
+                    icon = Icons.Filled.FitnessCenter,
+                    label = "Rutinas",
+                    value = resumen.rutinas.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+                MetricItem(
+                    icon = Icons.Filled.Timer, // Un icono más específico para tiempo
+                    label = "Tiempo Total",
+                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()), // Usar HMS para consistencia
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- CONTENIDO EXPANDIBLE ---
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300))
+            ) {
+                Column {
+                    // Detalles Adicionales
+                    Text("Detalles Adicionales:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                    InfoRowResumen("Total ejercicios realizados:", resumen.totalEjercicios.toString())
+                    if (resumen.ejerciciosPorTiempo > 0) {
+                        InfoRowResumen("Ejercicios por tiempo:", resumen.ejerciciosPorTiempo.toString())
+                    }
+                    if (resumen.ejerciciosPorRepeticiones > 0) {
+                        InfoRowResumen("Ejercicios por repeticiones:", resumen.ejerciciosPorRepeticiones.toString())
+                    }
+                    if (resumen.objetivosRecurrentes.isNotEmpty()) {
+                        InfoRowResumen(
+                            "Objetivos más frecuentes:",
+                            resumen.objetivosRecurrentes.joinToString(", ")
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Gráficos (sin cambios en su lógica interna por ahora)
+                    if (historialRutinas.isNotEmpty()) {
+                        Text("Actividad Diaria:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                        TabRow(selectedTabIndex = selectedChartTab) {
+                            Tab(selected = selectedChartTab == 0, onClick = { selectedChartTab = 0 }) {
+                                Text("Rutinas/día", modifier = Modifier.padding(vertical = 12.dp))
+                            }
+                            Tab(selected = selectedChartTab == 1, onClick = { selectedChartTab = 1 }) {
+                                Text("Tiempo/día", modifier = Modifier.padding(vertical = 12.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            tonalElevation = 2.dp,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            when (selectedChartTab) {
+                                0 -> RutinasBarChart(historialRutinas, modifier = Modifier
+                                    .height(150.dp)
+                                    .padding(8.dp))
+                                1 -> TiempoBarChart(historialRutinas, modifier = Modifier
+                                    .height(150.dp)
+                                    .padding(8.dp))
+                            }
+                        }
+                    } else {
+                        // Podríamos mejorar este mensaje
+                        Box(modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                "No hay suficientes datos para mostrar gráficos aún.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+            // --- BOTONES DE COMPARTIR ---
+            // Los mantendremos como están por ahora, enfocándonos primero en el contenido de la tarjeta
+            // pero podríamos estilizarlos más adelante.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp), // Añadir padding si está colapsado
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End) // Un poco más de espacio y alineados al final
+            ) {
+                OutlinedButton(onClick = {
+                    val mensaje = buildSemanalShareText(resumen) // Necesitaremos crear esta función
                     val sendIntent = Intent().apply {
                         action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, mensaje)
@@ -641,12 +696,13 @@ fun ResumenSemanalCard(
                     context.startActivity(shareIntent)
                 }) {
                     Icon(Icons.Default.Share, contentDescription = "Compartir Resumen")
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
                     Text("Texto")
                 }
 
                 Button(onClick = {
-                    captureComposableAsImage(context, { ResumenVisualCard(resumen = resumen) }) { file ->
+                    // AÚN NO HEMOS CREADO/MODIFICADO ResumenVisualCard, así que esto es un placeholder
+                    captureComposableAsImage(context, { ResumenSemanalVisualCard(resumen = resumen) }) { file ->
                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "image/png"
@@ -656,77 +712,581 @@ fun ResumenSemanalCard(
                         context.startActivity(Intent.createChooser(intent, "Compartir imagen del resumen"))
                     }
                 }) {
-                    Icon(Icons.Default.Share, contentDescription = "Compartir como Imagen")
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen") // Usar Icono de Imagen
+                    Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
                     Text("Imagen")
                 }
             }
         }
     }
 }
-
-// Composable para cada item en la lista de ProgresoRutina
+// Nuevo Composable para las métricas principales
 @Composable
-fun ProgresoRutinaCard(progreso: ProgresoRutina) {
-    val cardDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+fun MetricItem(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(horizontal = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                // Formatear el Timestamp a String antes de usarlo
-                "📅 ${cardDateFormat.format(progreso.fecha.toDate())} - ${progreso.nombreRutina}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            // Corregido: usar 'nivelUsuarioAlCompletar'
-            Text("Nivel: ${progreso.nivelUsuarioAlCompletar}", style = MaterialTheme.typography.bodyLarge)
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(36.dp) // Un poco más grandes
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+@Composable
+fun ResumenSemanalVisualCard(
+    resumen: ResumenSemanal,
+    // Puedes añadir más parámetros si necesitas, como el nombre de usuario, fechas específicas del resumen, etc.
+) {
+    // --- COLORES DEFINIDOS (puedes ajustarlos o tomarlos de un tema si la captura lo permite bien) ---
+    // Estos son los que sugerí antes para consistencia con UserActivityVisualCard
+    val cardBackgroundColor = Color(0xFFFFF0C9) // Un color crema/amarillo pálido
+    val onCardColor = Color(0xFF1C1C1E)      // Texto principal (casi negro)
+    val primaryAppColor = Color(0xFFC2850B)  // Tu color primario/acento (mostaza oscuro)
+    val secondaryColorIcons = Color(0xFF1976D2) // Un color secundario para iconos o detalles (azul)
+    val tertiaryColorHashtag = Color(0xFF388E3C) // Un color para hashtags (verde)
 
-            // Corregido: usar 'rondasRealizadas'.
-            // No tienes 'rondasTotales' en el modelo, así que solo mostramos las realizadas.
-            if (progreso.rondasRealizadas > 0) {
-                Text(
-                    "🔄 Rondas realizadas: ${progreso.rondasRealizadas}",
-                    style = MaterialTheme.typography.bodyMedium
+    Card(
+        modifier = Modifier
+            .width(380.dp) // Ancho fijo para la imagen generada, similar a UserActivityVisualCard
+            .wrapContentHeight()
+            .background(cardBackgroundColor), // El fondo de la Card en sí
+        colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para la captura limpia
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(20.dp) // Un padding generoso para que no se vea apretado
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // --- 1. Encabezado con Logo y Título ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                // horizontalArrangement = Arrangement.Center // Opcional, si quieres centrar todo el bloque
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo2), // ¡TU LOGO!
+                    contentDescription = "Logo KalisFit",
+                    modifier = Modifier
+                        .size(52.dp) // Un poco más grande para la imagen
+                        .padding(end = 12.dp)
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start // Alinea el texto a la izquierda
+                ) {
+                    Text(
+                        "Resumen Semanal",
+                        style = MaterialTheme.typography.headlineSmall.copy(color = primaryAppColor),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    // Opcional: Si tienes las fechas exactas del resumen, ponlas aquí
+                    // Text(
+                    //     "Del [Fecha Inicio] al [Fecha Fin]",
+                    //     style = MaterialTheme.typography.bodySmall.copy(color = onCardColor.copy(alpha = 0.7f))
+                    // )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- 2. Métricas Principales (Visuales y Claras) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                VisualMetricItem( // Usaremos un Composable específico para esto
+                    icon = Icons.Filled.FitnessCenter,
+                    value = resumen.rutinas.toString(),
+                    label = "Rutinas",
+                    iconColor = secondaryColorIcons,
+                    textColor = onCardColor
+                )
+                VisualMetricItem(
+                    icon = Icons.Filled.Timer,
+                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()), // Usas tu función de formato
+                    label = "Tiempo Total",
+                    iconColor = secondaryColorIcons,
+                    textColor = onCardColor
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            // Métrica adicional si es relevante y hay espacio
+            if (resumen.totalEjercicios > 0) {
+                VisualMetricItem(
+                    icon = Icons.Filled.ListAlt,
+                    value = resumen.totalEjercicios.toString(),
+                    label = "Ejercicios Totales",
+                    iconColor = secondaryColorIcons,
+                    textColor = onCardColor,
+                    modifier = Modifier.fillMaxWidth() // Para que ocupe el ancho si es una sola métrica aquí
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
-            // Corregido: usar 'objetivosUsuarioAlCompletar'
-            if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) {
+
+            // --- 3. Logro Destacado o Foco Principal ---
+            if (resumen.objetivosRecurrentes.isNotEmpty()) {
                 Text(
-                    "Objetivos: ${progreso.objetivosUsuarioAlCompletar.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodyMedium
+                    "🎯 Enfocado en:",
+                    style = MaterialTheme.typography.titleMedium.copy(color = onCardColor),
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    resumen.objetivosRecurrentes.take(2).joinToString(" • "), // Mostrar los 2 más importantes
+                    style = MaterialTheme.typography.titleSmall.copy(color = primaryAppColor),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // --- 4. Frase Motivacional / Cierre ---
+            Text(
+                "¡Excelente progreso esta semana!", // O algo como "¡Sigue así!"
+                style = MaterialTheme.typography.titleMedium.copy(color = primaryAppColor),
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- 5. Pie de Página con Hashtags y Nombre de la App ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Compartido desde KalisFit",
+                    style = MaterialTheme.typography.labelMedium.copy(color = onCardColor.copy(alpha = 0.7f)),
+                )
+                Text(
+                    "#KalisFit #ProgresoSemanal #Fitness", // Hashtags relevantes
+                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColorHashtag, fontWeight = FontWeight.Medium),
+                    textAlign = TextAlign.End
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Corregido: usar 'ejerciciosCompletados' y sus campos internos
-            Text("Ejercicios (${progreso.ejerciciosCompletados.size}):", style = MaterialTheme.typography.labelLarge)
-            progreso.ejerciciosCompletados.take(5).forEach { ejercicio ->
-                // Corregido: usar 'repeticionesPorSerie' y 'duracionPorSerieSegundos' de EjercicioProgreso
-                val detalleEjercicio = if (ejercicio.repeticionesPorSerie > 0) {
-                    "${ejercicio.repeticionesPorSerie} reps"
-                } else if (ejercicio.duracionPorSerieSegundos > 0) {
-                    "${ejercicio.duracionPorSerieSegundos}s"
-                } else { "N/A" }
-                // 'ejercicio.nombre' ya estaba bien.
-                Text("• ${ejercicio.nombre}: $detalleEjercicio (${ejercicio.seriesRealizadas} series)", style = MaterialTheme.typography.bodySmall)
-            }
-            if (progreso.ejerciciosCompletados.size > 5) {
-                Text("... y ${progreso.ejerciciosCompletados.size - 5} más.", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Corregido: usar 'tiempoTotalSesionSegundos'
-            Text(
-                "⏱️ Tiempo total: ${formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos)}",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
 
+@Composable
+fun VisualMetricItem( // Composable auxiliar para las métricas visuales
+    icon: ImageVector,
+    value: String,
+    label: String,
+    iconColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(horizontal = 8.dp) // Espacio entre items si están en una Row
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconColor,
+            modifier = Modifier.size(48.dp) // Iconos grandes y claros
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium.copy(color = textColor),
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(color = textColor.copy(alpha = 0.85f))
+        )
+    }
+}
+// Nuevo Composable para las filas de información en el resumen (similar a tu InfoRow pero con estilo de resumen)
+@Composable
+fun InfoRowResumen(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(0.5f) // Dar más espacio a la etiqueta si es necesario
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(0.5f)
+        )
+    }
+}
+// Composable para cada item en la lista de ProgresoRutina
+@Composable
+fun ProgresoRutinaCard(progreso: ProgresoRutina, modifier: Modifier = Modifier) { // Añadido modifier
+    val cardDateFormat = remember { SimpleDateFormat("EEE, dd MMM yyyy", Locale.getDefault()) } // EEE para día semana
 
+    Card(
+        modifier = modifier.fillMaxWidth(), // Usar el modifier pasado
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp), // Un poco más de elevación
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant) // Color sutil
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // --- Encabezado: Fecha y Nombre de la Rutina ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.EventNote, // Icono de calendario/nota
+                    contentDescription = "Fecha",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = cardDateFormat.format(progreso.fecha.toDate()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = progreso.nombreRutina,
+                style = MaterialTheme.typography.titleLarge, // Más grande para el nombre de la rutina
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- Detalles Principales de la Sesión ---
+            InfoRowProgreso(
+                icon = Icons.Filled.VerifiedUser, // Icono para Nivel
+                label = "Nivel:",
+                value = progreso.nivelUsuarioAlCompletar
+            )
+            if (progreso.rondasRealizadas > 0) {
+                InfoRowProgreso(
+                    icon = Icons.Filled.Autorenew, // Icono para Rondas
+                    label = "Rondas:",
+                    value = "${progreso.rondasRealizadas} completadas"
+                )
+            }
+            if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) {
+                InfoRowProgreso(
+                    icon = Icons.Filled.Flag, // Icono para Objetivos
+                    label = "Objetivos:",
+                    value = progreso.objetivosUsuarioAlCompletar.joinToString(", ")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- Lista de Ejercicios (Limitada) ---
+            if (progreso.ejerciciosCompletados.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.FitnessCenter,
+                        contentDescription = "Ejercicios",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Ejercicios Realizados (${progreso.ejerciciosCompletados.size}):",
+                        style = MaterialTheme.typography.titleSmall, // Un poco más pequeño que el nombre de la rutina
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Column(modifier = Modifier.padding(start = 8.dp)) { // Indentación para los ejercicios
+                    progreso.ejerciciosCompletados.take(4).forEach { ejercicio -> // Mostrar hasta 4 para dejar espacio para "ver más"
+                        val detalleEjercicio = if (ejercicio.repeticionesPorSerie > 0) {
+                            "${ejercicio.repeticionesPorSerie} reps"
+                        } else if (ejercicio.duracionPorSerieSegundos > 0) {
+                            "${ejercicio.duracionPorSerieSegundos}s"
+                        } else {
+                            "N/A"
+                        }
+                        Text(
+                            " • ${ejercicio.nombre}: $detalleEjercicio (${ejercicio.seriesRealizadas} series)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            lineHeight = 18.sp // Mejorar legibilidad si los nombres son largos
+                        )
+                    }
+                    if (progreso.ejerciciosCompletados.size > 4) {
+                        Text(
+                            "... y ${progreso.ejerciciosCompletados.size - 4} más.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+
+            // --- Tiempo Total ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End // Alineado a la derecha
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Timer,
+                    contentDescription = "Tiempo total",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                val context = LocalContext.current // Necesitarás el contexto
+                OutlinedButton(onClick = {
+                    val mensaje = buildProgresoRutinaShareText(progreso) // Crea esta función
+                    val sendIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(Intent.EXTRA_TEXT, mensaje)
+                        type = "text/plain"
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Compartir progreso de rutina"))
+                }) {
+                    Icon(Icons.Default.Share, contentDescription = "Compartir Texto")
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Texto")
+                }
+
+                Button(onClick = {
+                    captureComposableAsImage(context, { ProgresoRutinaVisualCard(progreso = progreso) }) { file ->
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Compartir imagen de rutina"))
+                    }
+                }) {
+                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen")
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Imagen")
+                }
+            }
+        }
+    }
+}
+// Composable auxiliar para las filas de información dentro de ProgresoRutinaCard
+@Composable
+fun InfoRowProgreso(icon: ImageVector, label: String, value: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.35f) // Ajustar peso para la etiqueta
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(0.65f) // Ajustar peso para el valor
+        )
+    }
+}
+@Composable
+fun ProgresoRutinaVisualCard(
+    progreso: ProgresoRutina,
+    // Podrías pasar el nombre del usuario si lo tienes
+) {
+    // --- COLORES DEFINIDOS (consistentes con las otras VisualCards) ---
+    val cardBackgroundColor = Color(0xFFFFF0C9)
+    val onCardColor = Color(0xFF1C1C1E)
+    val primaryAppColor = Color(0xFFC2850B)
+    val secondaryColorDetails = Color(0xFF1976D2) // Azul para detalles o iconos secundarios
+    val tertiaryColorHashtag = Color(0xFF388E3C)
+
+    val visualCardDateFormat = remember { SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()) }
+
+    Card(
+        modifier = Modifier
+            .width(380.dp)
+            .wrapContentHeight()
+            .background(cardBackgroundColor),
+        colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // --- 1. Encabezado con Logo y Título de Rutina ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo2), // TU LOGO
+                    contentDescription = "Logo KalisFit",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .padding(end = 12.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        progreso.nombreRutina, // Nombre de la rutina como título principal
+                        style = MaterialTheme.typography.titleLarge.copy(color = primaryAppColor),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        visualCardDateFormat.format(progreso.fecha.toDate()),
+                        style = MaterialTheme.typography.bodyMedium.copy(color = onCardColor.copy(alpha = 0.7f))
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- 2. Métricas Clave de la Sesión ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                VisualMetricItem(
+                    icon = Icons.Filled.Timer,
+                    value = formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos),
+                    label = "Duración",
+                    iconColor = secondaryColorDetails,
+                    textColor = onCardColor
+                )
+                VisualMetricItem(
+                    icon = Icons.Filled.FormatListNumbered, // Icono para contar ejercicios
+                    value = progreso.ejerciciosCompletados.size.toString(),
+                    label = "Ejercicios",
+                    iconColor = secondaryColorDetails,
+                    textColor = onCardColor
+                )
+                if (progreso.rondasRealizadas > 0) {
+                    VisualMetricItem(
+                        icon = Icons.Filled.Autorenew,
+                        value = progreso.rondasRealizadas.toString(),
+                        label = "Rondas",
+                        iconColor = secondaryColorDetails,
+                        textColor = onCardColor
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- 3. Foco en Ejercicios (Resumido) ---
+            if (progreso.ejerciciosCompletados.isNotEmpty()) {
+                Text(
+                    "💪 Enfoque Principal:",
+                    style = MaterialTheme.typography.titleMedium.copy(color = onCardColor),
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp), // Un poco de padding
+                    horizontalAlignment = Alignment.CenterHorizontally // Centrar los nombres de ejercicios
+                ) {
+                    // Mostrar los nombres de los primeros 3-4 ejercicios
+                    progreso.ejerciciosCompletados.take(3).forEach { ejercicio ->
+                        Text(
+                            text = "• ${ejercicio.nombre}",
+                            style = MaterialTheme.typography.bodyLarge.copy(color = primaryAppColor),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (progreso.ejerciciosCompletados.size > 3) {
+                        Text(
+                            "...¡y más enfoque!",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = onCardColor.copy(alpha = 0.8f)),
+                            fontStyle = FontStyle.Italic,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+            // --- 4. Frase de Logro/Cierre ---
+            Text(
+                "¡Rutina Completada! 🔥",
+                style = MaterialTheme.typography.titleMedium.copy(color = primaryAppColor),
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            // Opcional: Podrías añadir algo sobre los objetivos si quieres
+             if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) {
+                Text(
+                    "Objetivos alcanzados: ${progreso.objetivosUsuarioAlCompletar.joinToString()}",
+                    style = MaterialTheme.typography.bodySmall.copy(color = onCardColor.copy(alpha = 0.7f)),
+                    textAlign = TextAlign.Center
+                )
+             }
+            Spacer(modifier = Modifier.height(24.dp))
+            // --- 5. Pie de Página ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Compartido desde KalisFit",
+                    style = MaterialTheme.typography.labelMedium.copy(color = onCardColor.copy(alpha = 0.7f)),
+                )
+                Text(
+                    "#KalisFit #${progreso.nombreRutina.replace(" ", "")} #Entrenamiento", // Hashtags
+                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColorHashtag, fontWeight = FontWeight.Medium),
+                    textAlign = TextAlign.End
+                )
+            }
+        }
+    }
+}
 // NUEVO: Composable para el contenido de la pestaña "Actividades Libres" (Carreras/Caminatas)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -872,8 +1432,6 @@ fun HistorialActividadesLibresContent(
         }
     }
 }
-
-
 // NUEVO: Composable para mostrar cada UserActivity (carrera/caminata)
 @Composable
 fun UserActivityCard(activity: UserActivity, context: Context) {
@@ -1005,8 +1563,6 @@ fun InfoRow(label: String, value: String) {
     }
     Spacer(modifier = Modifier.height(4.dp))
 }
-
-
 // Composable genérico para estados vacíos (como lo tenías, pero más reutilizable)
 @Composable
 fun EmptyStateHistorial(
@@ -1054,4 +1610,60 @@ fun EmptyStateHistorial(
             }
         }
     }
+}
+// Función para generar el texto del resumen semanal (necesitas crearla)
+fun buildSemanalShareText(resumen: ResumenSemanal): String {
+    // Similar a buildActivityShareText, pero para el resumen
+    return """
+        🌟 ¡Mi Resumen Semanal con KalisFit! 🌟
+        -----------------------------------
+        🏋️ Rutinas Completadas: ${resumen.rutinas}
+        ⏱️ Tiempo Total Entrenado: ${formatSecondsToHMS(resumen.tiempoTotal.toLong())}
+        🤸 Total Ejercicios: ${resumen.totalEjercicios}
+        ${if (resumen.objetivosRecurrentes.isNotEmpty()) "🎯 Objetivos: ${resumen.objetivosRecurrentes.joinToString(", ")}\n" else ""}
+        -----------------------------------
+        ¡Una semana más fuerte! #KalisFit #Fitness #Progreso
+    """.trimIndent()
+}
+fun buildProgresoRutinaShareText(progreso: ProgresoRutina): String {
+    // Formateador para la fecha, puedes ajustarlo a tu preferencia
+    val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale.getDefault())
+    val fechaFormateada = dateFormat.format(progreso.fecha.toDate())
+
+    // Resumen de los primeros ejercicios (por ejemplo, los 3 primeros)
+    val ejerciciosDestacados = progreso.ejerciciosCompletados
+        .take(3) // Tomar los primeros 3
+        .joinToString(separator = "\n") { ejercicio ->
+            val detalle = if (ejercicio.repeticionesPorSerie > 0) {
+                "${ejercicio.repeticionesPorSerie} reps"
+            } else if (ejercicio.duracionPorSerieSegundos > 0) {
+                "${ejercicio.duracionPorSerieSegundos}s"
+            } else {
+                "N/A"
+            }
+            "  • ${ejercicio.nombre} ($detalle x ${ejercicio.seriesRealizadas} series)"
+        }
+
+    val masEjerciciosTexto = if (progreso.ejerciciosCompletados.size > 3) {
+        "\n  ...¡y ${progreso.ejerciciosCompletados.size - 3} más!"
+    } else {
+        ""
+    }
+
+    // Construcción del mensaje
+    // Puedes personalizar los emojis y el texto como quieras
+    return """
+    ¡💪 Rutina '${progreso.nombreRutina}' completada con KalisFit! 🎉
+    -----------------------------------
+    📅 Fecha: $fechaFormateada
+    ⏱️ Duración Total: ${formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos)}
+    ${if (progreso.rondasRealizadas > 0) "🔄 Rondas Realizadas: ${progreso.rondasRealizadas}\n" else ""}
+    🔢 Total Ejercicios: ${progreso.ejerciciosCompletados.size}
+    ${if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) "🎯 Objetivos: ${progreso.objetivosUsuarioAlCompletar.joinToString(", ")}\n" else ""}
+    -----------------------------------
+    🏋️‍♀️ Ejercicios Destacados:
+    $ejerciciosDestacados$masEjerciciosTexto
+    -----------------------------------
+    ¡A seguir dándolo todo! #KalisFit #EntrenamientoCompletado #${progreso.nombreRutina.replace(" ", "")} #FitnessMotivation
+    """.trimIndent()
 }

@@ -7,7 +7,7 @@ pluginManagement {
     }
 }
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS) // Más permisivo
     repositories {
         google()
         mavenCentral()
@@ -15,6 +15,7 @@ dependencyResolutionManagement {
         maven("https://jitpack.io")
     }
 }
+
 
 rootProject.name = "KalisFit"
 include(":app")
