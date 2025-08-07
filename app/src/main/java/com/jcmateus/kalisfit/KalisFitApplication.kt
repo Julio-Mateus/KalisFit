@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.graphics.Color
 import android.os.Build
 import android.content.Context
-import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
@@ -36,13 +35,11 @@ class KalisFitApplication : Application() {
     override fun onCreate() {
 
         super.onCreate()
-        Log.d("AppCheckDebug", "KalisFitApplication onCreate - BuildConfig.DEBUG: ${BuildConfig.DEBUG}") // Log para verificar BuildConfig
+
         if (BuildConfig.DEBUG) {
-            Log.d("AppCheckDebug", "Attempting to install DebugAppCheckProviderFactory")
             FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
-            Log.d("AppCheckDebug", "DebugAppCheckProviderFactory installed (or attempted)")
         } else {
             FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                 PlayIntegrityAppCheckProviderFactory.getInstance()
