@@ -82,32 +82,7 @@ class HistoryViewModel : ViewModel() {
                                 // Asegúrate de que todos los campos de EjercicioProgresoFirestore se llenen aquí
                             )
                         }
-
-                        // Convertir la fecha String del modelo a Timestamp para Firestore
-                        // ESTA ES LA PARTE COMPLICADA Y REQUIERE QUE EL STRING DE FECHA SEA PARSEABLE
-                        // Si tu `progresoModel.fecha` es un String como "yyyy-MM-dd HH:mm:ss" o similar,
-                        // necesitarás parsearlo a un Date y luego a Timestamp.
-                        // Si `obtenerHistorialProgreso` ya te diera un Timestamp o un Long (milis), sería más fácil.
-                        // Por ahora, asumiré que tienes una forma de convertir ese String a Timestamp.
-                        // SI NO TIENES UNA FORMA ESTANDARIZADA, ESTO PUEDE FALLAR O SER IMPRECISO.
-                        // Ejemplo muy básico (y potencialmente propenso a errores si el formato no coincide):
-                        val fechaTimestamp: Timestamp = try {
-                            // Si progresoModel.fecha es milisegundos desde epoch como String:
-                            // Timestamp(Date(progresoModel.fecha.toLong()))
-                            // Si progresoModel.fecha es un formato de fecha específico, necesitarás SimpleDateFormat:
-                            // val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // Ajusta el formato
-                            // Timestamp(sdf.parse(progresoModel.fecha))
-                            // COMO ÚLTIMO RECURSO y si los datos en `progresoModel.fecha` son basura para convertir,
-                            // podrías usar Timestamp.now(), pero perderías la fecha original.
-                            // ESTO ES UN PLACEHOLDER - NECESITAS UNA CONVERSIÓN ROBUSTA AQUÍ
-                            Timestamp.now() // ¡¡¡REEMPLAZA ESTO CON UNA CONVERSIÓN REAL!!!
-                            // Si no puedes convertirlo, tendrás que reconsiderar cómo manejas las fechas.
-                        } catch (e: Exception) {
-                            Log.e("HistoryViewModel", "Error convirtiendo fecha String a Timestamp: ${progresoModel.fecha}", e)
-                            Timestamp.now() // Fallback, no ideal
-                        }
-
-
+                        val fechaTimestamp: Timestamp = progresoModel.fecha
                         ProgresoRutinaFirestore(
                             userId = userId, // El userId lo tienes de la función del ViewModel
                             rutinaIdOriginal = progresoModel.rutinaIdOriginal,

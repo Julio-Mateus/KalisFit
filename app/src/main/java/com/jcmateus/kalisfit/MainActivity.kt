@@ -20,11 +20,14 @@ import com.jcmateus.kalisfit.viewmodel.AppTheme
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import kotlin.getValue
+import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 
 
 class MainActivity : ComponentActivity() {
 
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val authViewModel: AuthViewModel by viewModels()
 
     // --- INICIO: LÓGICA PARA PERMISO DE NOTIFICACIONES ---
     /**
@@ -106,7 +109,8 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     KalisNavGraph(
                         navController = navController,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        authViewModel = authViewModel
                     )
                 }
             }

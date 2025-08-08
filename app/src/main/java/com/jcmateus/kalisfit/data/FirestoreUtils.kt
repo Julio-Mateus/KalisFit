@@ -17,6 +17,7 @@ import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.Progression
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.TipoDeEjercicio
+import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.viewmodel.UserProfile
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
@@ -169,7 +170,6 @@ fun guardarProgresoRutina(
             onError(e.message ?: "Error desconocido al guardar progreso")
         }
 }
-
 fun obtenerHistorialProgreso(
     userId: String,
     onResult: (List<ProgresoRutina>) -> Unit,
@@ -641,6 +641,38 @@ suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? { // Asegúrat
     } catch (e: Exception) {
         Log.e(TAG, "Error al obtener rutina con ID $rutinaId desde Firestore con ejercicios.", e)
         throw e // O return null
+    }
+}
+suspend fun getUserCustomRoutineById(userId: String, customRoutineId: String): UserCustomRoutine? {
+    if (userId.isBlank() || customRoutineId.isBlank()) {
+        Log.w(TAG, "IDs de usuario o rutina personalizada están vacíos. userId: $userId, customRoutineId: $customRoutineId")
+        return null
+    }
+    val db = FirebaseFirestore.getInstance()
+    return try {
+        val documentSnapshot = db.collection("users")
+            .document(userId)
+            .collection("customRoutines") // O como llames a tu subcolección
+            .document(customRoutineId)
+            .get()
+            .await()
+
+        if (documentSnapshot.exists()) {
+            // Aquí es CRUCIAL que UserCustomRoutine sea tu data class que tiene originalTemplateId
+            val customRoutine = documentSnapshot.toObject(UserCustomRoutine::class.java)
+            // Firestore no siempre mete el ID del documento en el objeto, así que lo asignamos:
+            customRoutine?.id = documentSnapshot.id
+            // Si también quieres el userId en el objeto (aunque ya lo tienes como parámetro),
+            // podrías hacer: customRoutine?.userId = userId (si 'userId' es var en UserCustomRoutine)
+            // o asegurarte de que se guarde correctamente.
+            customRoutine
+        } else {
+            Log.w(TAG, "No se encontró UserCustomRoutine con ID: $customRoutineId para el usuario: $userId")
+            null
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error al obtener UserCustomRoutine: $customRoutineId para el usuario: $userId", e)
+        null // O re-lanza la excepción si quieres manejarla más arriba
     }
 }
 

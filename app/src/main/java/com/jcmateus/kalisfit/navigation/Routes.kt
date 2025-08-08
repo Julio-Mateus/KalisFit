@@ -2,8 +2,31 @@ package com.jcmateus.kalisfit.navigation
 
 
 object Routes {
+
+    // Objeto anidado para los NOMBRES DE LOS ARGUMENTOS
+    // Esto centraliza los nombres de los argumentos para evitar errores de tipeo
+    // y facilitar la refactorización.
+    object Args {
+        // Argumentos para RoutineDetailScreen
+        const val ROUTINE_ID_ARG = "routineId"
+
+        // Argumentos para CalisthenicsLevelDetailScreen
+        const val PROGRESSION_ID_ARG = "progressionId"
+        const val LEVEL_ID_ARG = "levelId"
+
+        // Argumentos para ProductDetailScreen
+        const val PRODUCT_ID_ARG = "productId"
+
+        // Argumentos para EditRoutineScreen (los que estamos añadiendo ahora)
+        const val USER_ID_ARG = "userId"
+        const val TEMPLATE_ID_ARG = "templateId"
+        const val CUSTOM_ROUTINE_ID_ARG = "customRoutineId"
+
+        // Puedes añadir más argumentos aquí a medida que los necesites para otras rutas
+    }
+
     // --- Rutas de Autenticación y Onboarding ---
-    const val SPLASH = "splash_screen" // Hago los nombres un poco más descriptivos añadiendo "_screen" o "_tab"
+    const val SPLASH = "splash_screen"
     const val LOGIN = "login_screen"
     const val REGISTER = "register_screen"
     const val FORGOT_PASSWORD = "forgot_password_screen"
@@ -11,69 +34,86 @@ object Routes {
     const val ONBOARDING_SUCCESS = "onboarding_success_screen"
 
     // --- Contenedor Principal (con Drawer, TopAppBar y BottomNav) ---
-    // Ruta que carga KalisMainScreen, que gestiona el NavHost interno para las pestañas.
     const val MAIN_CONTENT = "main_content_screen"
 
-    // --- Pestañas del BottomNavigationBar (gestionadas por el NavHost INTERNO de KalisMainScreen) ---
-    // Deben coincidir con los 'route' definidos en BottomNavItem.kt
+    // --- Pestañas del BottomNavigationBar ---
     const val HOME_TAB = "home_tab"
-    const val CALISTHENICS_TAB = "calisthenics_tab"   // NUEVA PESTAÑA
-    const val STOICISM_TAB = "stoicism_tab"         // NUEVA PESTAÑA
-    const val RUNNING_TAB = "running_tab"           // Se mantiene
+    const val CALISTHENICS_TAB = "calisthenics_tab"
+    const val STOICISM_TAB = "stoicism_tab"
+    const val RUNNING_TAB = "running_tab"
+    const val STORE_TAB = "store_tab" // Movida aquí para agrupar con otras pestañas
 
-    // --- Rutas de Nivel Superior (Sin BottomNav, accesibles desde Drawer, TopAppBar o navegación interna) ---
-    // Navegables usando el 'mainNavController' desde KalisNavGraph.
-
-    const val PROFILE_SCREEN = "profile_screen"             // Pantalla de perfil (desde Drawer)
-    const val EDIT_PROFILE_SCREEN = "edit_profile_screen"   // Edición de perfil (desde Drawer o Perfil)
-    const val SETTINGS_SCREEN = "settings_screen"           // Configuración (desde Drawer)
-
-    // Rutinas y Historial ahora son pantallas de nivel superior accedidas desde el Drawer
-    const val ROUTINES_EXPLORER_SCREEN = "routines_explorer_screen" // Antes ROUTINES_TAB
-    const val ACTIVITY_HISTORY_SCREEN = "activity_history_screen"   // Antes HISTORY_TAB
-
-    // Detalles y otras pantallas relacionadas con rutinas
-    const val ROUTINE_DETAIL_PREFIX = "routine_detail"
-    const val ROUTINE_DETAIL_SCREEN = "$ROUTINE_DETAIL_PREFIX/{routineId}" // Añadido "_screen"
-    const val ROUTINE_SUCCESS_SCREEN = "routine_success_screen"
-
-
-    // Rutas para contenido específico o secciones (evalúa si la de Tips sigue siendo necesaria)
+    // --- Rutas de Nivel Superior (Sin BottomNav) ---
+    const val PROFILE_SCREEN = "profile_screen"
+    const val EDIT_PROFILE_SCREEN = "edit_profile_screen"
+    const val SETTINGS_SCREEN = "settings_screen"
+    const val ROUTINES_EXPLORER_SCREEN = "routines_explorer_screen"
+    const val ACTIVITY_HISTORY_SCREEN = "activity_history_screen"
     const val TIPS_SCREEN = "tips_screen"
-    // const val STOICISM_CONTENT_SCREEN = "stoicism_content_screen" // Esta ruta se convierte en STOICISM_TAB si la pantalla es la misma.
-    // Si quisieras una pantalla de "Acerca de Estoicismo" separada en el drawer
-    // podrías mantenerla con un nombre diferente. Por ahora, asumimos que
-    // STOICISM_TAB es suficiente.
-    // =============================================================
-    //          NUEVA RUTA PARA DETALLE DE NIVEL DE CALISTENIA
-    // =============================================================
+    const val CART_SCREEN = "cart_screen" // Movida para agrupar con otras de nivel superior
+
+    // --- Rutas con Argumentos (Usando el objeto Args) ---
+
+    // Rutina Detalle
+    const val ROUTINE_DETAIL_PREFIX = "routine_detail"
+    // Ahora usa la constante de Args para el nombre del argumento
+    const val ROUTINE_DETAIL_SCREEN = "$ROUTINE_DETAIL_PREFIX/{${Args.ROUTINE_ID_ARG}}"
+    // Ya no necesitas: const val ROUTINE_DETAIL_ARG_ID = "routineId" porque está en Args
+    const val ROUTINE_SUCCESS_SCREEN = "routine_success_screen"
+    // --- NUEVA RUTA PARA LA EJECUCIÓN DE LA RUTINA (RoutineScreen) ---
+    const val ROUTINE_EXECUTION_PREFIX = "routine_execution" // O simplemente "routine_screen"
+    // Usaremos Args.ROUTINE_ID_ARG si el ID que espera RoutineScreen es el mismo que el de RoutineDetailScreen
+    const val ROUTINE_EXECUTION_SCREEN = "$ROUTINE_EXECUTION_PREFIX/{${Args.ROUTINE_ID_ARG}}"
+    // Calistenia Detalle Nivel
     const val CALISTHENICS_LEVEL_DETAIL_PREFIX = "calisthenics_level_detail"
-    const val CALISTHENICS_LEVEL_DETAIL_SCREEN = "$CALISTHENICS_LEVEL_DETAIL_PREFIX/{progressionId}/{levelId}"
+    const val CALISTHENICS_LEVEL_DETAIL_SCREEN = "$CALISTHENICS_LEVEL_DETAIL_PREFIX/{${Args.PROGRESSION_ID_ARG}}/{${Args.LEVEL_ID_ARG}}"
 
-    // Función helper para construir la ruta de detalle del nivel de calistenia
-    fun calisthenicsLevelDetail(progressionId: String, levelId: String): String {
-        return "$CALISTHENICS_LEVEL_DETAIL_PREFIX/$progressionId/$levelId"
+    // Producto Detalle
+    const val PRODUCT_DETAIL_BASE = "productDetail"
+    const val PRODUCT_DETAIL_SCREEN = "$PRODUCT_DETAIL_BASE/{${Args.PRODUCT_ID_ARG}}"
+
+    // Edición/Personalización de Rutina
+    const val EDIT_ROUTINE_PREFIX = "edit_routine"
+    const val EDIT_ROUTINE_SCREEN_BASE = EDIT_ROUTINE_PREFIX // Más corto y directo
+    const val EDIT_ROUTINE_SCREEN_ROUTE_TEMPLATE =
+        "$EDIT_ROUTINE_SCREEN_BASE" +
+                "?${Args.USER_ID_ARG}={${Args.USER_ID_ARG}}" +
+                "&${Args.TEMPLATE_ID_ARG}={${Args.TEMPLATE_ID_ARG}}" +
+                "&${Args.CUSTOM_ROUTINE_ID_ARG}={${Args.CUSTOM_ROUTINE_ID_ARG}}"
+
+
+    // --- FUNCIONES HELPER PARA CONSTRUIR RUTAS ---
+    fun startRoutineExecution(routineId: String): String {
+        // Asumiendo que ROUTINE_ID_ARG es el nombre del argumento que RoutineScreen espera
+        return "$ROUTINE_EXECUTION_PREFIX/$routineId"
     }
-    // =============================================================
-
-    // Función helper para la ruta de detalle de rutina (ya la tenías implícita, la hago explícita)
     fun routineDetail(routineId: String): String {
+        // La constante Args.ROUTINE_ID_ARG se usa implícitamente por la definición de ROUTINE_DETAIL_SCREEN
         return "$ROUTINE_DETAIL_PREFIX/$routineId"
     }
 
-    // --- NUEVAS RUTAS PARA LA TIENDA ---
-    const val STORE_TAB = "store_tab" // Para la pestaña en la BottomNav
-    const val PRODUCT_DETAIL_BASE = "productDetail" // O el nombre que prefieras
-    const val PRODUCT_DETAIL_SCREEN = "$PRODUCT_DETAIL_BASE/{productId}" // Plantilla completa
+    fun calisthenicsLevelDetail(progressionId: String, levelId: String): String {
+        return "$CALISTHENICS_LEVEL_DETAIL_PREFIX/$progressionId/$levelId"
+    }
 
-    // Y la función helper para navegar:
-    fun productDetail(productId: String) = "$PRODUCT_DETAIL_BASE/$productId"
+    fun productDetail(productId: String): String {
+        return "$PRODUCT_DETAIL_BASE/$productId"
+    }
 
-    const val CART_SCREEN = "cart_screen"
-
-
-    // --- Rutas Potenciales Futuras (o para funcionalidades específicas dentro de pantallas) ---
-    // const val RUNNING_DASHBOARD_SCREEN = "running_dashboard_screen" // Pantalla detallada de Running (Drawer)
-    // const val GYM_ROUTINES_FILTER_SCREEN = "gym_routines_filter_screen"       // Para rutinas filtradas de gimnasio
-    // const val CALISTHENICS_ROUTINES_FILTER_SCREEN = "calisthenics_routines_filter_screen" // Para rutinas filtradas de calistenia (si es diferente de la guía de progresión)
+    fun editRoutine(
+        userId: String,
+        templateId: String? = null,
+        customRoutineId: String? = null
+    ): String {
+        if (userId.isBlank()) {
+            // Log.w("Routes", "Se está intentando construir la ruta editRoutine con un userId vacío.")
+            // Considera cómo manejar esto. Para la construcción de la ruta, un ID vacío se pasará.
+            // La validación real debería ocurrir en el ViewModel.
+        }
+        // Usa las constantes de Args para construir los query parameters
+        val routeBuilder = StringBuilder("$EDIT_ROUTINE_SCREEN_BASE?${Args.USER_ID_ARG}=$userId")
+        templateId?.let { routeBuilder.append("&${Args.TEMPLATE_ID_ARG}=$it") }
+        customRoutineId?.let { routeBuilder.append("&${Args.CUSTOM_ROUTINE_ID_ARG}=$it") }
+        return routeBuilder.toString()
+    }
 }

@@ -70,7 +70,7 @@ data class Ejercicio(
 
 // Estructura de datos para una rutina (sin cambios directos aquí, pero los Ejercicio internos se actualizarán)
 data class Rutina(
-    val id: String = "",
+    var id: String = "",
     val slug: String = "",
     val nombre: String = "",
     val descripcion: String = "",

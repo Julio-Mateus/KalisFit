@@ -448,7 +448,6 @@ fun RoutineCard(
                         text = "Nivel: ${rutina.nivelRecomendado.joinToString(", ")}"
                     )
                 }
-
                 // Lugar
                 if (rutina.lugarEntrenamiento.mapNotNull { it.name }.isNotEmpty()) {
                     DetailRow(

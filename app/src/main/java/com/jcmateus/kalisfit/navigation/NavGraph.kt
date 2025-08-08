@@ -2,6 +2,7 @@ package com.jcmateus.kalisfit.navigation
 
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
@@ -9,14 +10,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.google.firebase.auth.FirebaseAuth
 import com.jcmateus.kalisfit.ui.screens.CalisthenicsLevelDetailScreen
 import com.jcmateus.kalisfit.ui.screens.CartScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
+import com.jcmateus.kalisfit.ui.screens.EditRoutineScreen
 import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HistorialScreen
 import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
@@ -26,18 +32,21 @@ import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProductDetailScreen
 import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineDetailScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineExplorerScreen
-import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
 import com.jcmateus.kalisfit.ui.screens.TipsScreen
+import com.jcmateus.kalisfit.viewmodel.AuthViewModel
+import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModel
+import com.jcmateus.kalisfit.viewmodel.RoutineDetailViewModel
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsViewModel) {
+fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsViewModel, authViewModel: AuthViewModel) {
     // NavHost se queda, pero ahora le añadimos animaciones por defecto.
     NavHost(
         navController = navController,
@@ -139,15 +148,11 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             // KalisMainScreen contiene el NavHost interno para las pestañas (Home, Calisthenics, Stoicism, Running)
             KalisMainScreen(mainNavController = navController)
         }
-
         // --- Rutas de Nivel Superior (Sin BottomNav) ---
         // Accesibles desde el Drawer, o navegación directa desde otras pantallas.
-
         composable(Routes.PROFILE_SCREEN) { // Usando tu nueva constante de Routes.kt
             ProfileScreen(navController = navController)
         }
-
-
         composable(
             route = "${Routes.ROUTINES_EXPLORER_SCREEN}?place={place}", //  <-- MODIFICACIÓN IMPORTANTE 1: Define el argumento en la plantilla de la ruta
             arguments = listOf(navArgument("place") {          //  <-- MODIFICACIÓN IMPORTANTE 2: Declara el argumento
@@ -166,19 +171,77 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 // viewModel se obtendrá dentro de RoutineExplorerScreen usando viewModel()
             )
         }
-
         composable(
-            route = Routes.ROUTINE_DETAIL_SCREEN, // Usando tu nueva constante
-            arguments = listOf(navArgument("routineId") { type = NavType.StringType })
+            route = Routes.ROUTINE_DETAIL_SCREEN, // ej. "routine_detail/{routineId}"
+            arguments = listOf(navArgument(Routes.Args.ROUTINE_ID_ARG) { // ej. "routineId"
+                type = NavType.StringType
+                // nullable = false // Por defecto es false
+            })
         ) { backStackEntry ->
-            val routineId = backStackEntry.arguments?.getString("routineId")
-            if (routineId != null) {
-                RoutineScreen(navController = navController, rutinaId = routineId)
-            } else {
-                // Manejo de error: argumento faltante
-                Text("Error: Falta el ID de la rutina.")
-                // O navController.popBackStack()
-            }
+            // El backStackEntry todavía es útil para obtener argumentos si los necesitaras pasar
+            // directamente al Composable, pero el ViewModel ahora los tomará del SavedStateHandle.
+            Log.d(
+                "NavGraph_RoutineDetail",
+                "Navegando a RoutineDetail. Argumento: ${backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)}"
+            )
+
+            val currentUserFromAuth by authViewModel.currentUser.collectAsState()
+            val currentUserId: String? = currentUserFromAuth?.uid
+
+            RoutineDetailScreen(
+                navController = navController, // El navController principal de este NavHost
+                // Ya NO pasas routineDetailViewModel aquí
+                currentUserId = currentUserId, // Pasa esto si la pantalla aún lo necesita directamente
+            )
+        }
+        composable(
+            route = Routes.ROUTINE_EXECUTION_SCREEN, // Usando la nueva plantilla de Routes.kt
+            arguments = listOf(
+                navArgument(Routes.Args.ROUTINE_ID_ARG) { // El nombre del argumento DEBE COINCIDIR con el de la plantilla de ruta
+                    type = NavType.StringType
+                    nullable = true // Importante si RoutineScreen acepta un rutinaId: String?
+                    // Si rutinaId en RoutineScreen NO es nullable, entonces aquí también debe ser nullable = false (o no especificarlo, ya que es el default)
+                    // En tu caso, RoutineScreen tiene rutinaId: String?, entonces nullable = true es correcto.
+                }
+            )
+        ) { backStackEntry ->
+            val rutinaId = backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)
+
+            // Aquí instancias tu RoutineScreen
+            // Asumiendo que RoutineScreen.kt ya está creado e importado
+            com.jcmateus.kalisfit.ui.screens.RoutineScreen( // Asegúrate de que la importación sea correcta si está en otro paquete
+                navController = navController,
+                rutinaId = rutinaId
+                // UserProfileViewModel se obtendrá con viewModel() dentro de RoutineScreen
+            )
+        }
+        composable(
+            route = Routes.EDIT_ROUTINE_SCREEN_ROUTE_TEMPLATE, // <--- Usa la plantilla de ruta completa
+            arguments = listOf(
+                navArgument(Routes.Args.USER_ID_ARG) { // <--- Usa Args para consistencia
+                    type = NavType.StringType
+                    // No se marca como nullable aquí porque la plantilla lo define como {userId},
+                    // pero el ViewModel debería manejar si llega vacío o inválido.
+                    // Si quieres que la ruta falle si no se pasa, NavType.StringType es suficiente.
+                },
+                navArgument(Routes.Args.TEMPLATE_ID_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument(Routes.Args.CUSTOM_ROUTINE_ID_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) {
+            // Aquí el composable para EditRoutineScreen
+            val editRoutineViewModel: EditRoutineViewModel = viewModel()
+            EditRoutineScreen(
+                navController = navController,
+                viewModel = editRoutineViewModel
+            )
         }
         composable(Routes.ROUTINE_SUCCESS_SCREEN) { // Usando tu nueva constante
             RoutineSuccessScreen(onFinish = {
