@@ -72,6 +72,7 @@ import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModelFactory
 fun RoutineExplorerScreen(
     navController: NavController,
     placeFilterArgument: String?,
+    levelFilterArgument: String?,
     routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory())
 ) {
     val rutinas: List<Rutina> by routineExplorerViewModel.rutinasFiltradas.collectAsState()
@@ -92,7 +93,12 @@ fun RoutineExplorerScreen(
             }
         }
     }
-
+    LaunchedEffect(levelFilterArgument, routineExplorerViewModel) {
+        // Asume que levelFilterArgument puede ser null directamente
+        if (routineExplorerViewModel.selectedNivel.value != levelFilterArgument) {
+            routineExplorerViewModel.setNivelFilter(levelFilterArgument)
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(

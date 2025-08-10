@@ -19,6 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
+import com.jcmateus.kalisfit.ui.screens.AllExercisesScreen
 import com.jcmateus.kalisfit.ui.screens.CalisthenicsLevelDetailScreen
 import com.jcmateus.kalisfit.ui.screens.CartScreen
 import com.jcmateus.kalisfit.ui.screens.EditProfileScreen
@@ -27,6 +28,7 @@ import com.jcmateus.kalisfit.ui.screens.ForgotPasswordScreen
 import com.jcmateus.kalisfit.ui.screens.HistorialScreen
 import com.jcmateus.kalisfit.ui.screens.KalisMainScreen
 import com.jcmateus.kalisfit.ui.screens.LoginScreen
+import com.jcmateus.kalisfit.ui.screens.MyRoutinesScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingScreen
 import com.jcmateus.kalisfit.ui.screens.OnboardingSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.ProductDetailScreen
@@ -154,21 +156,27 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             ProfileScreen(navController = navController)
         }
         composable(
-            route = "${Routes.ROUTINES_EXPLORER_SCREEN}?place={place}", //  <-- MODIFICACIÓN IMPORTANTE 1: Define el argumento en la plantilla de la ruta
-            arguments = listOf(navArgument("place") {          //  <-- MODIFICACIÓN IMPORTANTE 2: Declara el argumento
-                type = NavType.StringType
-                nullable = true                                    // Es opcional
-                defaultValue =
-                    null                                // Valor por defecto si no se pasa
-            })
-        ) { backStackEntry ->                                    // backStackEntry contiene los argumentos
-            val placeArgument =
-                backStackEntry.arguments?.getString("place") // <-- MODIFICACIÓN IMPORTANTE 3: Extrae el argumento
+            route = "${Routes.ROUTINES_EXPLORER_SCREEN}?place={place}&level={level}", // AÑADIR &level={level}
+            arguments = listOf(
+                navArgument("place") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("level") { // AÑADIR ESTE ARGUMENTO
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val placeArgument = backStackEntry.arguments?.getString("place")
+            val levelArgument = backStackEntry.arguments?.getString("level") // OBTENER EL ARGUMENTO DE NIVEL
 
             RoutineExplorerScreen(
-                navController = navController, // O el NavHostController relevante
-                placeFilterArgument = placeArgument  // <-- MODIFICACIÓN IMPORTANTE 4: Pasa el argumento extraído
-                // viewModel se obtendrá dentro de RoutineExplorerScreen usando viewModel()
+                navController = navController,
+                placeFilterArgument = placeArgument,
+                levelFilterArgument = levelArgument // PASAR EL ARGUMENTO DE NIVEL A LA PANTALLA
             )
         }
         composable(
@@ -253,6 +261,16 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 ) // Ejemplo: Volver a main sin incluir la pantalla de éxito
                 // o navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) { popUpTo(Routes.MAIN_CONTENT) }
             })
+        }
+        composable(Routes.MY_CUSTOM_ROUTINES_SCREEN) {
+            // Asumiendo que has creado MyRoutinesScreen.kt como se discutió
+            MyRoutinesScreen(navController = navController)
+        }
+        composable(Routes.ALL_EXERCISES_SCREEN) {
+            // Necesitarás crear una pantalla AllExercisesScreen.kt
+            // y su respectivo ViewModel si requiere lógica compleja.
+            // Por ahora, un placeholder:
+            AllExercisesScreen(navController = navController) // Asegúrate de crear este Composable
         }
 
         composable(Routes.EDIT_PROFILE_SCREEN) { // Usando tu nueva constante

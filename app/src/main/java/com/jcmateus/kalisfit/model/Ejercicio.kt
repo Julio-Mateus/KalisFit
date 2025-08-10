@@ -1,16 +1,58 @@
 package com.jcmateus.kalisfit.model
 
 // Define los lugares de entrenamiento como un enum class para mayor claridad
-enum class LugarEntrenamiento {
-    CASA, GIMNASIO, EXTERIOR, CALISTENIA
+enum class LugarEntrenamiento(val displayName: String) {
+    CASA("Casa"),
+    GIMNASIO("Gimnasio"),
+    EXTERIOR("Exterior"),
+    CALISTENIA("Calistenia"); // Añade un valor 'OTRO' por si acaso
+
+    companion object {
+        fun fromString(value: String): LugarEntrenamiento? {
+            return values().find {
+                it.name.equals(value, ignoreCase = true) ||
+                        it.displayName.equals(value, ignoreCase = true)
+            } ?: values().find { it.name.equals(value.replace(" ", "_"), ignoreCase = true) } // Intenta con underscores
+        }
+    }
 }
 
 // Define los grupos musculares, incluyendo los del JSON
-enum class GrupoMuscular {
-    PECHO, ESPALDA, PIERNAS, BRAZOS, ABDOMEN, HOMBROS, FULL_BODY,
-    GLUTEOS, TRICEPS, FEMORALES, ESPALDA_BAJA, CUADRICEPS, BICEPS, CORE,
-    ANTEBRAZOS, // Añadido de tu JSON
-    CARDIO // Añadido de tu JSON
+enum class GrupoMuscular(val displayName: String) {
+    PECHO("Pecho"),
+    ESPALDA("Espalda"),
+    PIERNAS("Piernas"),
+    BRAZOS("Brazos"), // Podrías ser más específico si quieres (Bíceps, Tríceps)
+    ABDOMEN("Abdomen"),
+    HOMBROS("Hombros"),
+    FULL_BODY("Cuerpo Completo"),
+    GLUTEOS("Glúteos"),
+    TRICEPS("Tríceps"),
+    FEMORALES("Femorales"), // Podrías usar ISQUIOTIBIALES para consistencia con tu JSON de EjercicioTodos
+    ESPALDA_BAJA("Espalda Baja"),
+    CUADRICEPS("Cuádriceps"),
+    BICEPS("Bíceps"),
+    CORE("Core"),
+    ANTEBRAZOS("Antebrazos"),
+    CARDIO("Cardio"),
+    // Nuevos valores de tu JSON de EjercicioTodos (asegúrate de que estén aquí o en displayName)
+    ISQUIOTIBIALES("Isquiotibiales"), // Si quieres usar este término
+    ESPALDA_ALTA("Espalda Alta"),    // Si lo necesitas
+    ABDUCTORES("Abductores"),        // Si lo necesitas
+    OBLICUOS("Oblicuos"),            // Si lo necesitas
+    CUERPO_COMPLETO("Cuerpo Completo"), // Ya estaba como FULL_BODY, unifica
+    OTRO("Otro"); // Para futuros valores no mapeados
+
+
+    companion object {
+        fun fromString(value: String): GrupoMuscular? {
+            val upperValue = value.uppercase().replace(" ", "_")
+            return values().find {
+                it.name.equals(upperValue, ignoreCase = true) ||
+                        it.displayName.equals(value, ignoreCase = true) // Compara con displayName original
+            }
+        }
+    }
 }
 
 // NUEVO: Define los tipos de ejecución de los ejercicios

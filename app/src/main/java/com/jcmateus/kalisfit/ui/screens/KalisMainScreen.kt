@@ -2,24 +2,42 @@ package com.jcmateus.kalisfit.ui.screens
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -29,6 +47,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,13 +66,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.forEach
+import androidx.core.graphics.values
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -84,10 +109,8 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val context = LocalContext.current
     val activity = context as? MainActivity
 
-    val cartRepository =
-        remember { CartRepositoryImpl(FirebaseFirestore.getInstance()) } // O como lo obtengas
-    val authRepository =
-        remember { AuthRepositoryImpl(FirebaseAuth.getInstance()) }    // O como lo obtengas
+    val cartRepository = remember { CartRepositoryImpl(FirebaseFirestore.getInstance()) }
+    val authRepository = remember { AuthRepositoryImpl(FirebaseAuth.getInstance()) }
     val cartViewModelFactory = remember(cartRepository, authRepository) {
         CartViewModelFactory(cartRepository, authRepository)
     }
@@ -101,6 +124,7 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val mainNavBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentMainRoute = mainNavBackStackEntry?.destination?.route
     val currentPlaceFilterArgument = mainNavBackStackEntry?.arguments?.getString("place")
+    val currentLevelFilterArgument = mainNavBackStackEntry?.arguments?.getString("level") // Para filtro de nivel
 
     val bottomNavItems = listOf(
         BottomNavItem.Home,
@@ -125,13 +149,14 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            // El contenido del ModalDrawerSheet es en sí mismo un @Composable lambda
             ModalDrawerSheet(
                 drawerContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                // Si surfaceVariant no te gusta, prueba con MaterialTheme.colorScheme.surface
-                // o si tienes una versión de M3 más nueva (1.1+), prueba:
-                // drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
+                // Estados para controlar la expansión de los submenús
+                var expandExplorarRutinas by remember { mutableStateOf(false) }
+                var expandPorLugar by remember { mutableStateOf(false) }
+                var expandPorNivel by remember { mutableStateOf(false) }
+
                 // --- Encabezado del Drawer ---
                 Column(
                     modifier = Modifier
@@ -150,172 +175,216 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                 Spacer(Modifier.height(8.dp))
 
                 // --- Ítems Principales ---
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Person, contentDescription = stringResource(R.string.drawer_profile)) },
-                    label = { Text(stringResource(R.string.drawer_profile)) },
-                    selected = currentMainRoute == Routes.PROFILE_SCREEN && currentPlaceFilterArgument == null,
+                DrawerMainItem(
+                    icon = Icons.Filled.Person,
+                    text = stringResource(R.string.drawer_profile),
+                    selected = currentMainRoute == Routes.PROFILE_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.PROFILE_SCREEN) {
                             mainNavController.navigate(Routes.PROFILE_SCREEN) { launchSingleTop = true }
                         }
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    }
                 )
 
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = stringResource(R.string.drawer_routines_explorer_all)) },
-                    label = { Text(stringResource(R.string.drawer_routines_explorer_all)) },
-                    selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentPlaceFilterArgument == null,
+                // --- Mis Rutinas ---
+                DrawerMainItem(
+                    icon = Icons.Filled.MenuBook, // Icono sugerido
+                    text = stringResource(R.string.drawer_my_routines), // Crea este string
+                    selected = currentMainRoute == Routes.MY_CUSTOM_ROUTINES_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) {
+                        mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) {
                             launchSingleTop = true
                         }
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    }
                 )
 
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.History, contentDescription = stringResource(R.string.drawer_activity_history)) },
-                    label = { Text(stringResource(R.string.drawer_activity_history)) },
+                // --- Todos los Ejercicios ---
+                DrawerMainItem(
+                    icon = Icons.Filled.FormatListBulleted, // Icono sugerido
+                    text = stringResource(R.string.drawer_all_exercises), // Crea este string
+                    selected = currentMainRoute == Routes.ALL_EXERCISES_SCREEN,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        mainNavController.navigate(Routes.ALL_EXERCISES_SCREEN) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+
+                DrawerMainItem(
+                    icon = Icons.Filled.History,
+                    text = stringResource(R.string.drawer_activity_history),
                     selected = currentMainRoute == Routes.ACTIVITY_HISTORY_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.ACTIVITY_HISTORY_SCREEN) {
                             mainNavController.navigate(Routes.ACTIVITY_HISTORY_SCREEN) { launchSingleTop = true }
                         }
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    }
                 )
 
                 Spacer(Modifier.height(8.dp))
-                Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(8.dp))
 
-                Text(
-                    stringResource(R.string.drawer_explore_by_place),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                // --- Sección Explorar Rutinas (Desplegable) ---
+                DrawerCollapsibleSectionHeader(
+                    icon = Icons.Filled.Search,
+                    text = stringResource(R.string.drawer_explore_routines), // Crea este string
+                    isExpanded = expandExplorarRutinas,
+                    onClick = { expandExplorarRutinas = !expandExplorarRutinas }
                 )
 
-                LugarEntrenamiento.values().forEach { lugar ->
-                    val labelResId = when (lugar) {
-                        LugarEntrenamiento.CASA -> R.string.place_filter_home
-                        LugarEntrenamiento.GIMNASIO -> R.string.place_filter_gym
-                        LugarEntrenamiento.EXTERIOR -> R.string.place_filter_outdoor
-                        LugarEntrenamiento.CALISTENIA -> R.string.place_filter_calisthenics
-                    }
-                    val icon = when (lugar) {
-                        LugarEntrenamiento.CASA -> Icons.Filled.Home
-                        LugarEntrenamiento.GIMNASIO -> Icons.Filled.FitnessCenter
-                        LugarEntrenamiento.EXTERIOR -> Icons.Filled.Terrain
-                        LugarEntrenamiento.CALISTENIA -> Icons.Filled.SelfImprovement
-                    }
-                    val contentDescriptionResId = when (lugar) {
-                        LugarEntrenamiento.CASA -> R.string.desc_place_filter_home
-                        LugarEntrenamiento.GIMNASIO -> R.string.desc_place_filter_gym
-                        LugarEntrenamiento.EXTERIOR -> R.string.desc_place_filter_outdoor
-                        LugarEntrenamiento.CALISTENIA -> R.string.desc_place_filter_calisthenics
-                    }
-
-                    NavigationDrawerItem(
-                        icon = { Icon(icon, contentDescription = stringResource(contentDescriptionResId)) },
-                        label = { Text(stringResource(labelResId)) },
-                        selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentPlaceFilterArgument == lugar.name,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            mainNavController.navigate("${Routes.ROUTINES_EXPLORER_SCREEN}?place=${lugar.name}") {
-                                launchSingleTop = true
-                                // Opcional: limpiar backstack
-                                // popUpTo(mainNavController.graph.findStartDestination().id) {
-                                // saveState = true
-                                // }
-                                // restoreState = true
+                AnimatedVisibility(
+                    visible = expandExplorarRutinas,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column(modifier = Modifier.padding(start = 16.dp)) { // Indentación para subitems
+                        // --- Submenú: Ver todas las rutinas (del explorador) ---
+                        DrawerSubItem(
+                            // Puedes usar un icono específico o ninguno para "Todas"
+                            icon = Icons.AutoMirrored.Filled.ListAlt,
+                            text = stringResource(R.string.drawer_routines_explorer_all),
+                            selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentPlaceFilterArgument == null && currentLevelFilterArgument == null,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) {
+                                    launchSingleTop = true
+                                }
                             }
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
-                    )
+
+                        // --- Submenú: Por Lugar (Desplegable) ---
+                        DrawerCollapsibleSectionHeader(
+                            icon = Icons.Filled.LocationOn,
+                            text = stringResource(R.string.drawer_explore_by_place),
+                            isExpanded = expandPorLugar,
+                            onClick = { expandPorLugar = !expandPorLugar },
+                            isSubHeader = true
+                        )
+                        AnimatedVisibility(
+                            visible = expandPorLugar,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column(modifier = Modifier.padding(start = 16.dp)) { // Mayor indentación
+                                LugarEntrenamiento.values().forEach { lugar ->
+                                    val labelResId = when (lugar) {
+                                        LugarEntrenamiento.CASA -> R.string.place_filter_home
+                                        LugarEntrenamiento.GIMNASIO -> R.string.place_filter_gym
+                                        LugarEntrenamiento.EXTERIOR -> R.string.place_filter_outdoor
+                                        LugarEntrenamiento.CALISTENIA -> R.string.place_filter_calisthenics
+                                    }
+                                    val icon = when (lugar) {
+                                        LugarEntrenamiento.CASA -> Icons.Filled.Home
+                                        LugarEntrenamiento.GIMNASIO -> Icons.Filled.FitnessCenter
+                                        LugarEntrenamiento.EXTERIOR -> Icons.Filled.Terrain
+                                        LugarEntrenamiento.CALISTENIA -> Icons.Filled.SelfImprovement
+                                    }
+                                    DrawerSubItem(
+                                        icon = icon,
+                                        text = stringResource(labelResId),
+                                        selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentPlaceFilterArgument == lugar.name,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            mainNavController.navigate("${Routes.ROUTINES_EXPLORER_SCREEN}?place=${lugar.name}") {
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // --- Submenú: Por Nivel (Desplegable) ---
+                        DrawerCollapsibleSectionHeader(
+                            icon = Icons.Filled.School, // Opcional
+                            text = stringResource(R.string.drawer_explore_by_level), // Crea este string
+                            isExpanded = expandPorNivel,
+                            onClick = { expandPorNivel = !expandPorNivel },
+                            isSubHeader = true
+                        )
+                        AnimatedVisibility(
+                            visible = expandPorNivel,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column(modifier = Modifier.padding(start = 16.dp)) { // Mayor indentación
+                                NivelExperiencia.values().forEach { nivel -> // Asume que tienes un enum NivelDificultad
+                                    // Necesitarás strings para los niveles, ej: R.string.level_beginner
+                                    val label = when (nivel) {
+                                        NivelExperiencia.PRINCIPIANTE -> stringResource(R.string.level_beginner)
+                                        NivelExperiencia.INTERMEDIO -> stringResource(R.string.level_intermediate)
+                                        NivelExperiencia.AVANZADO -> stringResource(R.string.level_advanced)
+                                    }
+                                    // Puedes añadir iconos si quieres
+                                    DrawerSubItem(
+                                        icon = Icons.Filled.BarChart, // Ejemplo
+                                        text = label,
+                                        selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentLevelFilterArgument == nivel.name,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            // Asume que tu RoutinesExplorerScreen puede filtrar por nivel
+                                            mainNavController.navigate("${Routes.ROUTINES_EXPLORER_SCREEN}?level=${nivel.name}") {
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
+
                 Spacer(Modifier.weight(1f)) // Empuja los siguientes items hacia abajo
-                Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(8.dp))
 
                 // --- Ítems Inferiores ---
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.desc_edit_profile)) },
-                    label = { Text(stringResource(R.string.desc_edit_profile)) },
+                DrawerMainItem(
+                    icon = Icons.Filled.Edit,
+                    text = stringResource(R.string.desc_edit_profile),
                     selected = currentMainRoute == Routes.EDIT_PROFILE_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.EDIT_PROFILE_SCREEN) {
                             mainNavController.navigate(Routes.EDIT_PROFILE_SCREEN) { launchSingleTop = true }
                         }
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    }
                 )
-
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.menu_settings)) },
-                    label = { Text(stringResource(R.string.menu_settings)) },
+                DrawerMainItem(
+                    icon = Icons.Filled.Settings,
+                    text = stringResource(R.string.menu_settings),
                     selected = currentMainRoute == Routes.SETTINGS_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.SETTINGS_SCREEN) {
                             mainNavController.navigate(Routes.SETTINGS_SCREEN) { launchSingleTop = true }
                         }
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    }
                 )
-
-                NavigationDrawerItem(
+                NavigationDrawerItem( // Logout puede seguir siendo un NavigationDrawerItem normal
                     icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.menu_logout)) },
                     label = { Text(stringResource(R.string.menu_logout)) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        FirebaseAuth.getInstance().signOut() // Considera inyectar FirebaseAuth o mover esta lógica a un ViewModel
+                        FirebaseAuth.getInstance().signOut()
                         mainNavController.navigate(Routes.LOGIN) {
                             popUpTo(mainNavController.graph.id) { inclusive = true }
                             launchSingleTop = true
                         }
                     }
-                    // No se necesitan colores de selección para logout si no es un estado persistente
                 )
                 Spacer(Modifier.height(16.dp))
             }
         }
-        // El último lambda de ModalNavigationDrawer es el contenido principal de la pantalla.
-        // NO recibe PaddingValues directamente. El Scaffold interno es quien maneja eso.
+        // ... (resto de tu KalisMainScreen: Scaffold con TopAppBar, BottomBar, NavHost para bottomNavController)
     ) {
-        // 'it' aquí NO son PaddingValues del ModalNavigationDrawer.
-        // El contenido del ModalNavigationDrawer es el Scaffold.
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -332,17 +401,13 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                             )
                         }
                     },
-                    actions = { // <--- SLOT DE ACCIONES PARA EL TOPAPPBAR
-                        // Mostrar el icono del carrito solo si estamos en la sección de la tienda
+                    actions = {
                         if (currentBottomRoute == BottomNavItem.Store.route) {
                             IconButton(onClick = {
-                                // Navegar a la pantalla del carrito usando mainNavController
-                                // Asegúrate de tener una ruta como Routes.CART_SCREEN
                                 mainNavController.navigate(Routes.CART_SCREEN)
                             }) {
                                 BadgedBox(
                                     badge = {
-                                        // Usa itemCount de tu CartUiState
                                         if (cartUiState.itemCount > 0) {
                                             Badge { Text("${cartUiState.itemCount}") }
                                         }
@@ -350,18 +415,17 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.ShoppingCart,
-                                        contentDescription = stringResource(R.string.desc_cart) // Crea este recurso de string
+                                        contentDescription = stringResource(R.string.desc_cart)
                                     )
                                 }
                             }
                         }
-                        // Aquí puedes añadir otros IconButton si los necesitas para otras secciones
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer // Color para el icono del carrito
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 )
             },
@@ -392,15 +456,13 @@ fun KalisMainScreen(mainNavController: NavHostController) {
             NavHost(
                 navController = bottomNavController,
                 startDestination = BottomNavItem.Home.route,
-                modifier = Modifier.padding(contentPadding), // Aplicar el padding del Scaffold aquí
-                // Animaciones de FADE para la navegación del BottomNav
+                modifier = Modifier.padding(contentPadding),
                 enterTransition = { fadeIn(animationSpec = tween(300)) },
                 exitTransition = { fadeOut(animationSpec = tween(300)) }
             ) {
                 composable(BottomNavItem.Home.route) {
                     HomeScreen(
                         mainNavController = mainNavController,
-                        //bottomNavController = bottomNavController
                     )
                 }
                 composable(BottomNavItem.Calisthenics.route) {
@@ -412,19 +474,129 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     StoicismContentScreen(mainNavController = mainNavController)
                 }
                 composable(BottomNavItem.Running.route) {
-                    RunningTabScreen(navController = mainNavController) // mainNavController aquí es correcto si RunningTabScreen lo usa para navegación principal
+                    RunningTabScreen(navController = mainNavController)
                 }
-                // --- NUEVA PANTALLA DE TIENDA ---
                 composable(BottomNavItem.Store.route) {
                     StoreScreen(
-                        onProductClick = { productId -> // <--- CAMBIO: ahora es productId
-                            // Navegar al detalle del producto usando el mainNavController y productId
-                            mainNavController.navigate(Routes.productDetail(productId)) // <--- CAMBIO: usa productId
+                        onProductClick = { productId ->
+                            mainNavController.navigate(Routes.productDetail(productId))
                         }
-                        // modifier = Modifier.fillMaxSize() // O el modifier apropiado si es necesario
                     )
                 }
             }
         }
     }
+}
+
+// --- Componentes Auxiliares para el Drawer ---
+
+/**
+ * Un Composable para los ítems principales del NavigationDrawer.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DrawerMainItem(
+    icon: ImageVector,
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String? = text // Por defecto usa el texto como descripción
+) {
+    NavigationDrawerItem(
+        icon = { Icon(icon, contentDescription = contentDescription) },
+        label = { Text(text) },
+        selected = selected,
+        onClick = onClick,
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ),
+        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+    )
+}
+
+/**
+ * Un Composable para el encabezado de una sección desplegable en el Drawer.
+ */
+@Composable
+fun DrawerCollapsibleSectionHeader(
+    text: String,
+    isExpanded: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector? = null, // Icono opcional para el encabezado de sección principal
+    isSubHeader: Boolean = false // Para aplicar un padding diferente si es un sub-encabezado
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = if (isSubHeader) 32.dp else 16.dp, // Mayor padding horizontal para sub-encabezados
+                vertical = 12.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = text,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(if (isSubHeader) 12.dp else 16.dp)) // Ajustar espaciado del icono
+            }
+            Text(
+                text,
+                style = if (isSubHeader) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (isExpanded) "Contraer" else "Expandir",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Un Composable para los ítems dentro de una sección desplegable (sub-ítems).
+ * Usamos el padding de NavigationDrawerItemDefaults, pero podrías ajustarlo.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DrawerSubItem(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector? = null, // Icono opcional para sub-ítems
+    contentDescription: String? = text
+) {
+    NavigationDrawerItem(
+        icon = {
+            if (icon != null) Icon(icon, contentDescription = contentDescription)
+            // else Spacer(Modifier.width(24.dp)) // Para alinear texto si otros tienen icono
+        },
+        label = { Text(text) },
+        selected = selected,
+        onClick = onClick,
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer, // Color diferente para sub-selección
+            selectedIconColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            // Colores no seleccionados (opcional, por defecto son adecuados)
+            // unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            // unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        // Aplicar padding para que se vea "anidado"
+        modifier = Modifier.padding(
+            start = (NavigationDrawerItemDefaults.ItemPadding.calculateStartPadding(LayoutDirection.Ltr) + 16.dp), // Aumentar padding izquierdo
+            top = NavigationDrawerItemDefaults.ItemPadding.calculateTopPadding(),
+            end = NavigationDrawerItemDefaults.ItemPadding.calculateEndPadding(LayoutDirection.Ltr),
+            bottom = NavigationDrawerItemDefaults.ItemPadding.calculateBottomPadding()
+        )
+        // shape = MaterialTheme.shapes.small // Opcional: forma diferente para sub-items
+    )
 }

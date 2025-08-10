@@ -110,6 +110,8 @@ data class CalisthenicsProgressionFirestore(
 )
 
 private const val TAG = "FirestoreUtils"
+private const val TAG_CUSTOM_ROUTINE = "FirestoreUtils_CustomRoutine" // Nuevo TAG para claridad
+private const val TAG_GET_CUSTOM_ROUTINES = "FirestoreUtils_GetCustom"
 @RequiresApi(Build.VERSION_CODES.O)
 fun guardarProgresoRutina(
     userIdAuth: String,
@@ -348,7 +350,6 @@ fun calcularResumenSemanal(historialProgreso: List<ProgresoRutinaFirestore>): Re
     )
 }
 // En FirestoreUtils.kt - Asumiendo que el usuario puede seleccionar VARIOS lugares
-
 fun obtenerRutinas(
     nivel: String? = null,
     objetivos: List<String>? = null,
@@ -441,7 +442,33 @@ fun obtenerRutinas(
             onError(it.message ?: "Error al obtener rutinas filtradas")
         }
 }
+suspend fun saveOrUpdateUserCustomRoutine(userId: String, routine: UserCustomRoutine) {
+    if (userId.isBlank()) {
+        Log.e(TAG_CUSTOM_ROUTINE, "El ID de usuario no puede estar vacío al guardar UserCustomRoutine.")
+        throw IllegalArgumentException("El ID de usuario no puede estar vacío.")
+    }
+    if (routine.id.isBlank()) {
+        Log.e(TAG_CUSTOM_ROUTINE, "El ID de la UserCustomRoutine no puede estar vacío.")
+        throw IllegalArgumentException("El ID de la UserCustomRoutine no puede estar vacío.")
+    }
 
+    val db = FirebaseFirestore.getInstance()
+    val customRoutineRef = db.collection("users")
+        .document(userId)
+        .collection("customRoutines") // Asegúrate que este es el nombre de tu subcolección
+        .document(routine.id) // Usamos el ID de la rutina para crear/actualizar
+
+    try {
+        // Firestore guardará los objetos UserCustomRoutine, Ejercicio y ComponenteEjercicio
+        // tal como están definidos en tus data classes.
+        // Los Enums se guardarán como Strings (ej: "CASA", "PECHO", "SIMPLE").
+        customRoutineRef.set(routine).await() // .set() crea o sobrescribe el documento.
+        Log.d(TAG_CUSTOM_ROUTINE, "UserCustomRoutine guardada/actualizada con ID: ${routine.id} para usuario: $userId")
+    } catch (e: Exception) {
+        Log.e(TAG_CUSTOM_ROUTINE, "Error al guardar/actualizar UserCustomRoutine con ID: ${routine.id} para usuario: $userId", e)
+        throw e // Relanzar la excepción para que el ViewModel la maneje
+    }
+}
 private fun parsearEjercicioFirestore(
     ef: EjercicioFirestore,
     gruposMuscularesEnum: List<GrupoMuscular>,
@@ -675,7 +702,46 @@ suspend fun getUserCustomRoutineById(userId: String, customRoutineId: String): U
         null // O re-lanza la excepción si quieres manejarla más arriba
     }
 }
+suspend fun getUserCustomRoutines(userId: String): List<UserCustomRoutine> {
+    if (userId.isBlank()) {
+        Log.e(TAG_GET_CUSTOM_ROUTINES, "El ID de usuario no puede estar vacío al obtener UserCustomRoutines.")
+        return emptyList() // O lanzar una excepción, según prefieras
+    }
 
+    val db = FirebaseFirestore.getInstance()
+    return try {
+        val snapshot = db.collection("users")
+            .document(userId)
+            .collection("customRoutines") // Asegúrate que este es el nombre de tu subcolección
+            .orderBy("fechaUltimaModificacion", Query.Direction.DESCENDING) // Opcional: ordenar por fecha
+            .get()
+            .await()
+
+        // Mapear los documentos a objetos UserCustomRoutine
+        // Usamos toObject con la clase correcta y manejamos el caso donde la conversión podría fallar
+        // o un documento no existe (aunque get() sin where() no debería dar documentos inexistentes en la lista).
+        val routines = snapshot.documents.mapNotNull { document ->
+            try {
+                document.toObject(UserCustomRoutine::class.java)?.apply {
+                    // Si el ID del documento de Firestore no está guardado dentro del objeto UserCustomRoutine,
+                    // (por ejemplo, si 'id' en UserCustomRoutine no es un campo directo del documento,
+                    // sino que es el ID del documento mismo), necesitarías asignarlo aquí.
+                    // Pero como lo estableces al guardar, debería estar ya en el objeto.
+                    // Si 'id' en tu UserCustomRoutine ES el id del documento y no un campo, harías:
+                    // this.id = document.id // Asegúrate que 'id' es var en tu data class
+                }
+            } catch (e: Exception) {
+                Log.e(TAG_GET_CUSTOM_ROUTINES, "Error al convertir documento ${document.id} a UserCustomRoutine", e)
+                null // Ignorar este documento si hay un error de conversión
+            }
+        }
+        Log.d(TAG_GET_CUSTOM_ROUTINES, "Se encontraron ${routines.size} rutinas personalizadas para el usuario $userId.")
+        routines
+    } catch (e: Exception) {
+        Log.e(TAG_GET_CUSTOM_ROUTINES, "Error al obtener rutinas personalizadas para el usuario: $userId", e)
+        throw e // Relanzar para que el ViewModel lo maneje
+    }
+}
 data class ResumenSemanal(
     val rutinas: Int = 0, // Es buena práctica añadir valores por defecto
     val tiempoTotal: Int = 0, // en segundos

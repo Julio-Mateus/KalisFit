@@ -67,7 +67,9 @@ object Routes {
     // Calistenia Detalle Nivel
     const val CALISTHENICS_LEVEL_DETAIL_PREFIX = "calisthenics_level_detail"
     const val CALISTHENICS_LEVEL_DETAIL_SCREEN = "$CALISTHENICS_LEVEL_DETAIL_PREFIX/{${Args.PROGRESSION_ID_ARG}}/{${Args.LEVEL_ID_ARG}}"
-
+    // --- Rutas de Nivel Superior (Sin BottomNav) ---
+    const val MY_CUSTOM_ROUTINES_SCREEN = "my_custom_routines"
+    const val ALL_EXERCISES_SCREEN = "all_exercises_screen"
     // Producto Detalle
     const val PRODUCT_DETAIL_BASE = "productDetail"
     const val PRODUCT_DETAIL_SCREEN = "$PRODUCT_DETAIL_BASE/{${Args.PRODUCT_ID_ARG}}"

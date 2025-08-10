@@ -22,24 +22,17 @@ import kotlin.text.lowercase
 class RoutineExplorerViewModel : ViewModel() {
 
     private val TAG = "RoutineExplorerViewModel"
-
     private val _rutinasCompletas = MutableStateFlow<List<Rutina>>(emptyList())
-
     private val _selectedNivel = MutableStateFlow<String?>(null)
     val selectedNivel: StateFlow<String?> = _selectedNivel.asStateFlow()
-
     private val _selectedLugar = MutableStateFlow<LugarEntrenamiento?>(null)
     val selectedLugar: StateFlow<LugarEntrenamiento?> = _selectedLugar.asStateFlow()
-
     private val _selectedGrupoMuscular = MutableStateFlow<String?>(null)
     val selectedGrupoMuscular: StateFlow<String?> = _selectedGrupoMuscular.asStateFlow()
-
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
     val rutinasFiltradas: StateFlow<List<Rutina>> = combine(
         _rutinasCompletas,
         _selectedNivel,

@@ -1,6 +1,8 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Refresh
@@ -35,15 +39,22 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
+import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineDetailViewModel
 
+@RequiresApi(Build.VERSION_CODES.P)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineDetailScreen(
@@ -105,9 +116,9 @@ fun RoutineDetailScreen(
             TopAppBar(
                 title = { Text(uiState.rutina?.nombre ?: "Detalle de Rutina") },
                 navigationIcon = {
-                    // IconButton(onClick = { navController.popBackStack() }) {
-                    //     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
-                    // }
+                     IconButton(onClick = { navController.popBackStack() }) {
+                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
+                     }
                 },
                 actions = {
                     IconButton(onClick = { routineDetailViewModel.refreshRoutineDetails() }) {
@@ -162,6 +173,7 @@ fun RoutineDetailScreen(
     )
 }
 
+@RequiresApi(Build.VERSION_CODES.P)
 @Composable
 fun RoutineDetailContent(
     rutina: Rutina,
@@ -211,7 +223,7 @@ fun RoutineDetailContent(
                 ) {
                     Icon(Icons.Filled.Edit, contentDescription = "Personalizar")
                     Spacer(Modifier.width(8.dp))
-                    Text("PERSONALIZAR")
+                    Text("EDITAR RUTINA")
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -229,35 +241,82 @@ fun RoutineDetailContent(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.P)
 @Composable
 fun EjercicioInDetailCard(ejercicio: Ejercicio) {
-    Card(modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 4.dp)) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(ejercicio.nombre, style = MaterialTheme.typography.titleMedium)
-            // Aquí puedes mostrar más detalles del ejercicio:
-            // ej. ejercicio.descripcion, series, repeticiones, componentes, etc.
-            Text("Series: ${ejercicio.numeroDeSeries}", style = MaterialTheme.typography.bodySmall)
-            if (ejercicio.repeticionesOriginal.isNotBlank() && ejercicio.repeticionesOriginal != "0") {
-                Text("Repeticiones: ${ejercicio.repeticionesOriginal}", style = MaterialTheme.typography.bodySmall)
-            }
-            if (ejercicio.duracionSegundosOriginal > 0) {
-                Text("Duración: ${ejercicio.duracionSegundosOriginal}s", style = MaterialTheme.typography.bodySmall)
-            }
-            if (ejercicio.descansoEntreSeriesSegundos > 0) {
-                Text("Descanso entre series: ${ejercicio.descansoEntreSeriesSegundos}s", style = MaterialTheme.typography.bodySmall)
-            }
-            if (ejercicio.componentes.isNotEmpty()) {
-                Text("Componentes:", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(
-                    top = 4.dp
-                ))
-                ejercicio.componentes.forEach { comp ->
-                    Text("- ${comp.nombreEspecifico ?: ""} ${comp.repeticiones ?: ""} ${comp.duracionSegundos?.let { "${it}s" } ?: ""}".trim(),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp) // Un poco más de padding vertical para la tarjeta
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp) // Padding general dentro de la tarjeta
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically // Centra verticalmente el texto y la imagen
+        ) {
+            // Columna para los detalles del texto (ocupará el espacio disponible)
+            Column(
+                modifier = Modifier.weight(1f), // Toma el espacio restante después de la imagen
+                verticalArrangement = Arrangement.spacedBy(4.dp) // Espacio entre los textos
+            ) {
+                Text(ejercicio.nombre, style = MaterialTheme.typography.titleMedium)
+
+                Text("Series: ${ejercicio.numeroDeSeries}", style = MaterialTheme.typography.bodySmall)
+
+                if (ejercicio.repeticionesOriginal.isNotBlank() && ejercicio.repeticionesOriginal != "0") {
+                    Text("Repeticiones: ${ejercicio.repeticionesOriginal}", style = MaterialTheme.typography.bodySmall)
                 }
+                if (ejercicio.duracionSegundosOriginal > 0) {
+                    Text("Duración: ${ejercicio.duracionSegundosOriginal}s", style = MaterialTheme.typography.bodySmall)
+                }
+                if (ejercicio.descansoEntreSeriesSegundos > 0) {
+                    Text("Descanso entre series: ${ejercicio.descansoEntreSeriesSegundos}s", style = MaterialTheme.typography.bodySmall)
+                }
+                if (ejercicio.componentes.isNotEmpty()) {
+                    Text(
+                        "Componentes:",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    ejercicio.componentes.forEach { comp ->
+                        Text(
+                            "- ${comp.nombreEspecifico ?: ""} ${comp.repeticiones ?: ""} ${comp.duracionSegundos?.let { "${it}s" } ?: ""}".trim(),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            // Espacio entre el texto y la imagen
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Imagen/GIF del ejercicio (si la URL existe)
+            if (!ejercicio.imagenUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(ejercicio.imagenUrl)
+                        .decoderFactory(ImageDecoderDecoder.Factory()) // Necesario para GIFs en API 28+
+                        .crossfade(true) // Efecto de fundido suave al cargar
+                        .placeholder(R.drawable.ic_default_placeholder) // Reemplaza con tu drawable
+                        .error(R.drawable.ic_error_placeholder)       // Reemplaza con tu drawable
+                        .build(),
+                    contentDescription = "Imagen de ${ejercicio.nombre}",
+                    modifier = Modifier
+                        .size(100.dp) // Tamaño fijo para la imagen, ajústalo como necesites
+                        .align(Alignment.CenterVertically), // Asegura que esté centrado si la altura del texto es diferente
+                    contentScale = ContentScale.Fit // O ContentScale.Crop, según prefieras
+                )
+            } else {
+                // Opcional: Mostrar un placeholder si no hay imagenUrl
+                // Podrías usar un Icono o una imagen de placeholder genérica aquí
+                // Image(
+                //     painter = painterResource(id = R.drawable.ic_no_image_available),
+                //     contentDescription = "No hay imagen disponible",
+                //     modifier = Modifier.size(100.dp),
+                //     contentScale = ContentScale.Fit
+                // )
             }
         }
     }
