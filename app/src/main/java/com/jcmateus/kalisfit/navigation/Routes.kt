@@ -57,7 +57,8 @@ object Routes {
     // Rutina Detalle
     const val ROUTINE_DETAIL_PREFIX = "routine_detail"
     // Ahora usa la constante de Args para el nombre del argumento
-    const val ROUTINE_DETAIL_SCREEN = "$ROUTINE_DETAIL_PREFIX/{${Args.ROUTINE_ID_ARG}}"
+    const val ROUTINE_DETAIL_SCREEN =
+        "$ROUTINE_DETAIL_PREFIX/{${Args.ROUTINE_ID_ARG}}?${Args.USER_ID_ARG}={${Args.USER_ID_ARG}}"
     // Ya no necesitas: const val ROUTINE_DETAIL_ARG_ID = "routineId" porque está en Args
     const val ROUTINE_SUCCESS_SCREEN = "routine_success_screen"
     // --- NUEVA RUTA PARA LA EJECUCIÓN DE LA RUTINA (RoutineScreen) ---
@@ -89,9 +90,16 @@ object Routes {
         // Asumiendo que ROUTINE_ID_ARG es el nombre del argumento que RoutineScreen espera
         return "$ROUTINE_EXECUTION_PREFIX/$routineId"
     }
-    fun routineDetail(routineId: String): String {
-        // La constante Args.ROUTINE_ID_ARG se usa implícitamente por la definición de ROUTINE_DETAIL_SCREEN
-        return "$ROUTINE_DETAIL_PREFIX/$routineId"
+    fun routineDetail(routineId: String, userId: String? = null): String {
+        // userId es ahora un parámetro opcional en la función
+        var route = "$ROUTINE_DETAIL_PREFIX/$routineId"
+        if (userId != null) {
+            // Si se proporciona userId, se añade como query parameter
+            // Importante: El nombre del arg aquí "userId" debe coincidir con Routes.Args.USER_ID_ARG
+            // y con cómo lo defines en la constante ROUTINE_DETAIL_SCREEN
+            route += "?${Args.USER_ID_ARG}=$userId"
+        }
+        return route
     }
 
     fun calisthenicsLevelDetail(progressionId: String, levelId: String): String {

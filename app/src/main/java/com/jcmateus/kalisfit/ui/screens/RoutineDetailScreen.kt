@@ -158,7 +158,7 @@ fun RoutineDetailScreen(
                             },
                             onPersonalizarClicked = {
                                 if (currentUserId != null) {
-                                    routineDetailViewModel.onPersonalizarRutinaClicked(currentUserId)
+                                    routineDetailViewModel.onPersonalizarRutinaClicked()
                                 } else {
                                     // Mostrar mensaje para iniciar sesión
                                     Log.w("RoutineDetailScreen", "Intento de personalizar sin userId.")

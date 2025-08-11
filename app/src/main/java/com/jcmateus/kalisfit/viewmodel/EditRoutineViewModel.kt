@@ -62,74 +62,128 @@ class EditRoutineViewModel(
             loadInitialRoutine()
         }
     }
-
     private fun loadInitialRoutine() {
         _uiState.value = _uiState.value.copy(isLoading = true)
         viewModelScope.launch {
             try {
                 when {
-                    // Editando una rutina personalizada existente
+                    // CASO 1: Editando una rutina personalizada existente directamente
+                    // (Se navega con customRoutineId y userId)
                     customRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
+                        Log.d(TAG, "Cargando rutina personalizada EXISTENTE para edición. customId: $customRoutineIdArg, userId: $currentUserIdArg")
                         val existingCustomRoutine: UserCustomRoutine? =
                             getUserCustomRoutineById(currentUserIdArg, customRoutineIdArg)
 
                         if (existingCustomRoutine != null) {
                             _uiState.value = _uiState.value.copy(
                                 routineToEdit = existingCustomRoutine,
-                                isNewRoutine = false,
+                                isNewRoutine = false, // No es nueva, se edita la existente
                                 originalTemplateId = existingCustomRoutine.originalTemplateId,
                                 isLoading = false
                             )
                         } else {
+                            Log.w(TAG, "Rutina personalizada (customId: $customRoutineIdArg) no encontrada para el usuario $currentUserIdArg.")
                             _uiState.value = _uiState.value.copy(errorMessages = listOf("Rutina personalizada no encontrada."), isLoading = false)
                         }
                     }
-                    // Creando una rutina personalizada desde una plantilla (JSON subido)
-                    templateRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
-                        val templateRoutine: Rutina? = getRutinaByIdFromFirestore(templateRoutineIdArg)
 
-                        if (templateRoutine != null) {
+                    // CASO 2: Creando una NUEVA rutina, posiblemente basada en una plantilla o en una copia de otra UserCustomRoutine
+                    // (Se navega con userId y opcionalmente templateId. customRoutineId es null)
+                    templateRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
+                        Log.d(TAG, "Creando NUEVA rutina basada en templateId: $templateRoutineIdArg, para userId: $currentUserIdArg")
+                        var baseForNewRoutine: Rutina? = null // Modelo base 'Rutina' para construir la nueva UserCustomRoutine
+                        var sourceOriginalTemplateId: String? = templateRoutineIdArg // Por defecto, el templateIdArg es el original
+
+                        // Intento 1: ¿Es el templateIdArg una plantilla global de Firestore?
+                        val globalTemplate: Rutina? = getRutinaByIdFromFirestore(templateRoutineIdArg)
+
+                        if (globalTemplate != null) {
+                            Log.d(TAG, "templateId '$templateRoutineIdArg' encontrado como PLANTILLA GLOBAL: ${globalTemplate.nombre}")
+                            baseForNewRoutine = globalTemplate
+                            // sourceOriginalTemplateId ya es templateRoutineIdArg
+                        } else {
+                            // Intento 2: Si no es plantilla global, ¿es el ID de una UserCustomRoutine existente que queremos COPIAR?
+                            // El currentUserIdArg es el dueño de la NUEVA rutina que se creará.
+                            // El templateRoutineIdArg es el ID de la UserCustomRoutine que queremos usar como base.
+                            // Para cargar esa UserCustomRoutine, necesitamos su ID (templateRoutineIdArg) y el ID de su dueño.
+                            // ¡IMPORTANTE! Asumimos que si llegamos aquí, templateRoutineIdArg es el ID de una
+                            // UserCustomRoutine y currentUserIdArg es el dueño de esa rutina que se va a copiar.
+                            // Esto es cierto si la navegación desde RoutineDetailScreen de una UserCustomRoutine pasa su propio ID como templateId
+                            // y su propio userId como userId.
+                            Log.d(TAG, "templateId '$templateRoutineIdArg' NO encontrado como plantilla global. Intentando cargar como UserCustomRoutine del usuario '$currentUserIdArg' para usarla como base (copia).")
+                            val baseUserCustomRoutine: UserCustomRoutine? = getUserCustomRoutineById(currentUserIdArg, templateRoutineIdArg)
+
+                            if (baseUserCustomRoutine != null) {
+                                Log.d(TAG, "templateId '$templateRoutineIdArg' encontrado como USER CUSTOM ROUTINE: ${baseUserCustomRoutine.nombrePersonalizado}. Se usará para COPIA.")
+                                // Necesitamos mapear UserCustomRoutine a un objeto 'Rutina' si tu lógica de creación lo espera,
+                                // o directamente usar baseUserCustomRoutine para crear la nueva.
+                                // Aquí asumiré que puedes usar directamente baseUserCustomRoutine:
+                                baseForNewRoutine = Rutina( // Mapeo manual si es necesario
+                                    id = baseUserCustomRoutine.id, // Se usará como originalTemplateId de la copia
+                                    nombre = baseUserCustomRoutine.nombrePersonalizado,
+                                    descripcion = baseUserCustomRoutine.descripcion,
+                                    imagenUrl = baseUserCustomRoutine.imagenUrl,
+                                    ejercicios = baseUserCustomRoutine.ejercicios, // Asume que 'Ejercicio' es el mismo modelo
+                                    numeroDeRondas = baseUserCustomRoutine.numeroDeRondas,
+                                    descansoEntreRondasSegundos = baseUserCustomRoutine.descansoEntreRondasSegundos,
+                                    nivelRecomendado = baseUserCustomRoutine.nivelRecomendado.toList(), // Asumiendo que es List<String> en ambos
+                                    objetivos = baseUserCustomRoutine.objetivos.toList(),             // Asumiendo que es List<String> en ambos
+                                    lugarEntrenamiento = baseUserCustomRoutine.lugarEntrenamiento.map { it }
+                                    // ... otros campos necesarios de Rutina
+                                )
+                                sourceOriginalTemplateId = baseUserCustomRoutine.originalTemplateId ?: baseUserCustomRoutine.id // Heredar el original o usar su propio ID si no tiene
+                            } else {
+                                Log.w(TAG, "templateId '$templateRoutineIdArg' NO encontrado ni como plantilla global ni como UserCustomRoutine del usuario '$currentUserIdArg'.")
+                            }
+                        }
+
+                        if (baseForNewRoutine != null) {
                             val newCustomRoutine = UserCustomRoutine(
-                                id = UUID.randomUUID().toString(),
-                                userId = currentUserIdArg,
-                                originalTemplateId = templateRoutine.id,
-                                nombrePersonalizado = templateRoutine.nombre,
-                                descripcion = templateRoutine.descripcion,
-                                imagenUrl = templateRoutine.imagenUrl,
-                                ejercicios = templateRoutine.ejercicios.map { ejercicioPlantilla ->
-                                    // Los ejercicios de la plantilla ya son del tipo Ejercicio (modelo app)
-                                    // gracias a getRutinaByIdFromFirestore y parsearEjercicioFirestore.
+                                id = UUID.randomUUID().toString(), // NUEVO ID para la rutina que se está creando/editando
+                                userId = currentUserIdArg,          // Dueño de esta nueva rutina
+                                originalTemplateId = sourceOriginalTemplateId, // ID de la plantilla global o de la UserCustomRoutine original
+                                nombrePersonalizado = baseForNewRoutine.nombre,
+                                descripcion = baseForNewRoutine.descripcion,
+                                imagenUrl = baseForNewRoutine.imagenUrl,
+                                ejercicios = baseForNewRoutine.ejercicios.map { ejercicioPlantilla ->
                                     ejercicioPlantilla.copy(
-                                        id = UUID.randomUUID().toString(), // Nuevo ID para esta instancia específica del ejercicio
-                                        componentes = ejercicioPlantilla.componentes.map { it.copy() } // Copia profunda
+                                        id = UUID.randomUUID().toString(),
+                                        componentes = ejercicioPlantilla.componentes.map { it.copy() }
                                     )
                                 },
-                                numeroDeRondas = templateRoutine.numeroDeRondas,
-                                descansoEntreRondasSegundos = templateRoutine.descansoEntreRondasSegundos,
-                                nivelRecomendado = templateRoutine.nivelRecomendado.toList(),
-                                objetivos = templateRoutine.objetivos.toList(),
-                                lugarEntrenamiento = templateRoutine.lugarEntrenamiento.toList(),
+                                numeroDeRondas = baseForNewRoutine.numeroDeRondas,
+                                descansoEntreRondasSegundos = baseForNewRoutine.descansoEntreRondasSegundos,
+                                nivelRecomendado = baseForNewRoutine.nivelRecomendado.toList(),
+                                objetivos = baseForNewRoutine.objetivos.toList(),
+                                lugarEntrenamiento = baseForNewRoutine.lugarEntrenamiento.toList(),
                                 fechaCreacion = Timestamp.now(),
                                 fechaUltimaModificacion = Timestamp.now()
                             )
                             _uiState.value = _uiState.value.copy(
                                 routineToEdit = newCustomRoutine,
-                                isNewRoutine = true,
-                                originalTemplateId = templateRoutine.id,
+                                isNewRoutine = true, // Siempre es una nueva rutina en este bloque (ya sea de plantilla o copia)
+                                originalTemplateId = newCustomRoutine.originalTemplateId, // El que acabamos de determinar
                                 isLoading = false
                             )
                         } else {
-                            _uiState.value = _uiState.value.copy(errorMessages = listOf("Plantilla de rutina no encontrada."), isLoading = false)
+                            // Si no se encontró ni plantilla global ni UserCustomRoutine para copiar
+                            Log.e(TAG, "No se pudo encontrar una base (plantilla o rutina custom) para templateId: $templateRoutineIdArg. Creando una rutina en blanco como fallback si es apropiado, o mostrando error.")
+                            // Podrías decidir crear una rutina en blanco aquí como fallback, o mantener el error.
+                            // Por ahora, mantendré el error para ser explícito.
+                            _uiState.value = _uiState.value.copy(errorMessages = listOf("Plantilla o rutina base no encontrada: $templateRoutineIdArg."), isLoading = false)
                         }
                     }
-                    // Creando una rutina personalizada totalmente nueva (desde cero)
-                    !currentUserIdArg.isNullOrBlank() -> {
+
+                    // CASO 3: Creando una rutina personalizada totalmente nueva (desde cero)
+                    // (Se navega solo con userId. templateId y customRoutineId son null)
+                    !currentUserIdArg.isNullOrBlank() -> { // Esta condición ahora es más específica (templateIdArg es null)
+                        Log.d(TAG, "Creando rutina personalizada totalmente NUEVA (desde cero) para userId: $currentUserIdArg")
                         val blankRoutine = UserCustomRoutine(
                             id = UUID.randomUUID().toString(),
                             userId = currentUserIdArg,
                             nombrePersonalizado = "Nueva Rutina",
                             descripcion = "",
-                            ejercicios = emptyList(), // Comienza vacía, el usuario puede añadir ejercicios en blanco o duplicar
+                            ejercicios = emptyList(),
                             numeroDeRondas = 3,
                             descansoEntreRondasSegundos = 60,
                             fechaCreacion = Timestamp.now(),
@@ -142,6 +196,8 @@ class EditRoutineViewModel(
                         )
                     }
                     else -> {
+                        // Caso de error no manejado (ej. currentUserIdArg es null y no debería serlo)
+                        Log.e(TAG, "Error crítico: ID de usuario no disponible o estado de argumentos inesperado.")
                         _uiState.value = _uiState.value.copy(errorMessages = listOf("Error crítico: ID de usuario no disponible."), isLoading = false)
                     }
                 }
@@ -151,20 +207,17 @@ class EditRoutineViewModel(
             }
         }
     }
-
     // --- Funciones de modificación de la Rutina ---
     fun onRoutineNameChanged(newName: String) {
         _uiState.value = _uiState.value.copy(
             routineToEdit = _uiState.value.routineToEdit?.copy(nombrePersonalizado = newName)
         )
     }
-
     fun onDescriptionChanged(newDescription: String) {
         _uiState.value = _uiState.value.copy(
             routineToEdit = _uiState.value.routineToEdit?.copy(descripcion = newDescription)
         )
     }
-
     fun onRoundsChanged(newRoundsString: String) {
         val newRounds = newRoundsString.toIntOrNull() ?: _uiState.value.routineToEdit?.numeroDeRondas ?: 1
         if (newRounds > 0) {
@@ -173,7 +226,6 @@ class EditRoutineViewModel(
             )
         }
     }
-
     fun onRestBetweenRoundsChanged(newRestString: String) {
         val newRest = newRestString.toIntOrNull() ?: _uiState.value.routineToEdit?.descansoEntreRondasSegundos ?: 0
         if (newRest >= 0) {
@@ -182,7 +234,6 @@ class EditRoutineViewModel(
             )
         }
     }
-
     // --- Funciones de modificación de Ejercicio (existente en la rutina) ---
     fun onExerciseSeriesChanged(exerciseIndex: Int, newSeriesString: String) {
         val newSeries = newSeriesString.toIntOrNull()
@@ -194,7 +245,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onExerciseSimpleRepsChanged(exerciseIndex: Int, newReps: String) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -204,7 +254,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onExerciseSimpleDurationChanged(exerciseIndex: Int, newDurationString: String) {
         val newDuration = newDurationString.toIntOrNull()
         _uiState.value.routineToEdit?.let { currentRoutine ->
@@ -215,7 +264,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onExerciseRestBetweenSeriesChanged(exerciseIndex: Int, newRestString: String) {
         val newRest = newRestString.toIntOrNull()
         _uiState.value.routineToEdit?.let { currentRoutine ->
@@ -226,7 +274,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onExerciseTempoChanged(exerciseIndex: Int, newTempo: String) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -236,7 +283,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onExerciseIsUnilateralChanged(exerciseIndex: Int, isUnilateral: Boolean) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -246,12 +292,10 @@ class EditRoutineViewModel(
             }
         }
     }
-
     // --- Funciones de modificación de ComponenteEjercicio ---
     fun onExerciseComponentRepsChanged(exerciseIndex: Int, componentIndex: Int, newReps: String) {
         updateExerciseComponent(exerciseIndex, componentIndex) { it.copy(repeticiones = newReps.ifBlank { null }) }
     }
-
     fun onExerciseComponentDurationChanged(exerciseIndex: Int, componentIndex: Int, newDurationString: String) {
         val newDuration = newDurationString.toIntOrNull()
         if (newDuration != null && newDuration >= 0) {
@@ -263,8 +307,6 @@ class EditRoutineViewModel(
     fun onExerciseComponentNameChanged(exerciseIndex: Int, componentIndex: Int, newName: String) {
         updateExerciseComponent(exerciseIndex, componentIndex) { it.copy(nombreEspecifico = newName) }
     }
-
-
     fun onAddComponentToExercise(exerciseIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -284,7 +326,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onRemoveComponentFromExercise(exerciseIndex: Int, componentIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -322,7 +363,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     // --- Funciones para gestionar la lista de ejercicios en la rutina ---
     fun onRemoveExercise(exerciseIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
@@ -334,7 +374,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     /**
      * Añade un ejercicio "en blanco" a la rutina actual.
      * El usuario deberá configurar este ejercicio manualmente.
@@ -392,7 +431,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onMoveExerciseUp(exerciseIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex > 0 && exerciseIndex in currentRoutine.ejercicios.indices) {
@@ -405,7 +443,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onMoveExerciseDown(exerciseIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine ->
             if (exerciseIndex >= 0 && exerciseIndex < currentRoutine.ejercicios.size - 1) {
@@ -418,7 +455,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     // --- Guardado de la Rutina ---
     fun saveRoutine() {
         val routineToSave = _uiState.value.routineToEdit ?: return
@@ -462,11 +498,9 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun clearErrorMessages() {
         _uiState.value = _uiState.value.copy(errorMessages = emptyList())
     }
-
     fun onSaveHandled() {
         _uiState.value = _uiState.value.copy(saveSuccess = false) // Resetea el flag de éxito
     }

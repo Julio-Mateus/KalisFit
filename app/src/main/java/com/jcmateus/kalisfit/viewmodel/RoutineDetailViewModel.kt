@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
+import com.jcmateus.kalisfit.data.getUserCustomRoutineById
+import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.navigation.Routes
@@ -29,64 +31,65 @@ class RoutineDetailViewModel(
 
     private val TAG = "RoutineDetailViewModel"
     private val rutinaId: String // Declaración sin inicialización inmediata
-
+    private val userId: String?
     // StateFlows para la UI y eventos de navegación
     private val _uiState = MutableStateFlow(RoutineDetailUiState())
     val uiState: StateFlow<RoutineDetailUiState> = _uiState.asStateFlow()
-
     private val _navigateToEditRoutine = MutableStateFlow<UserCustomRoutine?>(null)
     val navigateToEditRoutine: StateFlow<UserCustomRoutine?> = _navigateToEditRoutine.asStateFlow()
-
     private val _startRoutineExecution = MutableStateFlow<String?>(null) // Debe ser String?
     val startRoutineExecution: StateFlow<String?> = _startRoutineExecution.asStateFlow()
-
     init {
-        // Obtener el ID de la rutina desde SavedStateHandle
-        val idFromHandle: String? = savedStateHandle.get<String>(Routes.Args.ROUTINE_ID_ARG) // Usa la constante correcta
+        val idFromHandle: String? = savedStateHandle.get<String>(Routes.Args.ROUTINE_ID_ARG)
+        // Obtener el userId, podría ser nulo si es una plantilla
+        this.userId = savedStateHandle.get<String>(Routes.Args.USER_ID_ARG)
 
         if (idFromHandle != null && idFromHandle.isNotBlank()) {
             this.rutinaId = idFromHandle
-            Log.d(TAG, "ViewModel inicializado. rutinaId obtenido: '$idFromHandle'")
-            loadRoutineDetails(this.rutinaId) // Llama a loadRoutineDetails con el ID asignado
+            Log.d(TAG, "ViewModel inicializado. rutinaId: '${this.rutinaId}', userId: '${this.userId}'")
+            loadRoutineDetails(this.rutinaId, this.userId)
         } else {
-            val errorMessage = "Argumento '${Routes.Args.ROUTINE_ID_ARG}' no encontrado o inválido en SavedStateHandle para RoutineDetailViewModel"
-            Log.e(TAG, errorMessage)
-            _uiState.value = RoutineDetailUiState(
-                isLoading = false,
-                errorMessage = "ID de rutina no válido." // Mensaje amigable para el usuario
-            )
-            // Considera el manejo de errores: Si quieres que la app crashee, mantén el throw.
-            // Si prefieres que el ViewModel exista en un estado de error, puedes quitar el throw.
-            // Sin embargo, este ViewModel depende críticamente del rutinaId.
-            throw IllegalArgumentException(errorMessage)
+            val errorMsg = "Argumento '${Routes.Args.ROUTINE_ID_ARG}' no encontrado o inválido."
+            Log.e(TAG, errorMsg)
+            _uiState.value = RoutineDetailUiState(isLoading = false, errorMessage = "ID de rutina no válido.")
+            throw IllegalArgumentException(errorMsg)
         }
     }
-
-    // ELIMINA EL SEGUNDO BLOQUE init DESDE AQUÍ
-    /*
-    init {
-        // ... contenido del segundo bloque init que estaba causando problemas ...
-    }
-    */
-    // HASTA AQUÍ
-
-    private fun loadRoutineDetails(idRutina: String) {
+    private fun loadRoutineDetails(idRutina: String, currentUserId: String?) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            Log.d(TAG, "Cargando detalles para la rutina ID: $idRutina")
+            Log.d(TAG, "Cargando detalles para rutina ID: $idRutina, Usuario ID: $currentUserId")
 
             try {
-                val rutinaCargada = getRutinaByIdFromFirestore(idRutina)
+                val rutinaCargada: Rutina?
+
+                if (currentUserId != null && currentUserId.isNotBlank()) {
+                    // Es una rutina personalizada de un usuario
+                    Log.d(TAG, "Intentando cargar como UserCustomRoutine...")
+                    val customRoutine = getUserCustomRoutineById(currentUserId, idRutina) // Usa tu función de FirestoreUtils
+                    if (customRoutine != null) {
+                        Log.d(TAG, "UserCustomRoutine '${customRoutine.nombrePersonalizado}' cargada.")
+                        // Necesitas mapear UserCustomRoutine a Rutina (modelo de UI)
+                        rutinaCargada = mapUserCustomRoutineToRutina(customRoutine)
+                    } else {
+                        Log.w(TAG, "No se encontró UserCustomRoutine con ID: $idRutina para usuario: $currentUserId")
+                        rutinaCargada = null
+                    }
+                } else {
+                    // Es una rutina de plantilla (o el userId no se proporcionó)
+                    Log.d(TAG, "Intentando cargar como Rutina de plantilla...")
+                    rutinaCargada = getRutinaByIdFromFirestore(idRutina) // Usa tu función de FirestoreUtils
+                }
 
                 if (rutinaCargada != null) {
-                    Log.d(TAG, "Rutina '${rutinaCargada.nombre}' cargada con ${rutinaCargada.ejercicios.size} ejercicios.")
+                    Log.d(TAG, "Rutina '${rutinaCargada.nombre}' preparada para UI con ${rutinaCargada.ejercicios.size} ejercicios.")
                     _uiState.value = RoutineDetailUiState(
                         rutina = rutinaCargada,
                         isLoading = false,
                         errorMessage = null
                     )
                 } else {
-                    Log.w(TAG, "No se encontró la rutina con ID: $idRutina o falló la carga.")
+                    Log.w(TAG, "No se encontró la rutina con ID: $idRutina (intentado como custom y/o plantilla).")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         rutina = null,
@@ -103,7 +106,50 @@ class RoutineDetailViewModel(
             }
         }
     }
-
+    private fun mapUserCustomRoutineToRutina(customRoutine: UserCustomRoutine): Rutina {
+        Log.d(TAG, "Mapeando UserCustomRoutine (ID: ${customRoutine.id}) a Rutina UI.")
+        return Rutina(
+            id = customRoutine.id,
+            slug = customRoutine.originalTemplateId ?: customRoutine.id, // O lo que tenga sentido para el slug
+            nombre = customRoutine.nombrePersonalizado,
+            descripcion = customRoutine.descripcion ?: customRoutine.descripcion ?: "",
+            imagenUrl = customRoutine.imagenUrl,
+            nivelRecomendado = customRoutine.nivelRecomendado,
+            objetivos = customRoutine.objetivos,
+            lugarEntrenamiento = customRoutine.lugarEntrenamiento, // Asumiendo que UserCustomRoutine tiene List<LugarEntrenamiento>
+            ejercicios = customRoutine.ejercicios.map { ejercicioCustom ->
+                // Mapear cada Ejercicio (de UserCustomRoutine.ejercicios)
+                // al modelo de Ejercicio que espera tu Rutina UI.
+                // Esta es una copia directa, ajusta si los modelos son diferentes.
+                Ejercicio(
+                    id = ejercicioCustom.id,
+                    nombre = ejercicioCustom.nombre,
+                    descripcion = ejercicioCustom.descripcion,
+                    imagenUrl = ejercicioCustom.imagenUrl,
+                    imagenUrl1 = ejercicioCustom.imagenUrl1,
+                    imagenUrl2 = ejercicioCustom.imagenUrl2,
+                    videoUrl = ejercicioCustom.videoUrl,
+                    duracionSegundosOriginal = ejercicioCustom.duracionSegundosOriginal,
+                    repeticionesOriginal = ejercicioCustom.repeticionesOriginal,
+                    numeroDeSeries = ejercicioCustom.numeroDeSeries,
+                    descansoEntreSeriesSegundos = ejercicioCustom.descansoEntreSeriesSegundos,
+                    descansoDespuesEjercicioSegundos = ejercicioCustom.descansoDespuesEjercicioSegundos,
+                    grupoMuscular = ejercicioCustom.grupoMuscular,
+                    equipamientoNecesario = ejercicioCustom.equipamientoNecesario,
+                    lugarEntrenamiento = ejercicioCustom.lugarEntrenamiento,
+                    orden = ejercicioCustom.orden,
+                    tipoEjercicio = ejercicioCustom.tipoEjercicio,
+                    componentes = ejercicioCustom.componentes.map { compCustom ->
+                        compCustom.copy() // Asumiendo que ComponenteEjercicio es el mismo modelo
+                    },
+                    notaTempo = ejercicioCustom.notaTempo,
+                    esUnilateral = ejercicioCustom.esUnilateral
+                )
+            },
+            numeroDeRondas = customRoutine.numeroDeRondas,
+            descansoEntreRondasSegundos = customRoutine.descansoEntreRondasSegundos
+        )
+    }
     fun onIniciarRutinaClicked() {
         _uiState.value.rutina?.let { rutinaActual ->
             Log.d(TAG, "Solicitando inicio de rutina con ID: ${rutinaActual.id}")
@@ -115,40 +161,56 @@ class RoutineDetailViewModel(
         _startRoutineExecution.value = null
     }
 
-    fun onPersonalizarRutinaClicked(userId: String) {
-        val plantillaOriginal = _uiState.value.rutina
-        if (plantillaOriginal == null) {
+    fun onPersonalizarRutinaClicked() { // Ya no necesita userId como parámetro si lo tienes como propiedad
+        val rutinaActual = _uiState.value.rutina
+        if (rutinaActual == null) {
             _uiState.value = _uiState.value.copy(errorMessage = "No se puede personalizar, rutina no cargada.")
             Log.w(TAG, "Intento de personalizar rutina nula.")
             return
         }
 
-        if (userId.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Debes iniciar sesión para personalizar.")
-            Log.w(TAG, "Usuario no autenticado, no se puede personalizar rutina.")
+        // Usa el this.userId obtenido en el init
+        if (this.userId == null || this.userId.isBlank()) {
+            // Este caso es más complejo: si estamos viendo una plantilla, ¿cómo personalizamos?
+            // El userId para la NUEVA rutina personalizada vendría del usuario actualmente logueado.
+            // Necesitarías una forma de obtener el ID del usuario autenticado globalmente
+            // (e.g., desde un AuthViewModel o similar)
+            Log.w(TAG, "Se intentó personalizar, pero no hay un userId asociado a esta rutina (podría ser plantilla) o el usuario actual no está claro.")
+            _uiState.value = _uiState.value.copy(errorMessage = "Inicia sesión para personalizar o selecciona una rutina de usuario.")
             return
         }
 
-        Log.d(TAG, "Iniciando personalización para la rutina plantilla ID: ${plantillaOriginal.id} por usuario $userId")
+        Log.d(TAG, "Iniciando personalización para rutina ID: ${rutinaActual.id} por usuario ${this.userId}")
+
+        // La lógica para crear UserCustomRoutine a partir de la 'rutinaActual' (que es tipo Rutina)
+        // Si rutinaActual vino de una UserCustomRoutine, su ID es el customRoutineId.
+        // Si rutinaActual vino de una plantilla, su ID es el templateId.
 
         val nuevaRutinaParaPersonalizar = UserCustomRoutine(
-            id = UUID.randomUUID().toString(), // Asegúrate de que UserCustomRoutine tenga 'id' como var si lo asignas aquí
-            userId = userId,
-            nombrePersonalizado = plantillaOriginal.nombre,
-            descripcion = plantillaOriginal.descripcion,
-            imagenUrl = plantillaOriginal.imagenUrl,
-            ejercicios = plantillaOriginal.ejercicios.map { ejercicioOriginal ->
-                // Realiza una copia profunda si es necesario
-                ejercicioOriginal.copy(
+            id = UUID.randomUUID().toString(), // ID para la nueva copia personalizada
+            userId = this.userId, // El usuario que está personalizando
+            nombrePersonalizado = rutinaActual.nombre, // Empieza con el nombre actual
+            descripcion = rutinaActual.descripcion,
+            imagenUrl = rutinaActual.imagenUrl,
+            ejercicios = rutinaActual.ejercicios.map { ejercicioOriginal ->
+                ejercicioOriginal.copy( // Asegúrate que Ejercicio es tu modelo completo
                     componentes = ejercicioOriginal.componentes.map { componente -> componente.copy() }
                 )
             },
-            numeroDeRondas = plantillaOriginal.numeroDeRondas,
-            descansoEntreRondasSegundos = plantillaOriginal.descansoEntreRondasSegundos,
-            nivelRecomendado = plantillaOriginal.nivelRecomendado.toList(),
-            objetivos = plantillaOriginal.objetivos.toList(),
-            lugarEntrenamiento = plantillaOriginal.lugarEntrenamiento.toList(), // Asegúrate de que los tipos coincidan
-            originalTemplateId = plantillaOriginal.id,
+            numeroDeRondas = rutinaActual.numeroDeRondas,
+            descansoEntreRondasSegundos = rutinaActual.descansoEntreRondasSegundos,
+            nivelRecomendado = rutinaActual.nivelRecomendado.toList(),
+            objetivos = rutinaActual.objetivos.toList(),
+            lugarEntrenamiento = rutinaActual.lugarEntrenamiento.toList(),
+            originalTemplateId = if (rutinaActual.id != this.rutinaId && this.userId != null) rutinaActual.id else this.rutinaId, // Si el id de la rutina en UI es diferente al que vino por args (y hay user) era una plantilla
+            // ^ Esta lógica de originalTemplateId puede necesitar ajuste fino.
+            // Si this.userId es nulo, significa que estamos viendo una plantilla, entonces rutinaActual.id ES el templateId.
+            // Si this.userId no es nulo, significa que estamos viendo una customRoutine, entonces this.rutinaId ES el customRoutineId.
+            //   En este caso, UserCustomRoutine ya debería tener su propio originalTemplateId si fue creada desde una plantilla.
+            //   La clave es si la 'rutinaActual' es la plantilla original o ya una UserCustomRoutine.
+            //   Si la rutina actual ya es una UserCustomRoutine, su ID es el custom ID.
+            //   Si `rutinaActual` proviene de una plantilla, `rutinaActual.id` es el ID de la plantilla.
+
             fechaCreacion = Timestamp.now(),
             fechaUltimaModificacion = Timestamp.now()
         )
@@ -168,8 +230,8 @@ class RoutineDetailViewModel(
         // La comprobación isNotBlank() es una salvaguarda adicional,
         // pero teóricamente no es estrictamente necesaria debido a la lógica del init.
         if (rutinaId.isNotBlank()) {
-            Log.d(TAG, "Refrescando detalles para rutinaId: $rutinaId")
-            loadRoutineDetails(rutinaId)
+            Log.d(TAG, "Refrescando detalles para rutinaId: $rutinaId, userId: $userId")
+            loadRoutineDetails(rutinaId, userId)
         } else {
             // Este caso solo ocurriría si modificaras el init para NO lanzar una excepción
             // y permitieras que rutinaId se quede vacío o nulo.

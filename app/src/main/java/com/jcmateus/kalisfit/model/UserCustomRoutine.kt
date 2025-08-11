@@ -8,7 +8,6 @@ data class UserCustomRoutine(
     var nombrePersonalizado: String = "",
     var descripcion: String = "",
     var imagenUrl: String? = null,
-
     // El usuario personaliza una lista de Ejercicio, igual que en tu modelo Rutina original.
     // Todos los campos dentro de cada Ejercicio pueden ser modificados por el usuario para su rutina.
     var ejercicios: List<Ejercicio> = emptyList(),

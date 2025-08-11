@@ -180,26 +180,42 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             )
         }
         composable(
-            route = Routes.ROUTINE_DETAIL_SCREEN, // ej. "routine_detail/{routineId}"
-            arguments = listOf(navArgument(Routes.Args.ROUTINE_ID_ARG) { // ej. "routineId"
-                type = NavType.StringType
-                // nullable = false // Por defecto es false
-            })
+            route = Routes.ROUTINE_DETAIL_SCREEN, // Ahora es "$ROUTINE_DETAIL_PREFIX/{routineId}?userId={userId}"
+            arguments = listOf(
+                navArgument(Routes.Args.ROUTINE_ID_ARG) {
+                    type = NavType.StringType
+                    // nullable = false // Es parte de la ruta, no puede ser nulo para que la ruta coincida
+                },
+                navArgument(Routes.Args.USER_ID_ARG) { // DECLARAR EL NUEVO ARGUMENTO
+                    type = NavType.StringType
+                    nullable = true // Es un query parameter opcional, así que puede ser nulo
+                    defaultValue = null // Explícito que si no se pasa, es null
+                }
+            )
         ) { backStackEntry ->
-            // El backStackEntry todavía es útil para obtener argumentos si los necesitaras pasar
-            // directamente al Composable, pero el ViewModel ahora los tomará del SavedStateHandle.
+            // El ViewModel ahora tomará routineId y userId del SavedStateHandle automáticamente.
+            // No necesitas extraerlos aquí para pasarlos explícitamente al ViewModel.
+
             Log.d(
                 "NavGraph_RoutineDetail",
-                "Navegando a RoutineDetail. Argumento: ${backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)}"
+                "Navegando a RoutineDetail. ROUTINE_ID_ARG: ${backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)}, " +
+                        "USER_ID_ARG: ${backStackEntry.arguments?.getString(Routes.Args.USER_ID_ARG)}" // Loguea el userId también
             )
 
+            // Necesitas pasar el ID del usuario AUTENTICADO a RoutineDetailScreen para acciones
+            // como "personalizar esta rutina PARA MÍ".
             val currentUserFromAuth by authViewModel.currentUser.collectAsState()
-            val currentUserId: String? = currentUserFromAuth?.uid
+            val loggedInUserId: String? = currentUserFromAuth?.uid
 
+            // Ya NO necesitas pasar `routineId` ni `userIdFromNav` a `RoutineDetailScreen`
+            // si el ViewModel los toma del SavedStateHandle.
+            // Solo pasas el `loggedInUserId` si la pantalla lo necesita para alguna lógica de UI
+            // o para pasar a funciones del ViewModel que requieran el usuario *actual*.
             RoutineDetailScreen(
-                navController = navController, // El navController principal de este NavHost
-                // Ya NO pasas routineDetailViewModel aquí
-                currentUserId = currentUserId, // Pasa esto si la pantalla aún lo necesita directamente
+                navController = navController,
+                // routineId = routineIdFromArgs, // Ya no es necesario si el VM usa SavedStateHandle
+                currentUserId = loggedInUserId // Pasa el ID del usuario autenticado actualmente
+                // para acciones específicas del usuario (ej. personalizar)
             )
         }
         composable(

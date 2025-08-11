@@ -1,5 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.jcmateus.kalisfit.model.UserCustomRoutine
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.MyRoutinesViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,17 +55,23 @@ fun MyRoutinesScreen(
             TopAppBar(
                 title = { Text("Mis Rutinas Personalizadas") },
                 navigationIcon = {
-                    // Opcional: si esta pantalla no es la raíz de una sección
-                     IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Atrás")
-                     }
+                    }
                 },
                 actions = {
                     IconButton(onClick = {
-                        // Navegar a la pantalla de creación de rutina
-                        // Ejemplo: navController.navigate(Screen.EditRoutine.route + "?isNewRoutine=true")
-                        // O si tienes una ruta específica para crear desde cero:
-                        navController.navigate("edit_routine?isNewRoutine=true")
+                        val currentUserId = uiState.currentUserId
+                        if (currentUserId != null && currentUserId.isNotBlank()) {
+                            Log.d("MyRoutinesScreen", "Acción Crear: Navegando a edición para UserID: $currentUserId (Nueva Rutina)")
+                            // Usar la función helper de Routes para crear una nueva rutina
+                            navController.navigate(
+                                Routes.editRoutine(userId = currentUserId) // templateId y customRoutineId serán null por defecto
+                            )
+                        } else {
+                            Log.w("MyRoutinesScreen", "Acción Crear: currentUserId es nulo o vacío. No se puede crear rutina.")
+                            // Considera mostrar un mensaje al usuario (Toast, Snackbar)
+                        }
                     }) {
                         Icon(Icons.Filled.Add, contentDescription = "Crear Rutina")
                     }
@@ -78,26 +86,23 @@ fun MyRoutinesScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(
-                        Alignment.Center
-                    ))
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 uiState.errorMessage != null -> {
-                    Text(
-                        text = uiState.errorMessage ?: "Ocurrió un error",
+                    Column( // Envuelve en una columna para alinear botón y texto
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(16.dp),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    // Podrías añadir un botón de reintentar aquí
-                    Button(
-                        onClick = { viewModel.refreshRoutines() },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp)
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Reintentar")
+                        Text(
+                            text = uiState.errorMessage ?: "Ocurrió un error",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Button(onClick = { viewModel.refreshRoutines() }) {
+                            Text("Reintentar")
+                        }
                     }
                 }
                 uiState.routines.isEmpty() && uiState.currentUserId != null -> {
@@ -111,7 +116,11 @@ fun MyRoutinesScreen(
                         Text("Aún no tienes rutinas personalizadas.", style = MaterialTheme.typography.headlineSmall)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = {
-                            navController.navigate("edit_routine?isNewRoutine=true")
+                            val currentUserId = uiState.currentUserId!! // Ya sabemos que no es nulo aquí
+                            Log.d("MyRoutinesScreen", "Botón 'Crea tu primera': Navegando a edición para UserID: $currentUserId (Nueva Rutina)")
+                            navController.navigate(
+                                Routes.editRoutine(userId = currentUserId)
+                            )
                         }) {
                             Text("¡Crea tu primera rutina!")
                         }
@@ -126,19 +135,38 @@ fun MyRoutinesScreen(
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
-                else -> {
+                else -> { // routines no está vacía y currentUserId no es nulo (implícito por la carga de rutinas)
                     MyRoutinesList(
                         routines = uiState.routines,
-                        onRoutineClick = { routineId ->
-                            // Navegar a la pantalla de detalle/inicio de la rutina
-                            // Ejemplo: navController.navigate(Screen.RoutineDetail.createRoute(routineId, true))
-                            // O a la pantalla de ejecución de la rutina personalizada
-                            navController.navigate("start_custom_routine_screen/$routineId") // Ajusta la ruta
+                        onRoutineClick = { clickedRoutineId ->
+                            val currentUserId = uiState.currentUserId
+                            if (currentUserId != null && currentUserId.isNotBlank()) { // Doble check aunque debería estar
+                                Log.d("MyRoutinesScreen", "Navegando a detalle. Rutina ID: $clickedRoutineId, Usuario ID: $currentUserId")
+                                navController.navigate(
+                                    Routes.routineDetail(
+                                        routineId = clickedRoutineId,
+                                        userId = currentUserId
+                                    )
+                                )
+                            } else {
+                                Log.e("MyRoutinesScreen", "Error: currentUserId es nulo o vacío al intentar navegar a los detalles de la rutina personalizada.")
+                            }
                         },
-                        onEditRoutineClick = { routineId ->
-                            // Navegar a la pantalla de edición de rutina
-                            // Ejemplo: navController.navigate(Screen.EditRoutine.createRoute(routineId))
-                            navController.navigate("edit_routine/$routineId")
+                        onEditRoutineClick = { routineIdToEdit ->
+                            val currentUserId = uiState.currentUserId
+                            if (currentUserId != null && currentUserId.isNotBlank()) { // Doble check
+                                Log.d("MyRoutinesScreen", "Acción Editar: Navegando a edición para UserID: $currentUserId, CustomRoutineID: $routineIdToEdit")
+                                // Usar la función helper de Routes para editar una rutina existente
+                                navController.navigate(
+                                    Routes.editRoutine(
+                                        userId = currentUserId,
+                                        customRoutineId = routineIdToEdit // templateId será null por defecto
+                                    )
+                                )
+                            } else {
+                                Log.w("MyRoutinesScreen", "Acción Editar: currentUserId es nulo o vacío. No se puede editar rutina ID: $routineIdToEdit.")
+                                // Considera mostrar un mensaje al usuario
+                            }
                         }
                     )
                 }
@@ -146,7 +174,6 @@ fun MyRoutinesScreen(
         }
     }
 }
-
 @Composable
 fun MyRoutinesList(
     routines: List<UserCustomRoutine>,

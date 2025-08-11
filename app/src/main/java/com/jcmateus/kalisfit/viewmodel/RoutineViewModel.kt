@@ -6,11 +6,13 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
+import com.jcmateus.kalisfit.data.getUserCustomRoutineById
 import com.jcmateus.kalisfit.data.guardarProgresoRutina
 import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.TipoDeEjercicio
+import com.jcmateus.kalisfit.model.UserCustomRoutine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -212,49 +214,108 @@ class RoutineViewModel : ViewModel() {
             }
         }
     }
-    fun startRoutine(rutinaId: String, userProfile: UserProfile?) { // Asumiendo que necesitas userProfile
+
+    fun startRoutine(rutinaId: String, userProfile: UserProfile?) {
         if (userProfile == null) {
             _uiState.update { it.copy(errorMessage = "Perfil de usuario no disponible.", isLoading = false, estado = RoutineExecutionState.ERROR) }
             Log.w(TAG, "startRoutine: Perfil de usuario es nulo.")
             return
         }
-        _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null, rutina = null) }
+        _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null, rutina = null, estado = RoutineExecutionState.LOADING) }
+
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Cargando rutina completa con ID: $rutinaId")
-                val loadedRutina = getRutinaByIdFromFirestore(rutinaId) // Asegúrate que esta función parsea bien
-                if (loadedRutina == null) {
-                    _uiState.update { it.copy(errorMessage = "Rutina con ID $rutinaId no encontrada.", isLoading = false, estado = RoutineExecutionState.ERROR) }
-                    Log.w(TAG, "Rutina con ID $rutinaId no encontrada.")
+                Log.d(TAG, "Iniciando proceso de carga para rutina ID: $rutinaId con UserID: ${userProfile.uid}")
+                var finalRutinaToExecute: Rutina? = null // Usa tu modelo de app Rutina
+
+                // Intento 1: Cargar como UserCustomRoutine
+                val customRoutine: UserCustomRoutine? = getUserCustomRoutineById(userProfile.uid, rutinaId)
+
+                if (customRoutine != null) {
+                    Log.d(TAG, "Rutina encontrada como UserCustomRoutine: ${customRoutine.nombrePersonalizado}")
+                    // Mapear UserCustomRoutine a Rutina
+                    // Asumimos que customRoutine.ejercicios (List<com.jcmateus.kalisfit.model.Ejercicio>)
+                    // YA CONTIENE EJERCICIOS COMPLETAMENTE PARSEADOS.
+                    finalRutinaToExecute = Rutina(
+                        id = customRoutine.id,
+                        nombre = customRoutine.nombrePersonalizado,
+                        descripcion = customRoutine.descripcion,
+                        imagenUrl = customRoutine.imagenUrl,
+                        ejercicios = customRoutine.ejercicios.map { ej ->
+                            // Crear una copia profunda de cada ejercicio y sus componentes
+                            ej.copy(componentes = ej.componentes.map { comp -> comp.copy() })
+                        },
+                        numeroDeRondas = customRoutine.numeroDeRondas,
+                        descansoEntreRondasSegundos = customRoutine.descansoEntreRondasSegundos,
+                        nivelRecomendado = customRoutine.nivelRecomendado,
+                        objetivos = customRoutine.objetivos,
+                        lugarEntrenamiento = customRoutine.lugarEntrenamiento,
+                        slug = customRoutine.id // Usar ID de la rutina personalizada como slug
+                        // Si tu modelo Rutina tiene campos como fechaCreacion/fechaActualizacion de tipo Timestamp,
+                        // puedes mapearlos desde customRoutine.fechaCreacion y customRoutine.fechaUltimaModificacion
+                        // Ejemplo:
+                        // fechaCreacion = customRoutine.fechaCreacion,
+                        // fechaActualizacion = customRoutine.fechaUltimaModificacion
+                    )
+                    Log.d(TAG, "UserCustomRoutine mapeada a Rutina. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
                 } else {
+                    Log.d(TAG, "Rutina con ID $rutinaId no encontrada como UserCustomRoutine. Intentando como plantilla global.")
+                    // Intento 2: Cargar como plantilla global de Firestore
+                    // getRutinaByIdFromFirestore ya devuelve tu modelo de app Rutina con ejercicios parseados.
+                    val globalTemplateRoutine: Rutina? = getRutinaByIdFromFirestore(rutinaId)
+
+                    if (globalTemplateRoutine != null) {
+                        Log.d(TAG, "Rutina encontrada como plantilla global: ${globalTemplateRoutine.nombre}")
+                        finalRutinaToExecute = globalTemplateRoutine // Ya está parseada
+                        Log.d(TAG, "Plantilla global cargada. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
+                    }
+                }
+
+                if (finalRutinaToExecute == null) {
+                    _uiState.update { it.copy(errorMessage = "Rutina con ID $rutinaId no encontrada.", isLoading = false, estado = RoutineExecutionState.ERROR) }
+                    Log.w(TAG, "Rutina con ID $rutinaId no encontrada ni como personalizada ni como plantilla.")
+                } else {
+                    if (finalRutinaToExecute.ejercicios.isEmpty()) {
+                        finishRoutineWithError("La rutina '${finalRutinaToExecute.nombre}' no tiene ejercicios.")
+                        return@launch
+                    }
+
+                    // Log para verificar el parseo de cada ejercicio cargado
+                    finalRutinaToExecute.ejercicios.forEachIndexed { index, ej ->
+                        Log.d(TAG, "Verificando Ejercicio ${index + 1} [${ej.nombre}]: ID=${ej.id}, Tipo=${ej.tipoEjercicio}, Componentes=${ej.componentes.size}, Unilateral=${ej.esUnilateral}, Tempo=${ej.notaTempo}, RepsOrig='${ej.repeticionesOriginal}', DurOrig=${ej.duracionSegundosOriginal}s, Series=${ej.numeroDeSeries}")
+                        if (ej.tipoEjercicio == TipoDeEjercicio.SIMPLE && ej.componentes.isNotEmpty()) {
+                            Log.w(TAG, "Advertencia: Ejercicio '${ej.nombre}' (ID: ${ej.id}) marcado como SIMPLE pero tiene ${ej.componentes.size} componentes.")
+                        }
+                    }
+
                     _uiState.update {
                         it.copy(
-                            rutina = loadedRutina,
+                            rutina = finalRutinaToExecute,
                             isLoading = false,
                             rondaActual = 1,
-                            indiceEjercicioActual = 0, // Se usará para coger el primer ejercicio
-                            serieActualEjercicio = 1,
+                            indiceEjercicioActual = 0,
+                            serieActualEjercicio = if (finalRutinaToExecute.ejercicios.firstOrNull()?.numeroDeSeries ?: 0 > 0) 1 else 0,
                             tiempoTotalSesionSegundos = 0,
-                            previousState = RoutineExecutionState.IDLE, // Estado previo a iniciar
-                            componenteEjercicioActual = null, // Resetear al iniciar rutina
-                            indiceComponenteActual = -1,    // Resetear al iniciar rutina
+                            previousState = RoutineExecutionState.IDLE,
+                            componenteEjercicioActual = null,
+                            indiceComponenteActual = -1,
                             showExitConfirmation = false,
-                            userProfile = userProfile // Guardar perfil
+                            userProfile = userProfile,
+                            estado = RoutineExecutionState.IDLE // O INITIAL_COUNTDOWN si quieres que empiece la cuenta atrás ya
                         )
                     }
-                    // Resetear el estado de lado alternado para la nueva rutina
                     ladoAlternadoCompletadoParaSerieActual = false
-                    Log.d(TAG, "Rutina cargada: ${loadedRutina.nombre}, Número de ejercicios: ${loadedRutina.ejercicios.size}")
-                    if (loadedRutina.ejercicios.isNotEmpty()) {
-                        startInitialCountdown()
-                        startSessionTimer()
-                    } else {
-                        finishRoutineWithError("La rutina cargada no tiene ejercicios.")
-                    }
+                    Log.d(TAG, "Rutina '${finalRutinaToExecute.nombre}' lista (${finalRutinaToExecute.ejercicios.size} ej.). Estado UI actualizado. Preparada para iniciar.")
+
+                    // Decide si iniciar automáticamente o esperar acción del usuario
+                    // Para iniciar automáticamente la cuenta atrás:
+                    startInitialCountdown()
+                    startSessionTimer() // Inicia el temporizador de sesión total
+                    Log.d(TAG, "startInitialCountdown y startSessionTimer llamados.")
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.localizedMessage ?: "Error desconocido al cargar la rutina.", isLoading = false, estado = RoutineExecutionState.ERROR) }
-                Log.e(TAG, "Error al cargar rutina con ID $rutinaId", e)
+                Log.e(TAG, "Error catastrófico al cargar rutina con ID $rutinaId", e)
             }
         }
     }
