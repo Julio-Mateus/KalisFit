@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit.viewmodel
 
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.animation.core.copy
 import androidx.lifecycle.SavedStateHandle
@@ -19,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -34,7 +36,10 @@ data class EditRoutineUiState(
     val originalTemplateId: String? = null,
     val isNewRoutine: Boolean = true,
     val errorMessages: List<String> = emptyList(),
-    val saveSuccess: Boolean = false
+    val saveSuccess: Boolean = false,
+    val selectedCoverImageUri: Uri? = null, // URI de la imagen seleccionada localmente
+    val currentCoverImageUrl: String? = null, // URL de la imagen de portada actual (si existe)
+    val isUploadingCoverImage: Boolean = false
     // No hay picker global de ejercicios en esta fase
 )
 
@@ -63,22 +68,26 @@ class EditRoutineViewModel(
         }
     }
     private fun loadInitialRoutine() {
-        _uiState.value = _uiState.value.copy(isLoading = true)
+        // Resetear los estados relacionados con la imagen al iniciar la carga
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            selectedCoverImageUri = null, // Limpiar cualquier URI seleccionado previamente
+            currentCoverImageUrl = null   // Limpiar la URL actual antes de cargar la nueva
+        )
         viewModelScope.launch {
             try {
                 when {
                     // CASO 1: Editando una rutina personalizada existente directamente
-                    // (Se navega con customRoutineId y userId)
                     customRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
                         Log.d(TAG, "Cargando rutina personalizada EXISTENTE para edición. customId: $customRoutineIdArg, userId: $currentUserIdArg")
                         val existingCustomRoutine: UserCustomRoutine? =
                             getUserCustomRoutineById(currentUserIdArg, customRoutineIdArg)
-
                         if (existingCustomRoutine != null) {
                             _uiState.value = _uiState.value.copy(
                                 routineToEdit = existingCustomRoutine,
-                                isNewRoutine = false, // No es nueva, se edita la existente
+                                isNewRoutine = false,
                                 originalTemplateId = existingCustomRoutine.originalTemplateId,
+                                currentCoverImageUrl = existingCustomRoutine.imagenUrl, // Correcto: cargar la imagen existente
                                 isLoading = false
                             )
                         } else {
@@ -86,65 +95,46 @@ class EditRoutineViewModel(
                             _uiState.value = _uiState.value.copy(errorMessages = listOf("Rutina personalizada no encontrada."), isLoading = false)
                         }
                     }
-
                     // CASO 2: Creando una NUEVA rutina, posiblemente basada en una plantilla o en una copia de otra UserCustomRoutine
-                    // (Se navega con userId y opcionalmente templateId. customRoutineId es null)
                     templateRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
                         Log.d(TAG, "Creando NUEVA rutina basada en templateId: $templateRoutineIdArg, para userId: $currentUserIdArg")
-                        var baseForNewRoutine: Rutina? = null // Modelo base 'Rutina' para construir la nueva UserCustomRoutine
-                        var sourceOriginalTemplateId: String? = templateRoutineIdArg // Por defecto, el templateIdArg es el original
+                        var baseForNewRoutine: Rutina? = null
+                        var sourceOriginalTemplateId: String? = templateRoutineIdArg
 
-                        // Intento 1: ¿Es el templateIdArg una plantilla global de Firestore?
                         val globalTemplate: Rutina? = getRutinaByIdFromFirestore(templateRoutineIdArg)
 
                         if (globalTemplate != null) {
                             Log.d(TAG, "templateId '$templateRoutineIdArg' encontrado como PLANTILLA GLOBAL: ${globalTemplate.nombre}")
                             baseForNewRoutine = globalTemplate
-                            // sourceOriginalTemplateId ya es templateRoutineIdArg
                         } else {
-                            // Intento 2: Si no es plantilla global, ¿es el ID de una UserCustomRoutine existente que queremos COPIAR?
-                            // El currentUserIdArg es el dueño de la NUEVA rutina que se creará.
-                            // El templateRoutineIdArg es el ID de la UserCustomRoutine que queremos usar como base.
-                            // Para cargar esa UserCustomRoutine, necesitamos su ID (templateRoutineIdArg) y el ID de su dueño.
-                            // ¡IMPORTANTE! Asumimos que si llegamos aquí, templateRoutineIdArg es el ID de una
-                            // UserCustomRoutine y currentUserIdArg es el dueño de esa rutina que se va a copiar.
-                            // Esto es cierto si la navegación desde RoutineDetailScreen de una UserCustomRoutine pasa su propio ID como templateId
-                            // y su propio userId como userId.
-                            Log.d(TAG, "templateId '$templateRoutineIdArg' NO encontrado como plantilla global. Intentando cargar como UserCustomRoutine del usuario '$currentUserIdArg' para usarla como base (copia).")
                             val baseUserCustomRoutine: UserCustomRoutine? = getUserCustomRoutineById(currentUserIdArg, templateRoutineIdArg)
-
                             if (baseUserCustomRoutine != null) {
                                 Log.d(TAG, "templateId '$templateRoutineIdArg' encontrado como USER CUSTOM ROUTINE: ${baseUserCustomRoutine.nombrePersonalizado}. Se usará para COPIA.")
-                                // Necesitamos mapear UserCustomRoutine a un objeto 'Rutina' si tu lógica de creación lo espera,
-                                // o directamente usar baseUserCustomRoutine para crear la nueva.
-                                // Aquí asumiré que puedes usar directamente baseUserCustomRoutine:
-                                baseForNewRoutine = Rutina( // Mapeo manual si es necesario
-                                    id = baseUserCustomRoutine.id, // Se usará como originalTemplateId de la copia
+                                baseForNewRoutine = Rutina(
+                                    id = baseUserCustomRoutine.id,
                                     nombre = baseUserCustomRoutine.nombrePersonalizado,
                                     descripcion = baseUserCustomRoutine.descripcion,
-                                    imagenUrl = baseUserCustomRoutine.imagenUrl,
-                                    ejercicios = baseUserCustomRoutine.ejercicios, // Asume que 'Ejercicio' es el mismo modelo
+                                    imagenUrl = baseUserCustomRoutine.imagenUrl, // Heredar imagen de la rutina base
+                                    ejercicios = baseUserCustomRoutine.ejercicios,
                                     numeroDeRondas = baseUserCustomRoutine.numeroDeRondas,
                                     descansoEntreRondasSegundos = baseUserCustomRoutine.descansoEntreRondasSegundos,
-                                    nivelRecomendado = baseUserCustomRoutine.nivelRecomendado.toList(), // Asumiendo que es List<String> en ambos
-                                    objetivos = baseUserCustomRoutine.objetivos.toList(),             // Asumiendo que es List<String> en ambos
+                                    nivelRecomendado = baseUserCustomRoutine.nivelRecomendado.toList(),
+                                    objetivos = baseUserCustomRoutine.objetivos.toList(),
                                     lugarEntrenamiento = baseUserCustomRoutine.lugarEntrenamiento.map { it }
-                                    // ... otros campos necesarios de Rutina
                                 )
-                                sourceOriginalTemplateId = baseUserCustomRoutine.originalTemplateId ?: baseUserCustomRoutine.id // Heredar el original o usar su propio ID si no tiene
+                                sourceOriginalTemplateId = baseUserCustomRoutine.originalTemplateId ?: baseUserCustomRoutine.id
                             } else {
                                 Log.w(TAG, "templateId '$templateRoutineIdArg' NO encontrado ni como plantilla global ni como UserCustomRoutine del usuario '$currentUserIdArg'.")
                             }
                         }
-
                         if (baseForNewRoutine != null) {
                             val newCustomRoutine = UserCustomRoutine(
-                                id = UUID.randomUUID().toString(), // NUEVO ID para la rutina que se está creando/editando
-                                userId = currentUserIdArg,          // Dueño de esta nueva rutina
-                                originalTemplateId = sourceOriginalTemplateId, // ID de la plantilla global o de la UserCustomRoutine original
+                                id = UUID.randomUUID().toString(),
+                                userId = currentUserIdArg,
+                                originalTemplateId = sourceOriginalTemplateId,
                                 nombrePersonalizado = baseForNewRoutine.nombre,
                                 descripcion = baseForNewRoutine.descripcion,
-                                imagenUrl = baseForNewRoutine.imagenUrl,
+                                imagenUrl = baseForNewRoutine.imagenUrl, // Asignar la imagen heredada
                                 ejercicios = baseForNewRoutine.ejercicios.map { ejercicioPlantilla ->
                                     ejercicioPlantilla.copy(
                                         id = UUID.randomUUID().toString(),
@@ -161,28 +151,25 @@ class EditRoutineViewModel(
                             )
                             _uiState.value = _uiState.value.copy(
                                 routineToEdit = newCustomRoutine,
-                                isNewRoutine = true, // Siempre es una nueva rutina en este bloque (ya sea de plantilla o copia)
-                                originalTemplateId = newCustomRoutine.originalTemplateId, // El que acabamos de determinar
+                                isNewRoutine = true,
+                                originalTemplateId = newCustomRoutine.originalTemplateId,
+                                currentCoverImageUrl = newCustomRoutine.imagenUrl, // Establecer la imagen heredada
                                 isLoading = false
                             )
                         } else {
-                            // Si no se encontró ni plantilla global ni UserCustomRoutine para copiar
-                            Log.e(TAG, "No se pudo encontrar una base (plantilla o rutina custom) para templateId: $templateRoutineIdArg. Creando una rutina en blanco como fallback si es apropiado, o mostrando error.")
-                            // Podrías decidir crear una rutina en blanco aquí como fallback, o mantener el error.
-                            // Por ahora, mantendré el error para ser explícito.
+                            Log.e(TAG, "No se pudo encontrar una base (plantilla o rutina custom) para templateId: $templateRoutineIdArg.")
                             _uiState.value = _uiState.value.copy(errorMessages = listOf("Plantilla o rutina base no encontrada: $templateRoutineIdArg."), isLoading = false)
                         }
                     }
-
                     // CASO 3: Creando una rutina personalizada totalmente nueva (desde cero)
-                    // (Se navega solo con userId. templateId y customRoutineId son null)
-                    !currentUserIdArg.isNullOrBlank() -> { // Esta condición ahora es más específica (templateIdArg es null)
+                    !currentUserIdArg.isNullOrBlank() -> {
                         Log.d(TAG, "Creando rutina personalizada totalmente NUEVA (desde cero) para userId: $currentUserIdArg")
                         val blankRoutine = UserCustomRoutine(
                             id = UUID.randomUUID().toString(),
                             userId = currentUserIdArg,
                             nombrePersonalizado = "Nueva Rutina",
                             descripcion = "",
+                            // imagenUrl se deja null por defecto para una rutina en blanco
                             ejercicios = emptyList(),
                             numeroDeRondas = 3,
                             descansoEntreRondasSegundos = 60,
@@ -192,11 +179,11 @@ class EditRoutineViewModel(
                         _uiState.value = _uiState.value.copy(
                             routineToEdit = blankRoutine,
                             isNewRoutine = true,
+                            currentCoverImageUrl = null, // Una rutina nueva desde cero no tiene imagen de portada inicial
                             isLoading = false
                         )
                     }
                     else -> {
-                        // Caso de error no manejado (ej. currentUserIdArg es null y no debería serlo)
                         Log.e(TAG, "Error crítico: ID de usuario no disponible o estado de argumentos inesperado.")
                         _uiState.value = _uiState.value.copy(errorMessages = listOf("Error crítico: ID de usuario no disponible."), isLoading = false)
                     }
@@ -344,6 +331,18 @@ class EditRoutineViewModel(
         }
     }
 
+    fun onCoverImageSelected(uri: Uri?) {
+        _uiState.update { currentState ->
+            currentState.copy(selectedCoverImageUri = uri)
+        }
+        // Opcionalmente, si seleccionas null, podrías querer resetear algo más
+        // o iniciar la subida si el URI no es nulo y tienes auto-subida.
+    }
+    fun clearSelectedCoverImage() {
+        _uiState.update { currentState ->
+            currentState.copy(selectedCoverImageUri = null)
+        }
+    }
     private fun updateExerciseComponent(
         exerciseIndex: Int,
         componentIndex: Int,

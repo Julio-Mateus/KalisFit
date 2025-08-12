@@ -25,6 +25,7 @@ import com.jcmateus.kalisfit.model.StoicModule
 import com.jcmateus.kalisfit.model.UserStoicProgress
 import com.jcmateus.kalisfit.viewmodel.StoicismViewModel
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import com.jcmateus.kalisfit.model.UserExerciseResponse
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,7 +181,7 @@ fun ActiveStoicModuleView(
                 }
             }
         ) {
-            Text("Marcar como Completado y Continuar")
+            Text("Marcar como Completado y Continuar", style = MaterialTheme.typography.labelLarge, color = Color.Black)
         }
         Spacer(modifier = Modifier.height(16.dp))
 

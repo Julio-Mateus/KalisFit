@@ -44,7 +44,6 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -55,6 +54,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
@@ -171,7 +171,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-
                 Spacer(Modifier.height(8.dp))
 
                 // --- Ítems Principales ---
@@ -186,7 +185,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         }
                     }
                 )
-
                 // --- Mis Rutinas ---
                 DrawerMainItem(
                     icon = Icons.Filled.MenuBook, // Icono sugerido
@@ -199,7 +197,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         }
                     }
                 )
-
                 // --- Todos los Ejercicios ---
                 DrawerMainItem(
                     icon = Icons.Filled.FormatListBulleted, // Icono sugerido
@@ -212,7 +209,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         }
                     }
                 )
-
                 DrawerMainItem(
                     icon = Icons.Filled.History,
                     text = stringResource(R.string.drawer_activity_history),
@@ -224,7 +220,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         }
                     }
                 )
-
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(8.dp))
@@ -236,7 +231,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     isExpanded = expandExplorarRutinas,
                     onClick = { expandExplorarRutinas = !expandExplorarRutinas }
                 )
-
                 AnimatedVisibility(
                     visible = expandExplorarRutinas,
                     enter = fadeIn() + expandVertically(),
@@ -339,11 +333,9 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     }
                 }
 
-
                 Spacer(Modifier.weight(1f)) // Empuja los siguientes items hacia abajo
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(8.dp))
-
                 // --- Ítems Inferiores ---
                 DrawerMainItem(
                     icon = Icons.Filled.Edit,
@@ -447,7 +439,18 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                                 }
                             },
                             icon = { Icon(item.icon, contentDescription = stringResource(item.labelResource)) },
-                            label = { Text(stringResource(item.labelResource)) }
+                            label = { Text(stringResource(item.labelResource)) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                indicatorColor = MaterialTheme.colorScheme.onPrimaryContainer, // Color del fondo del item seleccionado (el "píldora")
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                // También puedes especificar:
+                                // disabledIconColor = ...,
+                                // disabledTextColor = ...
+                            )
+
                         )
                     }
                 }

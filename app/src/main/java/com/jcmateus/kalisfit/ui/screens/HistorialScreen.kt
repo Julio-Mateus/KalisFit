@@ -102,6 +102,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
@@ -471,7 +472,8 @@ fun HistorialScreen(navController: NavHostController) {
                         viewModel.deleteFreeActivity(activityId)
                     },
                     onRetryLoadActividades = { viewModel.loadFreeActivityHistory() }, // Añadido callback
-                    context = context
+                    context = context,
+                    navController = navController
                 )
             }
         }
@@ -712,9 +714,9 @@ fun ResumenSemanalCard(
                         context.startActivity(Intent.createChooser(intent, "Compartir imagen del resumen"))
                     }
                 }) {
-                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen") // Usar Icono de Imagen
+                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen", tint = Color.Black) // Usar Icono de Imagen
                     Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Imagen")
+                    Text("Imagen", color = Color.Black)
                 }
             }
         }
@@ -1296,7 +1298,8 @@ fun HistorialActividadesLibresContent(
     errorMessage: String?,
     onDeleteActivity: (String?) -> Unit,
     onRetryLoadActividades: () -> Unit,
-    context: Context
+    context: Context,
+    navController: NavController
 ) {
     if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1332,7 +1335,7 @@ fun HistorialActividadesLibresContent(
             title = stringResource(R.string.historial_actividades_vacio_titulo),
             subtitle = stringResource(R.string.historial_actividades_vacio_subtitulo),
             buttonText = stringResource(R.string.comenzar_actividad_libre),
-            onButtonClick = { /* Lógica de navegación */ }
+            onButtonClick = { navController.navigate(Routes.RUNNING_TAB) }
         )
     } else {
         LazyColumn( // De Foundation

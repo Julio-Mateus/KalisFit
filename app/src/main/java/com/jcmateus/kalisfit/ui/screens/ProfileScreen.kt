@@ -72,12 +72,6 @@ fun ProfileScreen(
         viewModel.loadUserProfile()
     }
 
-    val topAppBarColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.surface, // Un color más sutil para el fondo
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -90,9 +84,13 @@ fun ProfileScreen(
                         )
                     }
                 },
-                colors = topAppBarColors,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
                 // Considera añadir scrollBehavior si el contenido es muy largo
-                // scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
             )
         },
         floatingActionButton = {
@@ -100,8 +98,8 @@ fun ProfileScreen(
                 onClick = { navController.navigate(Routes.EDIT_PROFILE_SCREEN) },
                 icon = { Icon(Icons.Filled.Edit, contentDescription = "Editar Perfil") },
                 text = { Text("Editar Perfil") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         },
         floatingActionButtonPosition = FabPosition.Center // O FabPosition.End

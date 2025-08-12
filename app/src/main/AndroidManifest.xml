@@ -88,8 +88,5 @@
         android:enabled="true"
         android:exported="false"
         tools:ignore="MissingClass" /> <!-- Generalmente exported="false" es más seguro para receivers de alarmas internas -->
-    <!-- ===================================================================== -->
-
 </application>
-
-    </manifest>
+</manifest>

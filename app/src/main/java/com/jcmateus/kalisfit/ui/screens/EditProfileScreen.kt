@@ -190,11 +190,12 @@ fun EditProfileScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
-                )
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
             )
-        },
-        containerColor = MaterialTheme.colorScheme.surface
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -212,7 +213,6 @@ fun EditProfileScreen(
                 newImageUri = newImageUri,
                 onImageClick = { if(!isLoading) imagePickerLauncher.launch("image/*") }
             )
-
             // --- Sección de Información Personal ---
             ProfileSection(title = personalInfoLabel) {
                 // Nombre (TextField estándar dentro de la sección)
@@ -365,8 +365,8 @@ fun EditProfileScreen(
                     enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
                     if (isLoading) {
@@ -379,7 +379,6 @@ fun EditProfileScreen(
             Spacer(Modifier.height(8.dp)) // Espacio al final del scroll
         }
     }
-
     // --- Diálogos (sin cambios en su definición, solo asegúrate que estén) ---
     if (showEdadPickerDialog) {
         NumberPickerDialog(
@@ -472,7 +471,7 @@ fun ProfileImageSection(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)) // Fondo sutil
                 .clickable(onClick = onImageClick)
-                .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), CircleShape), // Borde de acento
+                .border(2.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), CircleShape), // Borde de acento
             contentAlignment = Alignment.Center
         ) {
             val imageToDisplay = newImageUri ?: if (currentImageUrl?.isNotBlank() == true) currentImageUrl else R.drawable.ic_default_avatar
@@ -500,7 +499,7 @@ fun ProfileImageSection(
                 Icon(
                     imageVector = Icons.Filled.CameraAlt,
                     contentDescription = stringResource(R.string.tap_to_change_photo_label),
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(20.dp)
                 )
             }

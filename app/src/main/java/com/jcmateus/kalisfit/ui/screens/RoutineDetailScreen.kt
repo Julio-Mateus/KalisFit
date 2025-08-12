@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -124,7 +126,13 @@ fun RoutineDetailScreen(
                     IconButton(onClick = { routineDetailViewModel.refreshRoutineDetails() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refrescar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
             )
         },
         content = { paddingValues ->
@@ -211,11 +219,12 @@ fun RoutineDetailContent(
             ) {
                 Button(
                     onClick = onIniciarClicked,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors( containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Icon(Icons.Filled.FitnessCenter, contentDescription = "Iniciar")
+                    Icon(Icons.Filled.FitnessCenter, contentDescription = "Iniciar", tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(Modifier.width(8.dp))
-                    Text("INICIAR RUTINA")
+                    Text("INICIAR RUTINA", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
                 OutlinedButton(
                     onClick = onPersonalizarClicked,

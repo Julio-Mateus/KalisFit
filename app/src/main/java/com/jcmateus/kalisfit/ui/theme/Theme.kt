@@ -1,6 +1,5 @@
 package com.jcmateus.kalisfit.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -76,14 +75,16 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun KalisFitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true, // Considera ponerlo en 'false' temporalmente para depurar tus colores estáticos
+    dynamicColor: Boolean = false, // Considera ponerlo en 'false' temporalmente para depurar tus colores estáticos
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        /*
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+         */
         // FORZAR TEMA CLARO PARA DEPURAR LA TARJETA VISUAL:
         // else -> LightColorScheme // Descomenta esta línea y comenta las dos de arriba para forzar LightColorScheme
         darkTheme -> DarkColorScheme

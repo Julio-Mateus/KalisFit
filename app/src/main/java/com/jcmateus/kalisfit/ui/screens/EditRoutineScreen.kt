@@ -1,26 +1,38 @@
 package com.jcmateus.kalisfit.ui.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -34,17 +46,24 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.TipoDeEjercicio
@@ -59,7 +78,6 @@ fun EditRoutineScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
             Toast.makeText(context, "Rutina guardada", Toast.LENGTH_SHORT).show()
@@ -67,14 +85,12 @@ fun EditRoutineScreen(
             navController.popBackStack() // Vuelve a la pantalla anterior
         }
     }
-
     LaunchedEffect(uiState.errorMessages) {
         uiState.errorMessages.firstOrNull()?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             // Aquí podrías tener una lógica para limpiar los mensajes de error del uiState
         }
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -89,9 +105,14 @@ fun EditRoutineScreen(
                         onClick = { viewModel.saveRoutine() },
                         enabled = !uiState.isLoading && uiState.routineToEdit != null
                     ) {
-                        Text("Guardar")
+                        Text("Guardar", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             )
         },
         content = { paddingValues ->
@@ -113,19 +134,25 @@ fun EditRoutineScreen(
                 } else {
                     // El contenido de la edición va aquí
                     EditRoutineContent(
-                        routine = uiState.routineToEdit!!, // Sabemos que no es nulo aquí
-                        isLoadingDuringSave = uiState.isLoading, // Para deshabilitar campos mientras guarda
+                        routine = uiState.routineToEdit!!,
+                        isLoadingDuringSave = uiState.isLoading || uiState.isUploadingCoverImage,
+                        currentCoverImageUrl = uiState.currentCoverImageUrl,
+                        selectedCoverImageUri = uiState.selectedCoverImageUri,
+                        isUploadingCoverImage = uiState.isUploadingCoverImage,
+
+                        // Callbacks para la imagen de portada - AÑADIR/VERIFICAR ESTOS:
+                        onCoverImageSelected = { uri -> viewModel.onCoverImageSelected(uri) }, // O simplemente viewModel::onCoverImageSelected
+                        onClearSelectedCoverImage = { viewModel.clearSelectedCoverImage() },   // O simplemente viewModel::clearSelectedCoverImage
 
                         // Callbacks para la Rutina
                         onNameChange = { viewModel.onRoutineNameChanged(it) },
                         onDescriptionChange = { viewModel.onDescriptionChanged(it) },
                         onRoundsChange = { viewModel.onRoundsChanged(it) },
                         onRestBetweenRoundsChange = { viewModel.onRestBetweenRoundsChanged(it) },
-
                         // Callbacks para Ejercicios
                         onExerciseSeriesChange = { index, series -> viewModel.onExerciseSeriesChanged(index, series) },
-                        onExerciseRepsChange = { index, reps -> viewModel.onExerciseSimpleRepsChanged(index, reps) }, // Asume que onExerciseSimpleRepsChanged es el correcto para reps generales
-                        onExerciseDurationChange = { index, duration -> viewModel.onExerciseSimpleDurationChanged(index, duration) }, // Asume similar para duration
+                        onExerciseRepsChange = { index, reps -> viewModel.onExerciseSimpleRepsChanged(index, reps) },
+                        onExerciseDurationChange = { index, duration -> viewModel.onExerciseSimpleDurationChanged(index, duration) },
                         onExerciseRestChange = { index, rest -> viewModel.onExerciseRestBetweenSeriesChanged(index, rest) },
                         onExerciseTempoChange = { index, tempo -> viewModel.onExerciseTempoChanged(index, tempo) },
                         onExerciseIsUnilateralChange = { index, isUnilateral -> viewModel.onExerciseIsUnilateralChanged(index, isUnilateral) },
@@ -133,7 +160,6 @@ fun EditRoutineScreen(
                         onMoveExerciseUp = { index -> viewModel.onMoveExerciseUp(index) },
                         onMoveExerciseDown = { index -> viewModel.onMoveExerciseDown(index) },
                         onDuplicateExercise = { index -> viewModel.onDuplicateExercise(index) },
-
                         // Callbacks para Componentes de Ejercicio
                         onExerciseComponentRepsChange = { exerciseIndex, componentIndex, newReps ->
                             viewModel.onExerciseComponentRepsChanged(exerciseIndex, componentIndex, newReps)
@@ -150,9 +176,8 @@ fun EditRoutineScreen(
                         onRemoveComponentFromExercise = { exerciseIndex, componentIndex ->
                             viewModel.onRemoveComponentFromExercise(exerciseIndex, componentIndex)
                         },
-
                         // Callback para añadir nuevo ejercicio
-                        onAddNewBlankExercise = { viewModel.onAddNewBlankExercise() }
+                        onAddNewBlankExercise = { viewModel.onAddNewBlankExercise() } // La coma aquí es opcional si es el último
                     )
                 }
             }
@@ -164,6 +189,11 @@ fun EditRoutineScreen(
 fun EditRoutineContent(
     routine: UserCustomRoutine,
     isLoadingDuringSave: Boolean,
+    currentCoverImageUrl: String?,
+    selectedCoverImageUri: Uri?,
+    isUploadingCoverImage: Boolean,
+    onCoverImageSelected: (Uri?) -> Unit,
+    onClearSelectedCoverImage: () -> Unit,
     onNameChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onRoundsChange: (String) -> Unit,
@@ -188,16 +218,111 @@ fun EditRoutineContent(
 
     onAddNewBlankExercise: () -> Unit
 ) {
+    // Launcher para el Photo Picker
+    val getContentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? -> // El URI puede ser nulo si el usuario cancela
+            onCoverImageSelected(uri)
+        }
+    )
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // --- SECCIÓN DE IMAGEN DE PORTADA ---
+        item {
+            Text("Imagen de Portada", style = MaterialTheme.typography.headlineSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f) // Proporción común para portadas
+                    .clip(MaterialTheme.shapes.medium)
+                    //.background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(enabled = !isLoadingDuringSave && !isUploadingCoverImage) {
+                        getContentLauncher.launch("image/*")
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                var imageToShow: Any? = null
+                if (selectedCoverImageUri != null) {
+                    imageToShow = selectedCoverImageUri
+                } else if (!currentCoverImageUrl.isNullOrBlank()) {
+                    imageToShow = currentCoverImageUrl
+                }
+
+                if (imageToShow != null) {
+                    AsyncImage(
+                        model = imageToShow,
+                        contentDescription = "Imagen de portada de la rutina",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = painterResource(id = R.drawable.ic_error_placeholder) // Reemplaza con tu placeholder
+                    )
+                    // Botón para quitar la imagen seleccionada (si hay una nueva selección)
+                    if (selectedCoverImageUri != null) {
+                        IconButton(
+                            onClick = onClearSelectedCoverImage,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
+                                    CircleShape
+                                ),
+                            enabled = !isLoadingDuringSave && !isUploadingCoverImage
+                        ) {
+                            Icon(
+                                Icons.Filled.Clear,
+                                contentDescription = "Quitar imagen seleccionada",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                } else {
+                    // Placeholder si no hay imagen
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Filled.AddPhotoAlternate,
+                            contentDescription = "Añadir imagen de portada",
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Toca para seleccionar una imagen",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (isUploadingCoverImage) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    getContentLauncher.launch("image/*")
+                },
+                enabled = !isLoadingDuringSave && !isUploadingCoverImage,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Text(if (selectedCoverImageUri != null || !currentCoverImageUrl.isNullOrBlank())
+                    "Cambiar Imagen" else "Seleccionar Imagen de Portada",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        // --- SECCIÓN DE INFORMACIÓN DE LA RUTINA ---
         item {
             Text("Información de la Rutina", style = MaterialTheme.typography.headlineSmall)
             Spacer(modifier = Modifier.height(8.dp))
-
             OutlinedTextField(
                 value = routine.nombrePersonalizado,
                 onValueChange = onNameChange,
@@ -238,7 +363,7 @@ fun EditRoutineContent(
                 )
             }
         }
-
+        // --- SECCIÓN DE EJERCICIOS ---
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -246,15 +371,14 @@ fun EditRoutineContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Ejercicios", style = MaterialTheme.typography.titleLarge)
-                Button(onClick = onAddNewBlankExercise, enabled = !isLoadingDuringSave) {
-                    Icon(Icons.Filled.Add, contentDescription = "Añadir Ejercicio")
+                Button(onClick = onAddNewBlankExercise, enabled = !isLoadingDuringSave, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Icon(Icons.Filled.Add, contentDescription = "Añadir Ejercicio",tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(Modifier.width(4.dp))
-                    Text("Añadir")
+                    Text("Añadir", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
 
         }
-
         if (routine.ejercicios.isEmpty()) {
             item {
                 Text(
@@ -297,7 +421,6 @@ fun EditRoutineContent(
         }
     }
 }
-
 @Composable
 fun EditableExerciseItem(
     exercise: Ejercicio,

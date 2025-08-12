@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -649,14 +650,14 @@ fun ActionButtonsSection(navController: NavHostController, userIsPresent: Boolea
             },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
             ),
             enabled = userIsPresent,
             contentPadding = PaddingValues(vertical = 14.dp)
         ) {
-            Icon(Icons.Filled.FitnessCenter, contentDescription = null)
+            Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Explorar Rutinas", fontSize = 16.sp)
+            Text("Explorar Rutinas", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer )
         }
 
         OutlinedButton(
