@@ -36,6 +36,7 @@ import com.jcmateus.kalisfit.ui.screens.ProfileScreen
 import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineDetailScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineExplorerScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
@@ -140,7 +141,6 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                     }
                 })
         }
-
         // --- Contenedor Principal con Drawer, BottomNav y TopAppBar ---
         composable(
             Routes.MAIN_CONTENT, // Al entrar al contenido principal, usemos un Fade para que se sienta como un "inicio"
@@ -195,18 +195,15 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
         ) { backStackEntry ->
             // El ViewModel ahora tomará routineId y userId del SavedStateHandle automáticamente.
             // No necesitas extraerlos aquí para pasarlos explícitamente al ViewModel.
-
             Log.d(
                 "NavGraph_RoutineDetail",
                 "Navegando a RoutineDetail. ROUTINE_ID_ARG: ${backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)}, " +
                         "USER_ID_ARG: ${backStackEntry.arguments?.getString(Routes.Args.USER_ID_ARG)}" // Loguea el userId también
             )
-
             // Necesitas pasar el ID del usuario AUTENTICADO a RoutineDetailScreen para acciones
             // como "personalizar esta rutina PARA MÍ".
             val currentUserFromAuth by authViewModel.currentUser.collectAsState()
             val loggedInUserId: String? = currentUserFromAuth?.uid
-
             // Ya NO necesitas pasar `routineId` ni `userIdFromNav` a `RoutineDetailScreen`
             // si el ViewModel los toma del SavedStateHandle.
             // Solo pasas el `loggedInUserId` si la pantalla lo necesita para alguna lógica de UI
@@ -219,24 +216,27 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             )
         }
         composable(
-            route = Routes.ROUTINE_EXECUTION_SCREEN, // Usando la nueva plantilla de Routes.kt
+            route = Routes.ROUTINE_EXECUTION_SCREEN, // Esta constante ahora es "$ROUTINE_EXECUTION_PREFIX?routineId={routineId}&customRoutineId={customRoutineId}"
             arguments = listOf(
-                navArgument(Routes.Args.ROUTINE_ID_ARG) { // El nombre del argumento DEBE COINCIDIR con el de la plantilla de ruta
+                navArgument(Routes.Args.ROUTINE_ID_ARG) { // Argumento para el ID de la rutina base/plantilla
                     type = NavType.StringType
-                    nullable = true // Importante si RoutineScreen acepta un rutinaId: String?
-                    // Si rutinaId en RoutineScreen NO es nullable, entonces aquí también debe ser nullable = false (o no especificarlo, ya que es el default)
-                    // En tu caso, RoutineScreen tiene rutinaId: String?, entonces nullable = true es correcto.
+                    nullable = true       // Es un parámetro de consulta, puede ser nulo
+                    defaultValue = null   // Valor por defecto si no se pasa
+                },
+                navArgument(Routes.Args.CUSTOM_ROUTINE_ID_ARG) { // NUEVO: Argumento para el ID de la rutina personalizada
+                    type = NavType.StringType
+                    nullable = true       // Es un parámetro de consulta, puede ser nulo
+                    defaultValue = null   // Valor por defecto si no se pasa
                 }
             )
         ) { backStackEntry ->
             val rutinaId = backStackEntry.arguments?.getString(Routes.Args.ROUTINE_ID_ARG)
+            val customRutinaId = backStackEntry.arguments?.getString(Routes.Args.CUSTOM_ROUTINE_ID_ARG) // Obtener el customRoutineId
 
-            // Aquí instancias tu RoutineScreen
-            // Asumiendo que RoutineScreen.kt ya está creado e importado
-            com.jcmateus.kalisfit.ui.screens.RoutineScreen( // Asegúrate de que la importación sea correcta si está en otro paquete
+            RoutineScreen(
                 navController = navController,
-                rutinaId = rutinaId
-                // UserProfileViewModel se obtendrá con viewModel() dentro de RoutineScreen
+                rutinaId = rutinaId,
+                customRutinaId = customRutinaId // Pasarlo a tu RoutineScreen
             )
         }
         composable(
@@ -282,25 +282,30 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             // Asumiendo que has creado MyRoutinesScreen.kt como se discutió
             MyRoutinesScreen(navController = navController)
         }
-        composable(Routes.ALL_EXERCISES_SCREEN) {
-            // Necesitarás crear una pantalla AllExercisesScreen.kt
-            // y su respectivo ViewModel si requiere lógica compleja.
-            // Por ahora, un placeholder:
-            AllExercisesScreen(navController = navController) // Asegúrate de crear este Composable
+        composable(
+            route = Routes.ALL_EXERCISES_SCREEN, // Ahora es "all_exercises_screen/{isSelectingForRoutine}"
+            arguments = listOf(
+                navArgument(Routes.Args.IS_SELECTING_FOR_ROUTINE_ARG) { // <--- Usa la constante de Args
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
+        ) { backStackEntry ->
+            val isSelecting = backStackEntry.arguments?.getBoolean(Routes.Args.IS_SELECTING_FOR_ROUTINE_ARG) ?: false
+            AllExercisesScreen(
+                navController = navController,
+                isSelectingForRoutine = isSelecting
+            )
         }
-
         composable(Routes.EDIT_PROFILE_SCREEN) { // Usando tu nueva constante
             EditProfileScreen(navController = navController)
         }
-
         composable(Routes.SETTINGS_SCREEN) { // Usando tu nueva constante
             SettingsScreen(navController = navController, settingsViewModel = settingsViewModel)
         }
-
         composable(Routes.ACTIVITY_HISTORY_SCREEN) {
             HistorialScreen(navController = navController) // Pasa navController si tu pantalla lo necesita
         }
-
         // Si StoicismContentScreen es una pantalla de nivel superior (ej. desde el Drawer)
         // y no solo una pestaña, su ruta se definiría aquí.
         // Por tu Routes.kt, parece que `STOICISM_TAB` es para la pestaña principal.

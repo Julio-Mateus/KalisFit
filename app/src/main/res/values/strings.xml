@@ -343,6 +343,25 @@
     <string name="level_beginner">Principiante</string>
     <string name="level_intermediate">Intermedio</string>
     <string name="level_advanced">Avanzado</string>
+    <string name="button_next_component">Siguiente Componente</string>
+    <string name="routine_component_time">Tiempo del Componente</string>
+    <string name="error_exercise_not_found_active">Ejercicio actual no encontrado.</string> <!-- Modificado para ser más específico -->
+    <string name="error_routine_not_found_active">Rutina actual no encontrada.</string> <!-- Modificado para ser más específico -->
+    <string name="error_opening_video">Error al abrir el video</string> <!-- Nuevo o más específico -->
+    <!-- Nuevos o específicamente referenciados en las últimas modificaciones -->
+    <string name="error_no_routine_specified">No se especificó ninguna rutina para cargar.</string>
+    <string name="waiting_for_user_profile">Esperando perfil de usuario...</string>
+    <!-- Strings para getNextButtonText y getNextUpMessage (ejemplos, adapta a tu lógica) -->
+    <!-- Estos dependerán de la lógica exacta de tus funciones getNextButtonText y getNextUpMessage -->
+    <string name="next_exercise">Siguiente Ejercicio</string>
+    <string name="next_set">Siguiente Serie</string>
+    <string name="next_round">Siguiente Ronda</string>
+    <string name="finish_exercise">Finalizar Ejercicio</string>
+    <string name="finish_routine">Finalizar Rutina</string>
+    <string name="next_up_exercise">Siguiente: %1$s</string> <!-- %1$s será el nombre del ejercicio -->
+    <string name="next_up_set">Siguiente: Serie %1$d de %2$s</string> <!-- %1$d serie actual, %2$s nombre ejercicio -->
+    <string name="next_up_round">Siguiente: Ronda %1$d</string> <!-- %1$d número de ronda -->
+    <string name="nothing_next_end_of_routine">Fin de la rutina</string>
 </resources>
 
 

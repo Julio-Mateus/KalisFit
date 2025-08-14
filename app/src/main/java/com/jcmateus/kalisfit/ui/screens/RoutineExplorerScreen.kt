@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +62,7 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModelFactory
 
@@ -73,11 +73,13 @@ fun RoutineExplorerScreen(
     navController: NavController,
     placeFilterArgument: String?,
     levelFilterArgument: String?,
-    routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory())
+    routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory()),
+    authViewModel: AuthViewModel = viewModel()
 ) {
     val rutinas: List<Rutina> by routineExplorerViewModel.rutinasFiltradas.collectAsState()
     val isLoading by routineExplorerViewModel.isLoading.collectAsState()
     val errorMessage by routineExplorerViewModel.errorMessage.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
 
     LaunchedEffect(placeFilterArgument, routineExplorerViewModel) {
         if (placeFilterArgument != null) {
@@ -184,7 +186,8 @@ fun RoutineExplorerScreen(
                     ) {
                         items(items = rutinas, key = { it.id }) { rutina ->
                             RutinaCardEnhanced(rutina = rutina, onClick = { // Usamos la nueva tarjeta
-                                navController.navigate(Routes.routineDetail(rutina.id))
+                                val userIdForNavigation: String? = currentUser?.uid
+                                navController.navigate(Routes.routineDetail(rutina.id, userIdForNavigation))
                             })
                         }
                     }

@@ -3,6 +3,7 @@ package com.jcmateus.kalisfit.ui.screens
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,27 +21,33 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +60,8 @@ import coil.request.ImageRequest
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.Rutina
+import com.jcmateus.kalisfit.model.TipoDeEjercicio
+import com.jcmateus.kalisfit.model.esTipoComplejo
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineDetailViewModel
 
@@ -249,84 +258,241 @@ fun RoutineDetailContent(
         }
     }
 }
-
+@Composable
+fun ChipComponent(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        tonalElevation = 2.dp
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
 @RequiresApi(Build.VERSION_CODES.P)
 @Composable
 fun EjercicioInDetailCard(ejercicio: Ejercicio) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp) // Un poco más de padding vertical para la tarjeta
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // Elevación sutil para la card principal
     ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp) // Padding general dentro de la tarjeta
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically // Centra verticalmente el texto y la imagen
-        ) {
-            // Columna para los detalles del texto (ocupará el espacio disponible)
-            Column(
-                modifier = Modifier.weight(1f), // Toma el espacio restante después de la imagen
-                verticalArrangement = Arrangement.spacedBy(4.dp) // Espacio entre los textos
+        Column { // Usar Column para apilar la info del ejercicio y luego los componentes
+            // --- Sección de detalles del Ejercicio Padre ---
+            Row(
+                modifier = Modifier
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = if (ejercicio.componentes.isEmpty()) 16.dp else 8.dp
+                    ) // Menos padding bottom si hay componentes
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                Text(ejercicio.nombre, style = MaterialTheme.typography.titleMedium)
+                // Columna para los detalles del texto del EJERCICIO PADRE
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = ejercicio.nombre,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (ejercicio.esTipoComplejo()) {
+                            Spacer(Modifier.width(8.dp))
+                            ChipComponent(text = ejercicio.tipoEjercicio.displayName)
+                        }
+                    }
 
-                Text("Series: ${ejercicio.numeroDeSeries}", style = MaterialTheme.typography.bodySmall)
+                    Text("Series: ${ejercicio.numeroDeSeries}", style = MaterialTheme.typography.bodyMedium)
 
-                if (ejercicio.repeticionesOriginal.isNotBlank() && ejercicio.repeticionesOriginal != "0") {
-                    Text("Repeticiones: ${ejercicio.repeticionesOriginal}", style = MaterialTheme.typography.bodySmall)
+                    val esSimpleOTempo = ejercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE ||
+                            ejercicio.tipoEjercicio == TipoDeEjercicio.CON_TEMPO
+
+                    if (esSimpleOTempo || (ejercicio.componentes.isEmpty() && (ejercicio.repeticionesOriginal.isNotBlank() || ejercicio.duracionSegundosOriginal > 0))) {
+                        if (ejercicio.repeticionesOriginal.isNotBlank() && ejercicio.repeticionesOriginal != "0") {
+                            Text(
+                                "Repeticiones: ${ejercicio.repeticionesOriginal}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (ejercicio.duracionSegundosOriginal > 0) {
+                            Text(
+                                "Duración: ${ejercicio.duracionSegundosOriginal}s",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else if (ejercicio.duracionSegundosOriginal > 0 && ejercicio.componentes.isNotEmpty()) {
+                        if (ejercicio.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) {
+                            Text(
+                                "Duración total: ${ejercicio.duracionSegundosOriginal}s",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    if (ejercicio.descansoEntreSeriesSegundos > 0) {
+                        Text(
+                            "Descanso entre series: ${ejercicio.descansoEntreSeriesSegundos}s",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } // Fin de la Columna de detalles del ejercicio padre
+
+                // --- IMAGEN PRINCIPAL DEL EJERCICIO (SOLO SI NO ES COMPLEJO y tiene URL) ---
+                if (!ejercicio.esTipoComplejo()) { // Solo para ejercicios simples o sin componentes visibles con imagen propia
+                    Spacer(modifier = Modifier.width(16.dp)) // Espacio a la izquierda de la imagen
+                    if (!ejercicio.imagenUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(ejercicio.imagenUrl)
+                                .decoderFactory(ImageDecoderDecoder.Factory())
+                                .crossfade(true)
+                                .placeholder(R.drawable.ic_default_placeholder) // Reemplaza con tu placeholder
+                                .error(R.drawable.ic_error_placeholder)         // Reemplaza con tu error placeholder
+                                .build(),
+                            contentDescription = "Imagen de ${ejercicio.nombre}",
+                            modifier = Modifier
+                                .size(120.dp) // Tamaño para la imagen principal
+                                .clip(MaterialTheme.shapes.medium),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // Placeholder si el ejercicio simple no tiene imagen
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    MaterialTheme.shapes.medium
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FitnessCenter,
+                                contentDescription = "No hay imagen disponible",
+                                modifier = Modifier.size(60.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
                 }
-                if (ejercicio.duracionSegundosOriginal > 0) {
-                    Text("Duración: ${ejercicio.duracionSegundosOriginal}s", style = MaterialTheme.typography.bodySmall)
-                }
-                if (ejercicio.descansoEntreSeriesSegundos > 0) {
-                    Text("Descanso entre series: ${ejercicio.descansoEntreSeriesSegundos}s", style = MaterialTheme.typography.bodySmall)
-                }
-                if (ejercicio.componentes.isNotEmpty()) {
+            } // Fin de la Row para info del ejercicio padre
+
+            // --- SECCIÓN DE COMPONENTES ---
+            val componentesOrdenados = ejercicio.componentes.sortedBy { it.orden }
+            if (componentesOrdenados.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp, start = 16.dp, end = 16.dp))
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                     Text(
                         "Componentes:",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 4.dp)
+                        style = MaterialTheme.typography.titleSmall, // Un poco más pequeño que el título del ejercicio
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    ejercicio.componentes.forEach { comp ->
-                        Text(
-                            "- ${comp.nombreEspecifico ?: ""} ${comp.repeticiones ?: ""} ${comp.duracionSegundos?.let { "${it}s" } ?: ""}".trim(),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
+                    componentesOrdenados.forEachIndexed { index, comp ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = if (index < componentesOrdenados.size - 1) 10.dp else 0.dp), // Espacio entre cards de componentes
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), // Menor elevación para componentes
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.Top // Alinea al top para que el texto y la imagen empiecen igual
+                            ) {
+                                // Columna para detalles del componente
+                                Column(
+                                    modifier = Modifier.weight(1f), // Toma el espacio disponible
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "${index + 1}. ",
+                                            style = MaterialTheme.typography.labelLarge, // Etiqueta para la numeración
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            comp.nombreEspecifico ?: "Componente sin nombre",
+                                            style = MaterialTheme.typography.bodyLarge, // Texto principal del componente
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    val detallesComponente = mutableListOf<String>()
+                                    comp.repeticiones?.takeIf { it.isNotBlank() && it != "0" }?.let { detallesComponente.add("Reps: $it") }
+                                    comp.duracionSegundos?.takeIf { it > 0 }?.let { detallesComponente.add("Tiempo: ${it}s") }
+
+                                    if (detallesComponente.isNotEmpty()) {
+                                        Text(
+                                            detallesComponente.joinToString(" / "),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            // modifier = Modifier.padding(start = 20.dp) // Opcional: indentar detalles
+                                        )
+                                    }
+                                }
+
+                                // Espacio entre texto e imagen del componente
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // --- IMAGEN DEL COMPONENTE ---
+                                if (!comp.imagenUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(comp.imagenUrl)
+                                            .decoderFactory(ImageDecoderDecoder.Factory())
+                                            .crossfade(true)
+                                            .placeholder(R.drawable.ic_default_placeholder) // Reemplaza
+                                            .error(R.drawable.ic_error_placeholder)         // Reemplaza
+                                            .build(),
+                                        contentDescription = "Imagen de ${comp.nombreEspecifico}",
+                                        modifier = Modifier
+                                            .size(90.dp) // Tamaño para la imagen del componente, un poco más pequeño
+                                            .clip(MaterialTheme.shapes.small),
+                                        contentScale = ContentScale.Crop // Crop suele verse mejor para items de lista
+                                    )
+                                } else {
+                                    // Placeholder si el COMPONENTE no tiene imagen
+                                    Box(
+                                        modifier = Modifier
+                                            .size(90.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.surfaceVariant.copy(
+                                                    alpha = 0.5f
+                                                ), MaterialTheme.shapes.small
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.ImageNotSupported,
+                                            contentDescription = "No hay imagen para este componente",
+                                            modifier = Modifier.size(36.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-
-            // Espacio entre el texto y la imagen
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Imagen/GIF del ejercicio (si la URL existe)
-            if (!ejercicio.imagenUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(ejercicio.imagenUrl)
-                        .decoderFactory(ImageDecoderDecoder.Factory()) // Necesario para GIFs en API 28+
-                        .crossfade(true) // Efecto de fundido suave al cargar
-                        .placeholder(R.drawable.ic_default_placeholder) // Reemplaza con tu drawable
-                        .error(R.drawable.ic_error_placeholder)       // Reemplaza con tu drawable
-                        .build(),
-                    contentDescription = "Imagen de ${ejercicio.nombre}",
-                    modifier = Modifier
-                        .size(100.dp) // Tamaño fijo para la imagen, ajústalo como necesites
-                        .align(Alignment.CenterVertically), // Asegura que esté centrado si la altura del texto es diferente
-                    contentScale = ContentScale.Fit // O ContentScale.Crop, según prefieras
-                )
-            } else {
-                // Opcional: Mostrar un placeholder si no hay imagenUrl
-                // Podrías usar un Icono o una imagen de placeholder genérica aquí
-                // Image(
-                //     painter = painterResource(id = R.drawable.ic_no_image_available),
-                //     contentDescription = "No hay imagen disponible",
-                //     modifier = Modifier.size(100.dp),
-                //     contentScale = ContentScale.Fit
-                // )
-            }
-        }
+        } // Fin de la Column principal de EjercicioInDetailCard
     }
 }
+
+

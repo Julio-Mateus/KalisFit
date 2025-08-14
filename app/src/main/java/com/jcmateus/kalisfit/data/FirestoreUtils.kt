@@ -24,27 +24,37 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.text.uppercase
 
-// Estructura de datos para un ejercicio TAL COMO SE GUARDARÁ EN FIRESTORE
+data class ComponenteEjercicioFirestore(
+    val nombreEspecifico: String? = null,
+    val repeticiones: String? = null,
+    val duracionSegundos: Long? = null, // En Firestore es null o número. Usar Long? para números enteros.
+    // Si es un String en Firestore, usa String?
+    val orden: Long = 0, // Los números en Firestore a menudo vienen como Long
+    val imagenUrl: String? = null
+    // Añade cualquier otro campo que tengas en tus componentes de Firestore
+)
 data class EjercicioFirestore(
     var id: String = "",
     val nombre: String = "",
+    val tipoEjercicio: String? = null, // Añade tipoEjercicio aquí si está en Firestore
     val descripcion: String = "",
     val imagenUrl: String? = null,
-    // AÑADE imagenUrl1 y imagenUrl2 si existen en tu Firestore/JSON
     val imagenUrl1: String? = null,
     val imagenUrl2: String? = null,
     val videoUrl: String? = null,
-    val duracionSegundos: Int = 0, // Este es el que usaremos como duracionSegundosOriginal
-    val repeticiones: String = "0", // CAMBIADO A STRING
-    val numeroDeSeries: Int = 0,
-    val descansoEntreSeriesSegundos: Int = 0,
-    val descansoDespuesEjercicioSegundos: Int = 0,
+    val duracionSegundos: Long = 0, // Cambiado a Long para consistencia con Firestore (números)
+    val repeticiones: String = "0",
+    val numeroDeSeries: Long = 0, // Cambiado a Long
+    val descansoEntreSeriesSegundos: Long = 0, // Cambiado a Long
+    val descansoDespuesEjercicioSegundos: Long = 0, // Cambiado a Long
     val grupoMuscular: List<String> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),
     val lugarEntrenamiento: List<String> = emptyList(),
-    val orden: Double = 0.0 // CAMBIADO A DOUBLE para consistencia con el modelo de app Ejercicio
+    var esUnilateral: Boolean = false,
+    val orden: Double = 0.0,
+    val componentes: List<ComponenteEjercicioFirestore> = emptyList(), // Para leer la lista de componentes anidados
+    val notaTempo: String? = null
 )
-
 // Representa cómo se guardará un ejercicio individual dentro del progreso de una rutina
 data class EjercicioProgresoFirestore(
     val ejercicioIdOriginal: String = "", // ID del Ejercicio original
@@ -56,7 +66,6 @@ data class EjercicioProgresoFirestore(
     val seriesRealizadas: Int = 0, // Cuántas series de este ejercicio se completaron
     val orden: Int = 0 // Para mantener el orden de los ejercicios tal como se hicieron
 )
-
 // Representa cómo se guardará el progreso completo de una sesión de rutina
 data class ProgresoRutinaFirestore(
     val userId: String = "", // ID del usuario que realizó la rutina
@@ -70,7 +79,6 @@ data class ProgresoRutinaFirestore(
     val tiempoTotalSesionSegundos: Int = 0
     // Considera añadir 'version: Int = 1' para futuras migraciones de datos si la estructura cambia mucho
 )
-
 // Estructura de datos para una rutina TAL COMO SE GUARDARÁ EN FIRESTORE (sin la lista de ejercicios)
 data class RutinaFirestore(
     var id: String = "", // Hacerlo var para poder asignarle el ID del documento
@@ -98,7 +106,6 @@ data class CalisthenicsLevelFirestore(
     val imageUrl: String? = null, // URL de la imagen del nivel
     val orden: Int = 0 // Para mantener el orden de los niveles
 )
-
 // Estructura para una progresión de calistenia TAL COMO SE GUARDARÁ EN FIRESTORE
 data class CalisthenicsProgressionFirestore(
     val id: String = "", // ID del documento en la colección 'calisthenicsProgressions'
@@ -108,7 +115,6 @@ data class CalisthenicsProgressionFirestore(
     val levels: List<CalisthenicsLevelFirestore> = emptyList()
     // Los niveles se guardarán en una subcolección "levels"
 )
-
 private const val TAG = "FirestoreUtils"
 private const val TAG_CUSTOM_ROUTINE = "FirestoreUtils_CustomRoutine" // Nuevo TAG para claridad
 private const val TAG_GET_CUSTOM_ROUTINES = "FirestoreUtils_GetCustom"
@@ -291,7 +297,6 @@ suspend fun getCalisthenicsExerciseLevel(progressionId: String, levelId: String)
         null
     }
 }
-
 @RequiresApi(Build.VERSION_CODES.O) // Para Instant
 fun calcularResumenSemanal(historialProgreso: List<ProgresoRutinaFirestore>): ResumenSemanal {
     val ahora = Instant.now()
@@ -469,120 +474,144 @@ suspend fun saveOrUpdateUserCustomRoutine(userId: String, routine: UserCustomRou
         throw e // Relanzar la excepción para que el ViewModel la maneje
     }
 }
-private fun parsearEjercicioFirestore(
-    ef: EjercicioFirestore,
+fun parsearEjercicioFirestore(
+    ef: EjercicioFirestore, // Ahora 'ef' PUEDE TENER ef.componentes de Firestore
     gruposMuscularesEnum: List<GrupoMuscular>,
     lugaresEntrenamientoEnum: List<LugarEntrenamiento>
 ): Ejercicio {
 
-    var tipo = TipoDeEjercicio.SIMPLE
-    val componentes = mutableListOf<ComponenteEjercicio>()
+    var tipoFinal = TipoDeEjercicio.SIMPLE // Tipo que se asignará al Ejercicio final
+    val componentesFinales = mutableListOf<ComponenteEjercicio>() // Para el modelo de app Ejercicio
     var notaTempoDetectada: String? = null
-    var esEjercicioUnilateral = false
+    var esEjercicioUnilateralDetectado = ef.esUnilateral // Usar el valor de Firestore si existe
 
-    val nombreLimpio = ef.nombre // Guardar una copia por si modificas ef.nombre
+    val nombreLimpio = ef.nombre
     val repeticionesOriginalString = ef.repeticiones.trim()
 
-    // 1. Detectar Tempo en el nombre
+    // 1. Detectar Tempo
     val tempoRegex = """\(Tempo\s*([\d-]+)\)""".toRegex(RegexOption.IGNORE_CASE)
     tempoRegex.find(nombreLimpio)?.let { matchResult ->
         notaTempoDetectada = matchResult.groupValues[1]
-        tipo = TipoDeEjercicio.CON_TEMPO
-        // ef.nombre = nombreLimpio.replace(tempoRegex, "").trim() // Opcional: limpiar el nombre en el objeto 'ef' si es var
+        tipoFinal = TipoDeEjercicio.CON_TEMPO
     }
-
-    // 2. Analizar repeticionesOriginalString
-    if (repeticionesOriginalString.contains(" + ")) {
-        tipo = TipoDeEjercicio.SUPERSET_SEQUENCIAL
-        val partesRepeticiones = repeticionesOriginalString.split("+").map { it.trim() }
-        val nombresComponentesSugeridos = if (nombreLimpio.contains(" + ")) {
-            nombreLimpio.split(" + ").map { it.trim() }
-        } else if (nombreLimpio.contains(" / ")) {
-            nombreLimpio.split(" / ").map { it.trim() }
-        } else {
-            emptyList()
-        }
-
-        partesRepeticiones.forEachIndexed { index, parteRep ->
-            var duracionComp: Int? = null
-            var repComp: String? = parteRep
-
-            if (parteRep.endsWith("s", ignoreCase = true)) {
-                duracionComp = parteRep.dropLast(1).toIntOrNull()
-                repComp = null
-            }
-
-            val nombreEspecificoComp = nombresComponentesSugeridos.getOrNull(index)
-                ?: ef.descripcion.split("\n").getOrNull(index)?.trim()
-                ?: "Parte ${index + 1}"
-
-            componentes.add(
-                ComponenteEjercicio(
-                    nombreEspecifico = nombreEspecificoComp,
-                    repeticiones = repComp,
-                    duracionSegundos = duracionComp, // CORREGIDO
-                    orden = index
+    // 2. Determinar el tipo de ejercicio y procesar componentes
+    // PRIORIDAD 1: Si EjercicioFirestore YA TIENE componentes y un tipoEjercicio explícito
+    if (ef.tipoEjercicio == "SUPERSET_SEQUENCIAL" && ef.componentes.isNotEmpty()) {
+        tipoFinal = TipoDeEjercicio.SUPERSET_SEQUENCIAL
+        ef.componentes.forEach { compFirestore ->
+            componentesFinales.add(
+                ComponenteEjercicio( // Mapear de ComponenteEjercicioFirestore a ComponenteEjercicio (tu modelo de app)
+                    nombreEspecifico = compFirestore.nombreEspecifico,
+                    repeticiones = compFirestore.repeticiones,
+                    // Asegúrate de que tu ComponenteEjercicio (modelo de app) espera Int? para duracionSegundos
+                    duracionSegundos = compFirestore.duracionSegundos?.toInt(),
+                    orden = compFirestore.orden.toInt(),
+                    imagenUrl = compFirestore.imagenUrl
+                    // ... mapear otros campos si los tienes ...
                 )
             )
         }
+        Log.d(TAG, "Ejercicio '${ef.nombre}' procesado como SUPERSET_SEQUENCIAL desde ef.componentes. Num componentes: ${componentesFinales.size}")
 
-        if (componentes.all { it.duracionSegundos != null && it.duracionSegundos!! > 0 } && ef.duracionSegundos > 0) { // CORREGIDO y añadido !! para non-null
-            tipo = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
-        } else if (ef.duracionSegundos > 0 && componentes.isNotEmpty() && componentes.first().duracionSegundos != null) { // CORREGIDO
-            tipo = TipoDeEjercicio.COMBINADO_TEMPORIZADO
+    } else if (ef.tipoEjercicio == "CIRCUITO_TEMPORIZADO" && ef.componentes.isNotEmpty()) {
+        tipoFinal = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
+        ef.componentes.forEach { compFirestore ->
+            componentesFinales.add(
+                ComponenteEjercicio(
+                    nombreEspecifico = compFirestore.nombreEspecifico,
+                    repeticiones = compFirestore.repeticiones,
+                    duracionSegundos = compFirestore.duracionSegundos?.toInt(),
+                    orden = compFirestore.orden.toInt(),
+                    imagenUrl = compFirestore.imagenUrl
+                )
+            )
         }
+        Log.d(TAG, "Ejercicio '${ef.nombre}' procesado como CIRCUITO_TEMPORIZADO desde ef.componentes. Num componentes: ${componentesFinales.size}")
 
-    } else if (repeticionesOriginalString.contains(" por pierna", ignoreCase = true) ||
-        repeticionesOriginalString.contains(" por lado", ignoreCase = true) ||
-        ef.descripcion.contains(" cada lado", ignoreCase = true) ||
-        repeticionesOriginalString.contains(" unilateral", ignoreCase = true)
-    ) {
-        esEjercicioUnilateral = true
-        tipo = TipoDeEjercicio.POR_LADO_ALTERNADO
-    } else if (repeticionesOriginalString.matches("""\d+\s*x\s*\d+s.*""".toRegex(RegexOption.IGNORE_CASE))) {
-        if (ef.duracionSegundos > 0 && (nombreLimpio.contains("+") || nombreLimpio.contains("/"))) {
-            val partesNombre = nombreLimpio.split(Regex("[+/]")).map { it.trim() }
-            val matchRep = """(\d+)\s*x\s*(\d+)s.*""".toRegex(RegexOption.IGNORE_CASE).find(repeticionesOriginalString)
-            if (matchRep != null && partesNombre.isNotEmpty()) { // Cambiado de partesNombre.size >=1 a isNotEmpty
-                val duracionPorComponente = matchRep.groupValues[2].toIntOrNull()
-
-                if (duracionPorComponente != null) {
-                    tipo = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
-                    componentes.clear()
-                    partesNombre.forEachIndexed { index, nombreParte ->
-                        componentes.add(ComponenteEjercicio(
-                            nombreEspecifico = nombreParte,
-                            duracionSegundos = duracionPorComponente, // CORREGIDO
-                            orden = index
-                        ))
-                    }
-                }
+    }
+    // PRIORIDAD 2: Lógica de parseo si no se usaron los componentes de ef (fallback o tipos simples)
+    else if (componentesFinales.isEmpty()) { // Solo entrar aquí si no se poblaron desde ef.componentes
+        Log.d(TAG, "Parseando ejercicio '${ef.nombre}' con lógica de repeticiones/descripción porque ef.componentes estaba vacío o tipo no coincidía.")
+        if (repeticionesOriginalString.contains(" + ")) {
+            tipoFinal = TipoDeEjercicio.SUPERSET_SEQUENCIAL // Por defecto, si se parsea de repeticiones
+            val partesRepeticiones = repeticionesOriginalString.split("+").map { it.trim() }
+            val nombresComponentesSugeridos = if (nombreLimpio.contains(" + ")) {
+                nombreLimpio.split(" + ").map { it.trim() }
+            } else if (nombreLimpio.contains(" / ")) {
+                nombreLimpio.split(" / ").map { it.trim() }
+            } else {
+                emptyList()
             }
+
+            partesRepeticiones.forEachIndexed { index, parteRep ->
+                var duracionComp: Int? = null
+                var repComp: String? = parteRep
+
+                if (parteRep.endsWith("s", ignoreCase = true)) {
+                    duracionComp = parteRep.dropLast(1).toIntOrNull()
+                    repComp = null
+                }
+
+                val nombreEspecificoComp = nombresComponentesSugeridos.getOrNull(index)
+                    ?: ef.descripcion.split("\n").getOrNull(index)?.trim()
+                    ?: "Parte ${index + 1}"
+
+                componentesFinales.add(
+                    ComponenteEjercicio( // Tu modelo de app ComponenteEjercicio
+                        nombreEspecifico = nombreEspecificoComp,
+                        repeticiones = repComp,
+                        duracionSegundos = duracionComp,
+                        orden = index
+                        // Aquí no tienes imagenUrl de Firestore si estás en este bloque de parseo
+                    )
+                )
+            }
+            // Lógica adicional para refinar a CIRCUITO_TEMPORIZADO o COMBINADO_TEMPORIZADO
+            // basado en los componentes parseados y ef.duracionSegundos
+            if (componentesFinales.all { (it.duracionSegundos ?: 0) > 0 } && ef.duracionSegundos > 0) {
+                tipoFinal = TipoDeEjercicio.CIRCUITO_TEMPORIZADO
+            } else if (ef.duracionSegundos > 0 && componentesFinales.isNotEmpty() && (componentesFinales.first().duracionSegundos ?: 0) > 0) {
+                tipoFinal = TipoDeEjercicio.COMBINADO_TEMPORIZADO
+            }
+
+        } else if (repeticionesOriginalString.contains(" por pierna", ignoreCase = true) ||
+            repeticionesOriginalString.contains(" por lado", ignoreCase = true) ||
+            ef.descripcion.contains(" cada lado", ignoreCase = true) ||
+            repeticionesOriginalString.contains(" unilateral", ignoreCase = true)
+        ) {
+            esEjercicioUnilateralDetectado = true // Sobrescribir si la lógica de string lo detecta
+            tipoFinal = TipoDeEjercicio.POR_LADO_ALTERNADO
+        } else if (repeticionesOriginalString.matches("""\d+\s*x\s*\d+s.*""".toRegex(RegexOption.IGNORE_CASE))) {
+            // ... (tu lógica para CIRCUITO_TEMPORIZADO desde regex)
+            // Asegúrate de que esta lógica también construya 'componentesFinales' si es necesario
         }
+        // Si tipoFinal sigue siendo CON_TEMPO (del paso 1) y no se cambió después, se mantendrá.
+        // Si no se cumplió ninguna condición anterior, tipoFinal sigue siendo SIMPLE.
     }
 
+
+    // Asegúrate de que tu modelo de app `Ejercicio` y `ComponenteEjercicio` coinciden con lo que se está creando.
     return Ejercicio(
         id = ef.id,
-        nombre = nombreLimpio.replace(tempoRegex, "").trim(), // Limpiar el nombre al final si se detectó tempo
+        nombre = nombreLimpio.replace(tempoRegex, "").trim(),
         descripcion = ef.descripcion,
         imagenUrl = ef.imagenUrl,
         imagenUrl1 = ef.imagenUrl1,
         imagenUrl2 = ef.imagenUrl2,
         videoUrl = ef.videoUrl,
-        duracionSegundosOriginal = ef.duracionSegundos,
+        duracionSegundosOriginal = ef.duracionSegundos.toInt(), // Convertir Long a Int
         repeticionesOriginal = repeticionesOriginalString,
-        numeroDeSeries = ef.numeroDeSeries,
-        descansoEntreSeriesSegundos = ef.descansoEntreSeriesSegundos,
-        descansoDespuesEjercicioSegundos = ef.descansoDespuesEjercicioSegundos,
+        numeroDeSeries = ef.numeroDeSeries.toInt(), // Convertir Long a Int
+        descansoEntreSeriesSegundos = ef.descansoEntreSeriesSegundos.toInt(),
+        descansoDespuesEjercicioSegundos = ef.descansoDespuesEjercicioSegundos.toInt(),
         grupoMuscular = gruposMuscularesEnum,
         equipamientoNecesario = ef.equipamientoNecesario,
         lugarEntrenamiento = lugaresEntrenamientoEnum,
-        orden = ef.orden, // Asumiendo que ef.orden ya es Double según tu EjercicioFirestore
-
-        tipoEjercicio = tipo,
-        componentes = componentes,
+        orden = ef.orden,
+        tipoEjercicio = tipoFinal, // Usar el tipo determinado
+        componentes = componentesFinales, // Usar los componentes procesados
         notaTempo = notaTempoDetectada,
-        esUnilateral = esEjercicioUnilateral
+        esUnilateral = esEjercicioUnilateralDetectado // Usar el valor determinado
     )
 }
 suspend fun getRutinaByIdFromFirestore(rutinaId: String): Rutina? { // Asegúrate que devuelve tu modelo de app

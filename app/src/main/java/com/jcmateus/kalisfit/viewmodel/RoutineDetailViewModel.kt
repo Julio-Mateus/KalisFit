@@ -61,26 +61,36 @@ class RoutineDetailViewModel(
             Log.d(TAG, "Cargando detalles para rutina ID: $idRutina, Usuario ID: $currentUserId")
 
             try {
-                val rutinaCargada: Rutina?
+                var rutinaCargada: Rutina? = null // Inicializar a null
 
+                // 1. Si hay un userId, INTENTAR cargar como UserCustomRoutine primero
                 if (currentUserId != null && currentUserId.isNotBlank()) {
-                    // Es una rutina personalizada de un usuario
                     Log.d(TAG, "Intentando cargar como UserCustomRoutine...")
-                    val customRoutine = getUserCustomRoutineById(currentUserId, idRutina) // Usa tu función de FirestoreUtils
+                    val customRoutine = getUserCustomRoutineById(currentUserId, idRutina)
                     if (customRoutine != null) {
                         Log.d(TAG, "UserCustomRoutine '${customRoutine.nombrePersonalizado}' cargada.")
-                        // Necesitas mapear UserCustomRoutine a Rutina (modelo de UI)
                         rutinaCargada = mapUserCustomRoutineToRutina(customRoutine)
                     } else {
-                        Log.w(TAG, "No se encontró UserCustomRoutine con ID: $idRutina para usuario: $currentUserId")
-                        rutinaCargada = null
+                        Log.w(TAG, "No se encontró UserCustomRoutine con ID: $idRutina para usuario: $currentUserId. Se intentará como plantilla.")
+                        // NO establezcas rutinaCargada a null aquí explícitamente, ya lo está.
+                        // Simplemente deja que continúe para intentar como plantilla.
                     }
-                } else {
-                    // Es una rutina de plantilla (o el userId no se proporcionó)
-                    Log.d(TAG, "Intentando cargar como Rutina de plantilla...")
-                    rutinaCargada = getRutinaByIdFromFirestore(idRutina) // Usa tu función de FirestoreUtils
                 }
 
+                // 2. Si NO se cargó como custom (o no había userId), INTENTAR cargar como plantilla
+                if (rutinaCargada == null) { // Solo intenta como plantilla si no se encontró como personalizada O si no había userId
+                    Log.d(TAG, "Intentando cargar como Rutina de plantilla...")
+                    val plantillaRutina = getRutinaByIdFromFirestore(idRutina) // Usa tu función de FirestoreUtils
+                    if (plantillaRutina != null) {
+                        Log.d(TAG, "Rutina de plantilla '${plantillaRutina.nombre}' cargada.")
+                        rutinaCargada = plantillaRutina // Asigna directamente, ya es tipo Rutina
+                    } else {
+                        Log.w(TAG, "No se encontró Rutina de plantilla con ID: $idRutina.")
+                        // rutinaCargada sigue siendo null
+                    }
+                }
+
+                // 3. Evaluar el resultado final y actualizar la UI
                 if (rutinaCargada != null) {
                     Log.d(TAG, "Rutina '${rutinaCargada.nombre}' preparada para UI con ${rutinaCargada.ejercicios.size} ejercicios.")
                     _uiState.value = RoutineDetailUiState(
@@ -89,7 +99,8 @@ class RoutineDetailViewModel(
                         errorMessage = null
                     )
                 } else {
-                    Log.w(TAG, "No se encontró la rutina con ID: $idRutina (intentado como custom y/o plantilla).")
+                    // Este log ahora será más preciso si ambas búsquedas fallan.
+                    Log.w(TAG, "No se encontró la rutina con ID: $idRutina (ni como custom ni como plantilla).")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         rutina = null,
@@ -156,11 +167,9 @@ class RoutineDetailViewModel(
             _startRoutineExecution.value = rutinaActual.id // Emitir SOLO el ID
         }
     }
-
     fun onRutinaExecutionStarted() {
         _startRoutineExecution.value = null
     }
-
     fun onPersonalizarRutinaClicked() { // Ya no necesita userId como parámetro si lo tienes como propiedad
         val rutinaActual = _uiState.value.rutina
         if (rutinaActual == null) {
@@ -218,12 +227,9 @@ class RoutineDetailViewModel(
         _navigateToEditRoutine.value = nuevaRutinaParaPersonalizar
         Log.d(TAG, "UserCustomRoutine creada para edición: ${nuevaRutinaParaPersonalizar.nombrePersonalizado}")
     }
-
     fun onNavigationToEditRoutineDone() {
         _navigateToEditRoutine.value = null
     }
-
-
     fun refreshRoutineDetails() {
         // Si llegamos aquí, y el init se completó sin lanzar una excepción,
         // rutinaId ya está inicializado y no está en blanco.

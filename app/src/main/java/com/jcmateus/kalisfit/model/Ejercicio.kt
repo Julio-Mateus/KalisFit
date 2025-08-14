@@ -1,5 +1,7 @@
 package com.jcmateus.kalisfit.model
 
+import java.util.UUID
+
 // Define los lugares de entrenamiento como un enum class para mayor claridad
 enum class LugarEntrenamiento(val displayName: String) {
     CASA("Casa"),
@@ -16,7 +18,17 @@ enum class LugarEntrenamiento(val displayName: String) {
         }
     }
 }
-
+fun Ejercicio.esTipoComplejo(): Boolean {
+    return when (this.tipoEjercicio) {
+        TipoDeEjercicio.SUPERSET_SEQUENCIAL,
+        TipoDeEjercicio.POR_LADO_ALTERNADO,
+        TipoDeEjercicio.COMBINADO_TEMPORIZADO,
+        TipoDeEjercicio.CIRCUITO_TEMPORIZADO -> true
+        // TipoDeEjercicio.SIMPLE y TipoDeEjercicio.CON_TEMPO se consideran no complejos
+        // en este contexto (no tienen una lista explícita de "sub-componentes" de la misma manera)
+        else -> false
+    }
+}
 // Define los grupos musculares, incluyendo los del JSON
 enum class GrupoMuscular(val displayName: String) {
     PECHO("Pecho"),
@@ -43,7 +55,6 @@ enum class GrupoMuscular(val displayName: String) {
     CUERPO_COMPLETO("Cuerpo Completo"), // Ya estaba como FULL_BODY, unifica
     OTRO("Otro"); // Para futuros valores no mapeados
 
-
     companion object {
         fun fromString(value: String): GrupoMuscular? {
             val upperValue = value.uppercase().replace(" ", "_")
@@ -54,19 +65,24 @@ enum class GrupoMuscular(val displayName: String) {
         }
     }
 }
-
 // NUEVO: Define los tipos de ejecución de los ejercicios
-enum class TipoDeEjercicio {
-    SIMPLE,                 // Ejercicio estándar: una métrica de tiempo o repeticiones.
-    SUPERSET_SEQUENCIAL,    // Múltiples movimientos uno tras otro sin descanso entre ellos. (Ej: "12 + 15")
-    POR_LADO_ALTERNADO,     // Se realiza para un lado y luego para el otro. (Ej: "10 por pierna")
-    COMBINADO_TEMPORIZADO,  // Múltiples acciones dentro de un mismo bloque de tiempo. (Ej: "30s wall sit + 25 talones")
-    CIRCUITO_TEMPORIZADO,   // Componentes por tiempo, con duración total definida. (Ej: "2 x 30s", total 60s)
-    CON_TEMPO               // Ejercicio simple pero con una cadencia específica.
+enum class TipoDeEjercicio(val displayName: String) {
+    SIMPLE("Simple"),
+    SUPERSET_SEQUENCIAL("Superset"),
+    POR_LADO_ALTERNADO("Por Lado"),
+    COMBINADO_TEMPORIZADO("Combinado"),
+    CIRCUITO_TEMPORIZADO("Circuito"),
+    CON_TEMPO("Con Tempo"); // Ejercicio simple pero con una cadencia específica.
+    fun esComplejo(): Boolean {
+        return when (this) {
+            SUPERSET_SEQUENCIAL, COMBINADO_TEMPORIZADO, CIRCUITO_TEMPORIZADO -> true
+            else -> false
+        }
+    }
 }
-
 // NUEVO: Define un componente de un ejercicio complejo (parte de un superset, circuito, etc.)
 data class ComponenteEjercicio(
+    val id: String = UUID.randomUUID().toString(),
     val nombreEspecifico: String? = null, // Ej: "Curl Martillo", "Curl con Banda", "Wall Sit"
     val repeticiones: String? = null,     // Ej: "12", "25". String para mantener "AMRAP" o similares si fuera necesario.
     val duracionSegundos: Int? = null,    // Ej: 30 (para "30s")
@@ -83,21 +99,17 @@ data class Ejercicio(
     val imagenUrl1: String? = null, // Para soportar múltiples imágenes como en tu JSON
     val imagenUrl2: String? = null, // Para soportar múltiples imágenes como en tu JSON
     val videoUrl: String? = null,
-
     // Campos originales de duración y repeticiones del JSON.
     // Serán la base para el parseo o para ejercicios simples.
     val duracionSegundosOriginal: Int = 0,    // Renombrado para claridad (antes duracionSegundos)
     val repeticionesOriginal: String = "0", // Renombrado y cambiado a String para parsear "6-8", "12 + 15", "10 por pierna" (antes repeticiones: Int)
-
     val numeroDeSeries: Int = 1,
     val descansoEntreSeriesSegundos: Int = 0,
     val descansoDespuesEjercicioSegundos: Int = 0,
-
     val grupoMuscular: List<GrupoMuscular> = emptyList(),
     val equipamientoNecesario: List<String> = emptyList(),
     val lugarEntrenamiento: List<LugarEntrenamiento> = emptyList(),
     val orden: Double = 0.0, // Cambiado a Double para permitir sub-órdenes decimales si es necesario para el parseador o lógica futura
-
     // NUEVOS CAMPOS PROCESADOS/DERIVADOS
     val tipoEjercicio: TipoDeEjercicio = TipoDeEjercicio.SIMPLE,
     val componentes: List<ComponenteEjercicio> = emptyList(),

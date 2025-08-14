@@ -39,7 +39,6 @@ enum class RoutineExecutionState {
     FINISHED,           // Rutina completada
     ERROR               // Algún error que detiene la rutina
 }
-
 // Clase de estado para encapsular toda la información de la UI
 data class RoutineUiState(
     val rutina: Rutina? = null,
@@ -60,7 +59,6 @@ data class RoutineUiState(
     val previousState: RoutineExecutionState = RoutineExecutionState.IDLE,
     val userProfile: UserProfile? = null
 )
-
 class RoutineViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(RoutineUiState())
     val uiState: StateFlow<RoutineUiState> = _uiState.asStateFlow()
@@ -82,41 +80,36 @@ class RoutineViewModel : ViewModel() {
             timerJob = null
             initialCountdownJob?.cancel()
             initialCountdownJob = null
+            currentCountdownJob?.cancel() // Añadido si no estaba
+            currentCountdownJob = null
+            sessionTimerJob?.cancel() // Añadido si no estaba
+            sessionTimerJob = null
 
-            // Resetear el estado de la UI a sus valores iniciales
+
             _uiState.update {
-                // Crea una nueva instancia de RoutineUiState con valores por defecto
-                // o copia el estado actual y resetea campos específicos.
-                // Es más seguro crear una nueva instancia limpia.
                 RoutineUiState(
-                    // Aquí puedes definir los valores por defecto que consideres.
-                    // Por ejemplo, si tienes un constructor por defecto para RoutineUiState, úsalo.
-                    // O especifica cada campo:
                     estado = RoutineExecutionState.IDLE,
+                    userProfile = _uiState.value.userProfile, // Mantener perfil
+                    // Resto de campos a valores por defecto
                     rutina = null,
                     ejercicioActual = null,
-                    indiceEjercicioActual = 0,
-                    rondaActual = 1,
-                    serieActualEjercicio = 1,
+                    componenteEjercicioActual = null,
+                    indiceComponenteActual = -1,
                     tiempoRestante = 0,
+                    tiempoTotalSesionSegundos = 0,
+                    rondaActual = 1,
+                    indiceEjercicioActual = 0,
+                    serieActualEjercicio = 1,
+                    isLoading = false,
                     errorMessage = null,
                     successMessage = null,
-                    showExitConfirmation = false, // Asegúrate de resetear esto también
-                    userProfile = _uiState.value.userProfile, // Mantén el perfil si es necesario para iniciar otra rutina
-
-                    // ... cualquier otro campo que necesite ser reseteado
+                    isSavingProgress = false,
+                    showExitConfirmation = false,
+                    previousState = RoutineExecutionState.IDLE
                 )
             }
-            // Aquí podrías añadir lógica adicional si necesitas limpiar algo más,
-            // como datos en un repositorio temporal o liberar otros recursos.
-            // Por ejemplo, si tienes un SoundPlayer que necesita ser liberado:
-            // soundPlayer.release()
-
-            // Si quieres emitir un sonido o evento al salir, puedes hacerlo aquí
-            // _soundEvents.emit("routine_exited_sound") // Ejemplo
+            Log.d(TAG, "exitAndCleanUpRoutine: Rutina limpiada y estado reseteado.")
         }
-        // Log para depuración
-        // Log.d("RoutineViewModel", "exitAndCleanUpRoutine: Rutina limpiada y estado reseteado.")
     }
     private fun startActiveTimerForCurrentStep() {
         currentCountdownJob?.cancel()
@@ -214,35 +207,46 @@ class RoutineViewModel : ViewModel() {
             }
         }
     }
+    fun setError(message: String) {
+        Log.e(TAG, "setError: $message")
+        // Asegúrate de cancelar todos los jobs de temporizadores que podrían estar activos
+        currentCountdownJob?.cancel()
+        sessionTimerJob?.cancel()
+        timerJob?.cancel() // Si 'timerJob' es usado por la rutina
+        initialCountdownJob?.cancel() // Si 'initialCountdownJob' es usado por la rutina
 
+        _uiState.update {
+            it.copy(
+                errorMessage = message,
+                estado = RoutineExecutionState.ERROR,
+                isLoading = false,
+                tiempoRestante = 0 // Resetea el tiempo restante en caso de error
+            )
+        }
+    }
     fun startRoutine(rutinaId: String, userProfile: UserProfile?) {
         if (userProfile == null) {
-            _uiState.update { it.copy(errorMessage = "Perfil de usuario no disponible.", isLoading = false, estado = RoutineExecutionState.ERROR) }
-            Log.w(TAG, "startRoutine: Perfil de usuario es nulo.")
+            setError("Perfil de usuario no disponible.") // Usar la nueva función setError
             return
         }
-        _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null, rutina = null, estado = RoutineExecutionState.LOADING) }
+        _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null, rutina = null, estado = RoutineExecutionState.LOADING, userProfile = userProfile) }
 
         viewModelScope.launch {
             try {
                 Log.d(TAG, "Iniciando proceso de carga para rutina ID: $rutinaId con UserID: ${userProfile.uid}")
-                var finalRutinaToExecute: Rutina? = null // Usa tu modelo de app Rutina
+                var finalRutinaToExecute: Rutina? = null
 
-                // Intento 1: Cargar como UserCustomRoutine
+                // Lógica para cargar UserCustomRoutine o Rutina global...
                 val customRoutine: UserCustomRoutine? = getUserCustomRoutineById(userProfile.uid, rutinaId)
 
                 if (customRoutine != null) {
                     Log.d(TAG, "Rutina encontrada como UserCustomRoutine: ${customRoutine.nombrePersonalizado}")
-                    // Mapear UserCustomRoutine a Rutina
-                    // Asumimos que customRoutine.ejercicios (List<com.jcmateus.kalisfit.model.Ejercicio>)
-                    // YA CONTIENE EJERCICIOS COMPLETAMENTE PARSEADOS.
                     finalRutinaToExecute = Rutina(
                         id = customRoutine.id,
                         nombre = customRoutine.nombrePersonalizado,
                         descripcion = customRoutine.descripcion,
                         imagenUrl = customRoutine.imagenUrl,
                         ejercicios = customRoutine.ejercicios.map { ej ->
-                            // Crear una copia profunda de cada ejercicio y sus componentes
                             ej.copy(componentes = ej.componentes.map { comp -> comp.copy() })
                         },
                         numeroDeRondas = customRoutine.numeroDeRondas,
@@ -250,37 +254,30 @@ class RoutineViewModel : ViewModel() {
                         nivelRecomendado = customRoutine.nivelRecomendado,
                         objetivos = customRoutine.objetivos,
                         lugarEntrenamiento = customRoutine.lugarEntrenamiento,
-                        slug = customRoutine.id // Usar ID de la rutina personalizada como slug
-                        // Si tu modelo Rutina tiene campos como fechaCreacion/fechaActualizacion de tipo Timestamp,
-                        // puedes mapearlos desde customRoutine.fechaCreacion y customRoutine.fechaUltimaModificacion
-                        // Ejemplo:
-                        // fechaCreacion = customRoutine.fechaCreacion,
-                        // fechaActualizacion = customRoutine.fechaUltimaModificacion
+                        slug = customRoutine.id
                     )
                     Log.d(TAG, "UserCustomRoutine mapeada a Rutina. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
                 } else {
                     Log.d(TAG, "Rutina con ID $rutinaId no encontrada como UserCustomRoutine. Intentando como plantilla global.")
-                    // Intento 2: Cargar como plantilla global de Firestore
-                    // getRutinaByIdFromFirestore ya devuelve tu modelo de app Rutina con ejercicios parseados.
                     val globalTemplateRoutine: Rutina? = getRutinaByIdFromFirestore(rutinaId)
 
                     if (globalTemplateRoutine != null) {
                         Log.d(TAG, "Rutina encontrada como plantilla global: ${globalTemplateRoutine.nombre}")
-                        finalRutinaToExecute = globalTemplateRoutine // Ya está parseada
+                        finalRutinaToExecute = globalTemplateRoutine
                         Log.d(TAG, "Plantilla global cargada. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
                     }
                 }
 
                 if (finalRutinaToExecute == null) {
-                    _uiState.update { it.copy(errorMessage = "Rutina con ID $rutinaId no encontrada.", isLoading = false, estado = RoutineExecutionState.ERROR) }
-                    Log.w(TAG, "Rutina con ID $rutinaId no encontrada ni como personalizada ni como plantilla.")
+                    setError("Rutina con ID $rutinaId no encontrada.") // Usar setError
                 } else {
                     if (finalRutinaToExecute.ejercicios.isEmpty()) {
+                        // Asumo que tienes una función como esta, que internamente llamará a setError.
+                        // Si no, reemplaza con setError directamente.
                         finishRoutineWithError("La rutina '${finalRutinaToExecute.nombre}' no tiene ejercicios.")
                         return@launch
                     }
 
-                    // Log para verificar el parseo de cada ejercicio cargado
                     finalRutinaToExecute.ejercicios.forEachIndexed { index, ej ->
                         Log.d(TAG, "Verificando Ejercicio ${index + 1} [${ej.nombre}]: ID=${ej.id}, Tipo=${ej.tipoEjercicio}, Componentes=${ej.componentes.size}, Unilateral=${ej.esUnilateral}, Tempo=${ej.notaTempo}, RepsOrig='${ej.repeticionesOriginal}', DurOrig=${ej.duracionSegundosOriginal}s, Series=${ej.numeroDeSeries}")
                         if (ej.tipoEjercicio == TipoDeEjercicio.SIMPLE && ej.componentes.isNotEmpty()) {
@@ -300,21 +297,18 @@ class RoutineViewModel : ViewModel() {
                             componenteEjercicioActual = null,
                             indiceComponenteActual = -1,
                             showExitConfirmation = false,
-                            userProfile = userProfile,
-                            estado = RoutineExecutionState.IDLE // O INITIAL_COUNTDOWN si quieres que empiece la cuenta atrás ya
+                            estado = RoutineExecutionState.IDLE
                         )
                     }
                     ladoAlternadoCompletadoParaSerieActual = false
                     Log.d(TAG, "Rutina '${finalRutinaToExecute.nombre}' lista (${finalRutinaToExecute.ejercicios.size} ej.). Estado UI actualizado. Preparada para iniciar.")
 
-                    // Decide si iniciar automáticamente o esperar acción del usuario
-                    // Para iniciar automáticamente la cuenta atrás:
                     startInitialCountdown()
-                    startSessionTimer() // Inicia el temporizador de sesión total
+                    startSessionTimer()
                     Log.d(TAG, "startInitialCountdown y startSessionTimer llamados.")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.localizedMessage ?: "Error desconocido al cargar la rutina.", isLoading = false, estado = RoutineExecutionState.ERROR) }
+                setError(e.localizedMessage ?: "Error desconocido al cargar la rutina.") // Usar setError
                 Log.e(TAG, "Error catastrófico al cargar rutina con ID $rutinaId", e)
             }
         }
@@ -648,7 +642,6 @@ class RoutineViewModel : ViewModel() {
             finishRoutineWithError("Error: Ejercicio nulo al preparar.")
             return
         }
-
         var tiempoParaPaso: Int
         var esPorRepeticionesPaso: Boolean
         var nombrePasoLog: String = ejercicioParaPreparar.nombre // Default
@@ -673,17 +666,17 @@ class RoutineViewModel : ViewModel() {
                 Log.d(TAG, "prepareAndStartExerciseStep: Reanudando EJERCICIO PRINCIPAL POR TIEMPO '${nombrePasoLog}' con ${stateBeforeCall.tiempoRestante}s.")
             }
         }
-
         // B. Configurar el paso (nuevo o reanudado)
         if (isResumingTimedPaso) {
             tiempoParaPaso = stateBeforeCall.tiempoRestante
             esPorRepeticionesPaso = false // Si se reanuda, era por tiempo
             // componenteQueSePrepara ya está seteado si es un componente.
             // indiceComponenteASetearEnState se mantiene como el del componente pausado.
+            Log.d(TAG, "prepareAndStartExerciseStep: Paso configurado para REANUDACIÓN. Nombre: $nombrePasoLog, Tiempo: $tiempoParaPaso")
         } else {
             // Es un inicio NUEVO de un paso (ejercicio o componente)
             // Resetear previousState ya que no estamos reanudando
-            _uiState.update { it.copy(previousState = RoutineExecutionState.IDLE) }
+            _uiState.update { it.copy(previousState = RoutineExecutionState.IDLE) } // Se resetea para que la próxima pausa no tenga un previousState incorrecto si este paso no es temporizado.
 
             // B1. Manejo de POR_LADO_ALTERNADO (tiene prioridad para mostrar el "lado")
             if (ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO &&
@@ -693,21 +686,25 @@ class RoutineViewModel : ViewModel() {
                 // Las métricas (tiempo/reps) son las mismas que el primer lado.
                 Log.d(TAG, "prepareAndStartExerciseStep: Preparando SEGUNDO LADO de '${ejercicioParaPreparar.nombre}'.")
             }
-
             // B2. Determinar si es un COMPONENTE o el ejercicio principal
             if ((ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL ||
                         ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) &&
                 ejercicioParaPreparar.componentes.isNotEmpty()) {
-
                 // Si indiceComponenteActual es -1 (inicio de superset) o un índice válido.
                 // moveToNextStep ya debería haber incrementado indiceComponenteActual para el siguiente.
                 // Si venimos de un REST_BETWEEN_SETS, indiceComponenteActual debería ser -1, y aquí lo ponemos a 0.
                 val indiceDelComponenteAUsar = if (stateBeforeCall.indiceComponenteActual == -1) 0 else stateBeforeCall.indiceComponenteActual
+                // ***** INICIO LOGS ADICIONALES PARA COMPONENTES *****
+                Log.d(TAG, "prepareAndStartExerciseStep: Es SUPERSET/CIRCUITO. Índice de componente en state (stateBeforeCall.indiceComponenteActual): ${stateBeforeCall.indiceComponenteActual}. Índice a usar para buscar componente (indiceDelComponenteAUsar): $indiceDelComponenteAUsar. Total componentes: ${ejercicioParaPreparar.componentes.size}")
+                // ***** FIN LOGS ADICIONALES PARA COMPONENTES *****
 
                 componenteQueSePrepara = ejercicioParaPreparar.componentes.getOrNull(indiceDelComponenteAUsar)
                 indiceComponenteASetearEnState = indiceDelComponenteAUsar // Aseguramos que el state refleje el componente actual
 
                 if (componenteQueSePrepara != null) {
+                    // ***** INICIO LOGS ADICIONALES PARA COMPONENTES *****
+                    Log.d(TAG, "prepareAndStartExerciseStep: Componente recuperado: '${componenteQueSePrepara.nombreEspecifico}', Orden: ${componenteQueSePrepara.orden}, Duración: ${componenteQueSePrepara.duracionSegundos}, Reps: ${componenteQueSePrepara.repeticiones}")
+                    // ***** FIN LOGS ADICIONALES PARA COMPONENTES *****
                     nombrePasoLog = componenteQueSePrepara.nombreEspecifico ?: ejercicioParaPreparar.nombre
                     if ((componenteQueSePrepara.duracionSegundos ?: 0) > 0) {
                         tiempoParaPaso = componenteQueSePrepara.duracionSegundos!!
@@ -717,18 +714,19 @@ class RoutineViewModel : ViewModel() {
                         esPorRepeticionesPaso = true
                     }
                     Log.d(TAG, "prepareAndStartExerciseStep: Preparando NUEVO COMPONENTE '${nombrePasoLog}' (Índice $indiceDelComponenteAUsar). Tiempo: $tiempoParaPaso, EsReps: $esPorRepeticionesPaso")
-                } else { // No debería pasar si la lógica de moveToNext es correcta
-                    Log.e(TAG, "prepareAndStartExerciseStep: Error - Se esperaba un componente para ${ejercicioParaPreparar.nombre} en índice $indiceDelComponenteAUsar pero no se encontró. Volviendo al ejercicio principal.")
+                } else { // No debería pasar si la lógica de moveToNext es correcta y los datos son consistentes
+                    Log.e(TAG, "prepareAndStartExerciseStep: Error CRÍTICO - Se esperaba un componente para ${ejercicioParaPreparar.nombre} en índice $indiceDelComponenteAUsar pero no se encontró (getOrNull devolvió null). Verifique datos y lógica de `moveToNextRoutineStep`. Volviendo al ejercicio principal como fallback.")
                     // Fallback a ejercicio principal si el componente es nulo (error de lógica/datos)
                     tiempoParaPaso = ejercicioParaPreparar.duracionSegundosOriginal
                     esPorRepeticionesPaso = !ejercicioParaPreparar.repeticionesOriginal.isNullOrEmpty() && ejercicioParaPreparar.repeticionesOriginal != "0" && ejercicioParaPreparar.duracionSegundosOriginal <= 0
                     nombrePasoLog = ejercicioParaPreparar.nombre
                     componenteQueSePrepara = null // Asegurar que no hay componente
-                    indiceComponenteASetearEnState = -1
+                    indiceComponenteASetearEnState = -1 // Resetear índice de componente en el estado
                 }
             } else {
                 // Ejercicio SIMPLE, CON_TEMPO, POR_LADO_ALTERNADO (primer lado), COMBINADO_TEMPORIZADO
                 // O un superset/circuito sin componentes definidos (tratar como simple)
+                Log.d(TAG, "prepareAndStartExerciseStep: No es SUPERSET/CIRCUITO con componentes, o componentes están vacíos. Tratando como ejercicio principal/simple: ${ejercicioParaPreparar.nombre}")
                 componenteQueSePrepara = null // No hay componente activo
                 indiceComponenteASetearEnState = -1 // Resetear índice de componente
 
@@ -760,7 +758,7 @@ class RoutineViewModel : ViewModel() {
                 ejercicioActual = ejercicioParaPreparar, // Puede ser redundante si no cambió, pero asegura consistencia
                 componenteEjercicioActual = componenteQueSePrepara,
                 indiceComponenteActual = indiceComponenteASetearEnState
-                // previousState se reseteó arriba si no es reanudación
+                // previousState se reseteó arriba si no es reanudación, o se mantuvo si es reanudación
             )
         }
 
@@ -770,10 +768,87 @@ class RoutineViewModel : ViewModel() {
         } else {
             Log.d(TAG, "prepareAndStartExerciseStep: NO emitiendo sonido 'exercise_start' (reanudando $nombrePasoLog).")
         }
-
         Log.d(TAG, "prepareAndStartExerciseStep: Llamando a startActiveTimerForCurrentStep().")
         Log.d(TAG, "prepareAndStartExerciseStep: =================== FIN (Salida) ====================")
         startActiveTimerForCurrentStep()
+    }
+    fun startCustomRoutine(customRoutine: UserCustomRoutine, userProfile: UserProfile?) {
+        if (userProfile == null) {
+            setError("Perfil de usuario no disponible para iniciar rutina personalizada.")
+            return
+        }
+        if (customRoutine.ejercicios.isEmpty()) {
+            setError("La rutina personalizada '${customRoutine.nombrePersonalizado}' no tiene ejercicios.")
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                errorMessage = null,
+                successMessage = null,
+                rutina = null, // Limpiar rutina anterior
+                estado = RoutineExecutionState.LOADING,
+                userProfile = userProfile // Guardar el perfil de usuario
+            )
+        }
+        Log.d(TAG, "startCustomRoutine: Iniciando rutina personalizada '${customRoutine.nombrePersonalizado}' para UserID: ${userProfile.uid}")
+
+        viewModelScope.launch {
+            try {
+                // Mapear UserCustomRoutine a Rutina (el modelo interno del ViewModel)
+                val rutinaToExecute = Rutina(
+                    id = customRoutine.id,
+                    nombre = customRoutine.nombrePersonalizado,
+                    descripcion = customRoutine.descripcion,
+                    imagenUrl = customRoutine.imagenUrl,
+                    ejercicios = customRoutine.ejercicios.map { ej ->
+                        ej.copy(componentes = ej.componentes.map { comp -> comp.copy() })
+                    },
+                    numeroDeRondas = customRoutine.numeroDeRondas,
+                    descansoEntreRondasSegundos = customRoutine.descansoEntreRondasSegundos,
+                    nivelRecomendado = customRoutine.nivelRecomendado,
+                    objetivos = customRoutine.objetivos,
+                    lugarEntrenamiento = customRoutine.lugarEntrenamiento,
+                    slug = customRoutine.id
+                )
+
+                rutinaToExecute.ejercicios.forEachIndexed { index, ej ->
+                    Log.d(TAG, "Verificando Ejercicio ${index + 1} [${ej.nombre}]: ID=${ej.id}, Tipo=${ej.tipoEjercicio}, Componentes=${ej.componentes.size}, Unilateral=${ej.esUnilateral}, Tempo=${ej.notaTempo}, RepsOrig='${ej.repeticionesOriginal}', DurOrig=${ej.duracionSegundosOriginal}s, Series=${ej.numeroDeSeries}")
+                    if (ej.tipoEjercicio == TipoDeEjercicio.SIMPLE && ej.componentes.isNotEmpty()) {
+                        Log.w(TAG, "Advertencia: Ejercicio '${ej.nombre}' (ID: ${ej.id}) marcado como SIMPLE pero tiene ${ej.componentes.size} componentes.")
+                    }
+                }
+
+                _uiState.update {
+                    it.copy(
+                        rutina = rutinaToExecute,
+                        isLoading = false,
+                        rondaActual = 1,
+                        indiceEjercicioActual = 0,
+                        serieActualEjercicio = if (rutinaToExecute.ejercicios.firstOrNull()?.numeroDeSeries ?: 0 > 0) 1 else 0,
+                        tiempoTotalSesionSegundos = 0,
+                        previousState = RoutineExecutionState.IDLE,
+                        componenteEjercicioActual = null,
+                        indiceComponenteActual = -1,
+                        showExitConfirmation = false,
+                        estado = RoutineExecutionState.IDLE
+                    )
+                }
+                ladoAlternadoCompletadoParaSerieActual = false
+                Log.d(TAG, "Rutina personalizada '${rutinaToExecute.nombre}' lista (${rutinaToExecute.ejercicios.size} ej.). Estado UI actualizado. Preparada para iniciar.")
+
+                // Iniciar automáticamente la cuenta atrás y el temporizador de sesión
+                // (Asumiendo que tienes funciones similares a startInitialCountdown y startSessionTimer)
+                startInitialCountdown() // Necesitas esta función definida, o similar
+                startSessionTimer()     // Necesitas esta función definida, o similar
+                Log.d(TAG, "startCustomRoutine: startInitialCountdown y startSessionTimer llamados.")
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error catastrófico al procesar rutina personalizada '${customRoutine.nombrePersonalizado}'", e)
+                setError(e.localizedMessage ?: "Error desconocido al procesar la rutina personalizada.")
+            }
+        }
     }
     fun togglePausa() {
         val currentStateValue = _uiState.value // Captura el estado en el momento de llamar a togglePausa

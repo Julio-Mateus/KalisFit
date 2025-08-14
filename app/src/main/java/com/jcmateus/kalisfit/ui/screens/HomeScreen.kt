@@ -28,7 +28,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -46,6 +45,7 @@ import coil.request.ImageRequest
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.UserActivity
+import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.LastActivityItem
 import com.jcmateus.kalisfit.viewmodel.ResumenSemanal
@@ -62,7 +62,6 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun HomeScreen(
     mainNavController: NavHostController,
-    // bottomNavController: NavHostController // No se usa directamente aquí, pero se pasa
 ) {
     val userViewModel: UserProfileViewModel = viewModel()
 
@@ -70,7 +69,6 @@ fun HomeScreen(
     val isLoadingUser by userViewModel.isLoadingUser.collectAsState()
     val userErrorMessage by userViewModel.userErrorMessage.collectAsState()
 
-    // Datos específicos del HomeScreen del ViewModel
     val homeScreenSummary by userViewModel.homeScreenSummary.collectAsState()
     val lastActivity by userViewModel.lastActivity.collectAsState()
     val isLoadingHomeScreenData by userViewModel.isLoadingHomeScreenData.collectAsState()
@@ -79,6 +77,12 @@ fun HomeScreen(
     val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState()
     val isLoadingRoutines by userViewModel.isLoadingRoutines.collectAsState()
     val routinesError by userViewModel.routinesErrorMessage.collectAsState()
+
+    // --- Nuevos estados para Rutinas Personalizadas ---
+    val userCustomRoutines by userViewModel.userCustomRoutines.collectAsState()
+    val isLoadingUserCustomRoutines by userViewModel.isLoadingUserCustomRoutines.collectAsState()
+    val userCustomRoutinesError by userViewModel.userCustomRoutinesError.collectAsState()
+    // --- Fin nuevos estados ---
 
     val tipsGenerales = remember {
         listOf(
@@ -95,11 +99,9 @@ fun HomeScreen(
         )
     }
 
-    val tipDelDia = remember(tipsGenerales, user?.uid) { // Cambia con el usuario para nueva semilla
+    val tipDelDia = remember(tipsGenerales, user?.uid) {
         if (tipsGenerales.isNotEmpty()) {
-            // Usar una semilla basada en el día actual y el UID para que el tip sea el mismo durante el día para ese usuario
-            val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()
-                ?.toLong() ?: 0L)
+            val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()?.toLong() ?: 0L)
             tipsGenerales.random(Random(seed))
         } else {
             "¡Recuerda mantenerte activo hoy!"
@@ -107,25 +109,22 @@ fun HomeScreen(
     }
 
     // Pull to refresh state
-    val isRefreshing = isLoadingUser || isLoadingHomeScreenData || isLoadingRoutines
+    // *** ACTUALIZADO isRefreshing ***
+    val isRefreshing = isLoadingUser || isLoadingHomeScreenData || isLoadingRoutines || isLoadingUserCustomRoutines
     val pullToRefreshState = rememberPullToRefreshState()
 
     if (pullToRefreshState.isRefreshing) {
         LaunchedEffect(true) {
-            userViewModel.loadUserProfile() // Esto ya debería llamar a las otras cargas
-            // O puedes ser explícito:
-            // userViewModel.refreshHomeScreenData()
-            // userViewModel.refreshRecommendations()
-
-            // Una vez que la carga finaliza (basado en tus StateFlows de carga),
-            // necesitas llamar a pullToRefreshState.endRefresh()
-            // Esto se puede hacer observando los estados de `isLoading...`
+            userViewModel.loadUserProfile() // Carga perfil, luego recomendaciones
+            userViewModel.refreshHomeScreenData() // Carga resumen, última actividad y rutinas personalizadas
+            // No es necesario llamar a refreshUserCustomRoutines directamente si refreshHomeScreenData ya lo hace
         }
     }
 
     // Observa los estados de carga para finalizar el refresh
-    LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines) {
-        if (!isLoadingUser && !isLoadingHomeScreenData && !isLoadingRoutines) {
+    // *** ACTUALIZADO LaunchedEffect para endRefresh ***
+    LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines, isLoadingUserCustomRoutines) {
+        if (!isLoadingUser && !isLoadingHomeScreenData && !isLoadingRoutines && !isLoadingUserCustomRoutines) {
             pullToRefreshState.endRefresh()
         }
     }
@@ -134,22 +133,19 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-
     ) {
         when {
-            isLoadingUser && user == null -> { // Mostrar carga principal solo si no hay datos de usuario aún
+            isLoadingUser && user == null -> {
                 LoadingIndicator(text = "Cargando perfil...")
             }
-
             user == null && userErrorMessage != null -> {
                 ErrorState(
                     message = userErrorMessage ?: "No se pudo cargar el perfil.",
                     onRetry = { userViewModel.loadUserProfile() }
                 )
             }
-
             user != null -> {
-                val currentUser = user!! // Sabemos que no es null aquí
+                val currentUser = user!!
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
@@ -161,89 +157,115 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     stickyHeader(key = "header") {
-                        // El HeaderCard se coloca dentro del stickyHeader.
-                        // Es importante darle un fondo propio para que no se
-                        // vuelva transparente al "pegarse".
                         HeaderCard(
                             user = currentUser,
                             tipDelDia = tipDelDia,
                             modifier = Modifier
                                 .animateItemPlacement(tween(durationMillis = 500))
                                 .background(MaterialTheme.colorScheme.background)
-                                .padding(bottom = 8.dp) // Un pequeño espacio antes de que empiece la lista
+                                .padding(bottom = 8.dp)
                         )
                     }
-                    // --- RESUMEN SEMANAL ---
+
                     item(key = "summary") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
-                            SectionTitle1(
-                                "📈 Tu Semana",
-                                //icon = Icons.AutoMirrored.Filled.TrendingUp
-                            )
+                            SectionTitle1("📈 Tu Semana")
                             when {
-                                isLoadingHomeScreenData && homeScreenSummary == null -> LoadingCard(
-                                    text = "Cargando resumen..."
-                                )
-
+                                isLoadingHomeScreenData && homeScreenSummary == null -> LoadingCard(text = "Cargando resumen...")
                                 homeScreenError != null && homeScreenSummary == null -> ErrorCard(
                                     message = homeScreenError ?: "Error al cargar resumen.",
                                     onRetry = { userViewModel.refreshHomeScreenData() }
                                 )
-
                                 homeScreenSummary != null -> WeeklySummaryCard(summary = homeScreenSummary!!)
                                 else -> NoDataCard(message = "Aún no hay datos para tu resumen semanal. ¡Empieza a entrenar!")
                             }
                         }
                     }
-                    // --- ÚLTIMA ACTIVIDAD ---
+
                     item(key = "last_activity") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
-                            SectionTitle1(
-                                "⏱️ Última Actividad",
-                                //icon = Icons.Filled.Timelapse
-                            )
+                            SectionTitle1("⏱️ Última Actividad")
                             when (val activity = lastActivity) {
                                 is LastActivityItem.Loading -> LoadingCard(text = "Cargando última actividad...")
                                 is LastActivityItem.None -> NoDataCard(message = "No has registrado actividades recientemente.")
-                                is LastActivityItem.Routine -> LastActivityRoutineCard(
-                                    activity.progreso,
-                                    mainNavController
-                                )
-
-                                is LastActivityItem.FreeActivity -> LastActivityFreeCard(
-                                    activity.activity,
-                                    mainNavController
-                                )
-                                // El caso de error para lastActivity se maneja a través de homeScreenError
-                                // si es un error general de carga de datos del home.
-                                // Si quisieras un error específico para lastActivity, necesitarías otro StateFlow.
+                                is LastActivityItem.Routine -> LastActivityRoutineCard(activity.progreso, mainNavController)
+                                is LastActivityItem.FreeActivity -> LastActivityFreeCard(activity.activity, mainNavController)
                             }
-                            if (homeScreenError != null && lastActivity is LastActivityItem.None) { // Mostrar error si no hay datos Y hubo error
+                            if (homeScreenError != null && lastActivity is LastActivityItem.None) {
                                 Spacer(Modifier.height(8.dp))
                                 ErrorCard(
-                                    message = homeScreenError
-                                        ?: "Error al cargar última actividad.",
-                                    onRetry = { userViewModel.refreshHomeScreenData() })
+                                    message = homeScreenError ?: "Error al cargar última actividad.",
+                                    onRetry = { userViewModel.refreshHomeScreenData() }
+                                )
                             }
                         }
                     }
-                    // --- RUTINAS RECOMENDADAS ---
-                    item(key = "recommendations") {
+
+                    // --- MIS RUTINAS (PERSONALIZADAS) --- // *** NUEVA SECCIÓN ***
+                    item(key = "my_custom_routines") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
                             SectionTitle1(
-                                "🏋️‍♂️ Tus Rutinas Recomendadas",
-                                //icon = Icons.Filled.FitnessCenter
+                                title = "📖 Mis Rutinas Guardadas", // O "Continuar con mis Rutinas"
+                                actionText = if (userCustomRoutines.isNotEmpty()) "Ver todas" else null, // Opcional
+                                onActionClick = if (userCustomRoutines.isNotEmpty()) {
+                                    {
+                                        // mainNavController.navigate(Routes.MY_ROUTINES_SCREEN) // Navegar a una pantalla de "Mis Rutinas" si la tienes
+                                    }
+                                } else null
                             )
+                            when {
+                                isLoadingUserCustomRoutines && userCustomRoutines.isEmpty() -> LoadingCard(
+                                    text = "Cargando tus rutinas..."
+                                )
+                                userCustomRoutinesError != null && userCustomRoutines.isEmpty() -> ErrorCard(
+                                    message = userCustomRoutinesError ?: "Error al cargar tus rutinas.",
+                                    onRetry = { userViewModel.refreshUserCustomRoutines() }
+                                )
+                                userCustomRoutines.isEmpty() && !isLoadingUserCustomRoutines -> {
+                                    NoDataCard(message = "Aún no has guardado ninguna rutina personalizada.") {
+                                        // Opcionalmente, un botón para ir a crear/explorar rutinas
+                                        Button(
+                                            onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                        ) {
+                                            Text("Explorar Rutinas")
+                                        }
+                                    }
+                                }
+                                userCustomRoutines.isNotEmpty() -> {
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp)
+                                    ) {
+                                        items(
+                                            items = userCustomRoutines.take(5), // Mostrar un máximo en el home
+                                            key = { it.id }) { rutina -> // Asume que UserCustomRoutine tiene 'id'
+                                            UserCustomRoutineCard( // *** NUEVO COMPOSABLE ***
+                                                userRoutine = rutina,
+                                                navController = mainNavController,
+                                                modifier = Modifier.width(280.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                // else -> {} // No es necesario si cubrimos todos los casos
+                            }
+                        }
+                    }
+                    // --- FIN NUEVA SECCIÓN ---
+
+
+                    item(key = "recommendations") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            SectionTitle1("🏋️‍♂️ Tus Rutinas Recomendadas")
                             when {
                                 isLoadingRoutines && recommendedRoutines.isEmpty() -> LoadingCard(
                                     text = "Buscando recomendaciones..."
                                 )
-
                                 routinesError != null && recommendedRoutines.isEmpty() -> ErrorCard(
                                     message = routinesError ?: "Error al cargar rutinas.",
                                     onRetry = { userViewModel.refreshRecommendations() }
                                 )
-
                                 recommendedRoutines.isEmpty() && !isLoadingRoutines -> {
                                     NoDataCard(message = "No hay rutinas recomendadas ahora. ¡Explora y encuentra la tuya!") {
                                         Button(
@@ -254,19 +276,18 @@ fun HomeScreen(
                                         }
                                     }
                                 }
-
                                 else -> {
                                     LazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 2.dp) // Pequeño padding para sombras de card
+                                        contentPadding = PaddingValues(horizontal = 2.dp)
                                     ) {
                                         items(
-                                            items = recommendedRoutines,
+                                            items = recommendedRoutines, // Ya se limitan a 5 en el ViewModel
                                             key = { it.id }) { rutina ->
                                             RoutineCard(
                                                 rutina = rutina,
                                                 navController = mainNavController,
-                                                modifier = Modifier.width(280.dp) // Ancho fijo para consistencia en LazyRow
+                                                modifier = Modifier.width(280.dp)
                                             )
                                         }
                                     }
@@ -274,7 +295,7 @@ fun HomeScreen(
                             }
                         }
                     }
-                    // --- BOTONES DE ACCIÓN PRINCIPALES ---
+
                     item(key = "actions") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
                             ActionButtonsSection(
@@ -285,7 +306,6 @@ fun HomeScreen(
                     }
                 }
             }
-            // Caso inicial antes de que LaunchedEffect se active completamente o si el usuario no está logueado
             else -> {
                 LoadingIndicator(text = "Inicializando...")
             }
@@ -294,12 +314,128 @@ fun HomeScreen(
         PullToRefreshContainer(
             state = pullToRefreshState,
             modifier = Modifier.align(Alignment.TopCenter),
-            // Puedes personalizar el indicador si lo deseas
-            // indicator = { CircularProgressIndicator() }
         )
     }
 }
+// --- NUEVO COMPOSABLE PARA UserCustomRoutine ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UserCustomRoutineCard(
+    userRoutine: UserCustomRoutine, // Tu modelo de datos para rutinas personalizadas
+    navController: NavHostController,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "userCustomRoutineScaleAnimation"
+    )
+    Card(
+        onClick = {
+            // Lógica de navegación:
+            // Si la rutina personalizada tiene un 'originalTemplateId' Y NO es una rutina
+            // que solo exista como personalizada (es decir, el usuario quiere ver los detalles
+            // de la plantilla base en lugar de ejecutar su versión directamente),
+            // entonces navega al detalle de la plantilla.
+            // SI NO, o si el usuario siempre debe ejecutar SU versión,
+            // entonces navega a la pantalla de ejecución con el customRoutineId.
 
+            // CASO 1: El usuario quiere iniciar SU versión personalizada de la rutina.
+            // Esta es la acción más probable para "Mis Rutinas Guardadas".
+            //navController.navigate(Routes.startCustomRoutine(userRoutine.id))
+
+            // CASO 2: (Alternativa o si quieres ofrecer ambas opciones en otro lugar)
+            // Si quieres que al hacer clic se vea el detalle de la PLANTILLA ORIGINAL
+            // (si existe) en lugar de iniciar la rutina personalizada:
+
+            if (userRoutine.originalTemplateId != null && userRoutine.originalTemplateId.isNotBlank()) {
+                // Navega al detalle de la plantilla original si existe
+                navController.navigate(Routes.routineDetail(userRoutine.originalTemplateId))
+            } else {
+                // Si no hay plantilla original (es 100% custom) O si siempre se ejecuta la custom,
+                // navega para iniciar la rutina personalizada
+                navController.navigate(
+                    Routes.startRoutineExecution(customRoutineId = userRoutine.id)
+                )
+            }
+        },
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(IntrinsicSize.Min)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (!userRoutine.imagenUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(userRoutine.imagenUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Imagen de la rutina: ${userRoutine.nombrePersonalizado}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FitnessCenter,
+                        contentDescription = "Sin imagen",
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = userRoutine.nombrePersonalizado.ifBlank { "Rutina Personalizada" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                if (userRoutine.ejercicios.isNotEmpty()) {
+                    DetailRow(
+                        icon = Icons.Filled.FitnessCenter,
+                        text = "${userRoutine.ejercicios.size} ejercicios",
+                    )
+                }
+
+                if (userRoutine.numeroDeRondas > 0) {
+                    DetailRow(
+                        icon = Icons.Filled.Timelapse,
+                        text = "${userRoutine.numeroDeRondas} rondas",
+                    )
+                }
+            }
+        }
+    }
+}
 @Composable
 fun HeaderCard(user: UserProfile, tipDelDia: String, modifier: Modifier = Modifier) {
     // La card ya tiene su propio color, así que no se transparentará.
@@ -470,7 +606,6 @@ fun RoutineCard(
         }
     }
 }
-
 @Composable
 fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -490,7 +625,6 @@ fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
         )
     }
 }
-
 @Composable
 fun WeeklySummaryCard(summary: ResumenSemanal) {
     Card(
@@ -523,7 +657,6 @@ fun WeeklySummaryCard(summary: ResumenSemanal) {
         }
     }
 }
-
 @Composable
 fun SummaryItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -540,7 +673,6 @@ fun SummaryItem(value: String, label: String) {
         )
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostController) {
@@ -595,7 +727,6 @@ fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostCont
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LastActivityFreeCard(activity: UserActivity, navController: NavHostController) {
@@ -639,7 +770,6 @@ fun LastActivityFreeCard(activity: UserActivity, navController: NavHostControlle
         }
     }
 }
-
 @Composable
 fun ActionButtonsSection(navController: NavHostController, userIsPresent: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -676,7 +806,6 @@ fun ActionButtonsSection(navController: NavHostController, userIsPresent: Boolea
         }
     }
 }
-
 @Composable
 fun LoadingIndicator(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -691,7 +820,6 @@ fun LoadingIndicator(text: String) {
         }
     }
 }
-
 @Composable
 fun LoadingCard(text: String = "Cargando...") {
     Card(
@@ -722,7 +850,6 @@ fun LoadingCard(text: String = "Cargando...") {
         }
     }
 }
-
 @Composable
 fun ErrorState(message: String, onRetry: () -> Unit) {
     Box(
@@ -754,7 +881,6 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
         }
     }
 }
-
 @Composable
 fun ErrorCard(message: String, onRetry: () -> Unit) {
     Card(
@@ -795,7 +921,6 @@ fun ErrorCard(message: String, onRetry: () -> Unit) {
         }
     }
 }
-
 @Composable
 fun NoDataCard(message: String, content: (@Composable () -> Unit)? = null) {
     Card(
@@ -824,7 +949,6 @@ fun NoDataCard(message: String, content: (@Composable () -> Unit)? = null) {
         }
     }
 }
-
 fun formatDuration(totalSeconds: Int): String {
     if (totalSeconds < 0) return "0s"
     val hours = TimeUnit.SECONDS.toHours(totalSeconds.toLong())

@@ -20,6 +20,7 @@ import com.google.firebase.Timestamp // <--- AÑADE ESTA LÍNEA
 import com.google.firebase.firestore.Query
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.UserActivity
+import com.jcmateus.kalisfit.model.UserCustomRoutine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.text.SimpleDateFormat
@@ -68,49 +69,41 @@ class UserProfileViewModel(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) : ViewModel() {
-
     // --- Estados del Perfil del Usuario ---
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user.asStateFlow()
-
     private val _isLoadingUser = MutableStateFlow(false)
     val isLoadingUser: StateFlow<Boolean> = _isLoadingUser.asStateFlow()
-
     private val _userErrorMessage = MutableStateFlow<String?>(null)
     val userErrorMessage: StateFlow<String?> = _userErrorMessage.asStateFlow()
-
     // --- Estados para Rutinas Recomendadas ---
     private val _recommendedRoutines = MutableStateFlow<List<Rutina>>(emptyList())
     val recommendedRoutines: StateFlow<List<Rutina>> = _recommendedRoutines.asStateFlow()
-
     private val _routinesErrorMessage = MutableStateFlow<String?>(null)
     val routinesErrorMessage: StateFlow<String?> = _routinesErrorMessage.asStateFlow()
-
     private val _isLoadingRoutines = MutableStateFlow(false)
     val isLoadingRoutines: StateFlow<Boolean> = _isLoadingRoutines.asStateFlow()
-
+    private val _userCustomRoutines = MutableStateFlow<List<UserCustomRoutine>>(emptyList())
+    val userCustomRoutines: StateFlow<List<UserCustomRoutine>> = _userCustomRoutines.asStateFlow()
+    private val _isLoadingUserCustomRoutines = MutableStateFlow(false)
+    val isLoadingUserCustomRoutines: StateFlow<Boolean> = _isLoadingUserCustomRoutines.asStateFlow()
+    private val _userCustomRoutinesError = MutableStateFlow<String?>(null)
+    val userCustomRoutinesError: StateFlow<String?> = _userCustomRoutinesError.asStateFlow()
     // --- Estados para los Campos Editables del Perfil ---
     private val _editableNombre = MutableStateFlow("")
     val editableNombre: StateFlow<String> = _editableNombre.asStateFlow()
-
     private val _editablePeso = MutableStateFlow("")
     val editablePeso: StateFlow<String> = _editablePeso.asStateFlow()
-
     private val _editableAltura = MutableStateFlow("")
     val editableAltura: StateFlow<String> = _editableAltura.asStateFlow()
-
     private val _editableEdad = MutableStateFlow("")
     val editableEdad: StateFlow<String> = _editableEdad.asStateFlow()
-
     private val _editableSexo = MutableStateFlow("")
     val editableSexo: StateFlow<String> = _editableSexo.asStateFlow()
-
     private val _editableFrecuenciaSemanal = MutableStateFlow("")
     val editableFrecuenciaSemanal: StateFlow<String> = _editableFrecuenciaSemanal.asStateFlow()
-
     private val _editableLugarEntrenamiento = MutableStateFlow("") // Asume edición de un solo lugar
     val editableLugarEntrenamiento: StateFlow<String> = _editableLugarEntrenamiento.asStateFlow()
-
     // --- Estado para la Operación de Actualización/Guardado del Perfil ---
     sealed class UpdateProfileState {
         object Idle : UpdateProfileState()
@@ -118,24 +111,17 @@ class UserProfileViewModel(
         object Success : UpdateProfileState()
         data class Error(val message: String) : UpdateProfileState()
     }
-
     private val _updateState = MutableStateFlow<UpdateProfileState>(UpdateProfileState.Idle)
     val updateState: StateFlow<UpdateProfileState> = _updateState.asStateFlow()
-
     // --- Estados para los Datos del HomeScreen ---
     private val _homeScreenSummary = MutableStateFlow<ResumenSemanal?>(null)
     val homeScreenSummary: StateFlow<ResumenSemanal?> = _homeScreenSummary.asStateFlow()
-
     private val _lastActivity = MutableStateFlow<LastActivityItem>(LastActivityItem.Loading)
     val lastActivity: StateFlow<LastActivityItem> = _lastActivity.asStateFlow()
-
     private val _isLoadingHomeScreenData = MutableStateFlow(false)
     val isLoadingHomeScreenData: StateFlow<Boolean> = _isLoadingHomeScreenData.asStateFlow()
-
     private val _homeScreenErrorMessage = MutableStateFlow<String?>(null)
     val homeScreenErrorMessage: StateFlow<String?> = _homeScreenErrorMessage.asStateFlow()
-
-
     companion object {
         private const val TAG = "UserProfileViewModel"
         // Formateador de fecha para mostrar en la UI si es necesario
@@ -152,7 +138,6 @@ class UserProfileViewModel(
             return date?.let { displayDateFormatter.format(it) } ?: "N/A"
         }
     }
-
     init {
         if (firebaseAuth.currentUser != null) {
             loadUserProfile()
@@ -164,7 +149,6 @@ class UserProfileViewModel(
             _lastActivity.value = LastActivityItem.None
         }
     }
-
     // --- Funciones para Actualizar Campos Editables desde la UI ---
     fun onNombreChange(newName: String) { _editableNombre.value = newName }
     fun onPesoChange(newPeso: String) { _editablePeso.value = newPeso }
@@ -173,7 +157,6 @@ class UserProfileViewModel(
     fun onSexoChange(newSexo: String) { _editableSexo.value = newSexo }
     fun onFrecuenciaChange(newFrecuencia: String) { _editableFrecuenciaSemanal.value = newFrecuencia }
     fun onLugarEntrenamientoChange(newLugar: String) { _editableLugarEntrenamiento.value = newLugar }
-
     // --- Carga y Gestión del Perfil del Usuario ---
     fun loadUserProfile() {
         val uid = firebaseAuth.currentUser?.uid
@@ -215,7 +198,6 @@ class UserProfileViewModel(
                 clearEditableFields()
             }
     }
-
     private fun populateEditableFields(userProfile: UserProfile?) {
         userProfile?.let {
             _editableNombre.value = it.nombre
@@ -227,7 +209,6 @@ class UserProfileViewModel(
             _editableLugarEntrenamiento.value = it.lugarEntrenamiento.firstOrNull() ?: ""
         }
     }
-
     private fun clearEditableFields() {
         _editableNombre.value = ""
         _editablePeso.value = ""
@@ -237,7 +218,6 @@ class UserProfileViewModel(
         _editableFrecuenciaSemanal.value = ""
         _editableLugarEntrenamiento.value = ""
     }
-
     fun saveUserProfile(newImageUri: Uri?) {
         val currentUserId = firebaseAuth.currentUser?.uid
         if (currentUserId == null) {
@@ -286,11 +266,9 @@ class UserProfileViewModel(
             }
         }
     }
-
     fun resetUpdateState() {
         _updateState.value = UpdateProfileState.Idle
     }
-
     // --- Carga de Datos para HomeScreen ---
     fun loadHomeScreenData() {
         val uid = firebaseAuth.currentUser?.uid
@@ -420,11 +398,9 @@ class UserProfileViewModel(
             }
         }
     }
-
     fun refreshHomeScreenData() {
         loadHomeScreenData()
     }
-
     // --- Carga de Rutinas Recomendadas ---
     fun loadRecommendedRoutines(currentUserProfile: UserProfile?) {
         val profileToUse = currentUserProfile ?: _user.value
@@ -475,7 +451,6 @@ class UserProfileViewModel(
             }
         }
     }
-
     // Esta función debería idealmente estar en una clase Repositorio.
     // Aquí se incluye como ejemplo de cómo podría ser la lógica de consulta.
     private suspend fun obtenerRutinasDesdeFirestore(
@@ -540,16 +515,55 @@ class UserProfileViewModel(
             throw e
         }
     }
-
-
     fun refreshRecommendations() {
         loadRecommendedRoutines(null) // Usa el perfil de usuario actual en _user.value
     }
+    // --- Carga de Rutinas Personalizadas del Usuario --- // *** NUEVA SECCIÓN ***
+    fun loadUserCustomRoutines() {
+        val uid = firebaseAuth.currentUser?.uid
+        if (uid == null) {
+            _userCustomRoutinesError.value = "Usuario no autenticado."
+            _isLoadingUserCustomRoutines.value = false
+            _userCustomRoutines.value = emptyList()
+            return
+        }
 
+        _isLoadingUserCustomRoutines.value = true
+        _userCustomRoutinesError.value = null
+        // _userCustomRoutines.value = emptyList() // Opcional: limpiar antes de cargar
+
+        viewModelScope.launch {
+            try {
+                // *** ASUME que tienes una colección "userCustomRoutines" anidada bajo "users/{userId}/userCustomRoutines" ***
+                // *** O si es una colección de nivel raíz, ajusta la ruta y añade .whereEqualTo("userId", uid) ***
+                val querySnapshot = firestore.collection("users").document(uid)
+                    .collection("userCustomRoutines") // AJUSTA ESTA RUTA SI ES DIFERENTE
+                    // .orderBy("fechaCreacion", Query.Direction.DESCENDING) // Opcional: ordenar por fecha
+                    .get()
+                    .await()
+
+                val routines = querySnapshot.toObjects(UserCustomRoutine::class.java)
+                _userCustomRoutines.value = routines
+                if (routines.isEmpty()) {
+                    // No es necesariamente un error, podría simplemente no tener rutinas
+                    // _userCustomRoutinesError.value = "No tienes rutinas personalizadas todavía."
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al cargar las rutinas personalizadas del usuario", e)
+                _userCustomRoutines.value = emptyList()
+                _userCustomRoutinesError.value = "Error al cargar tus rutinas: ${e.localizedMessage}"
+            } finally {
+                _isLoadingUserCustomRoutines.value = false
+            }
+        }
+    }
+
+    fun refreshUserCustomRoutines() { // Para pull-to-refresh
+        loadUserCustomRoutines()
+    }
     fun isUserLoggedIn(): Boolean {
         return firebaseAuth.currentUser != null
     }
-
     // Limpiar estados cuando el ViewModel se destruye (o el usuario se desloguea explícitamente)
     override fun onCleared() {
         super.onCleared()

@@ -71,7 +71,10 @@ import com.jcmateus.kalisfit.viewmodel.AllExercisesViewModel
 import kotlin.text.contains
 import kotlin.text.lowercase
 
-
+// Clave para el resultado del ejercicio seleccionado (defínela en un lugar accesible, ej. un object)
+object NavigationKeys {
+    const val SELECTED_EXERCISE_ID_KEY = "selectedExerciseIdResult"
+}
 @RequiresApi(Build.VERSION_CODES.P)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +82,7 @@ fun AllExercisesScreen(
     navController: NavHostController,
     viewModel: AllExercisesViewModel = viewModel(),
     isSelectingForRoutine: Boolean = false,
-    onExerciseSelected: (String) -> Unit = {}
+    //onExerciseSelected: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -137,28 +140,37 @@ fun AllExercisesScreen(
                 )
             )
             // --- FIN CAMPO DE BÚSQUEDA ---
-
-            RenderExercisesContent( // Pasa el uiState completo, que contiene el searchTerm
+            RenderExercisesContent(
                 uiState = uiState,
                 isSelectingForRoutine = isSelectingForRoutine,
                 onExerciseClick = { exerciseId ->
                     if (isSelectingForRoutine) {
-                        Log.d("AllExercisesScreen", "Ejercicio SELECCIONADO: $exerciseId")
-                        onExerciseSelected(exerciseId)
+                        Log.d("AllExercisesScreen", "Ejercicio SELECCIONADO (click en tarjeta): $exerciseId")
+                        // Guardar el resultado en el SavedStateHandle de la pantalla anterior
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(NavigationKeys.SELECTED_EXERCISE_ID_KEY, exerciseId)
+                        navController.popBackStack() // Volver a la pantalla anterior
                     } else {
                         Log.d("AllExercisesScreen", "Ejercicio clickeado (para detalle): $exerciseId")
-                        // La expansión es manejada dentro de ExerciseItemCard
+                        // Aquí, si no está seleccionando, podría navegar a un detalle del ejercicio
+                        // navController.navigate("exerciseDetailScreen/$exerciseId")
                     }
                 },
                 onAddExerciseToRoutine = { exerciseId ->
-                    Log.d("AllExercisesScreen", "Solicitud para AÑADIR ejercicio a rutina: $exerciseId")
-                    onExerciseSelected(exerciseId) // Reutilizamos para cerrar/confirmar selección
+                    // Este callback en ExerciseItemCard se llama cuando se presiona el botón "+"
+                    // y isSelectingForRoutine es true.
+                    Log.d("AllExercisesScreen", "Solicitud para AÑADIR ejercicio a rutina (botón +): $exerciseId")
+                    // Guardar el resultado en el SavedStateHandle de la pantalla anterior
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(NavigationKeys.SELECTED_EXERCISE_ID_KEY, exerciseId)
+                    navController.popBackStack() // Volver a la pantalla anterior
                 }
             )
         }
     }
 }
-
 @RequiresApi(Build.VERSION_CODES.P)
 @Composable
 fun RenderExercisesContent(
@@ -252,8 +264,6 @@ fun RenderExercisesContent(
         }
     }
 }
-
-
 @RequiresApi(Build.VERSION_CODES.P)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

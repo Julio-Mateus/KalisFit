@@ -8,11 +8,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
 import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
 import com.jcmateus.kalisfit.data.getUserCustomRoutineById
+import com.jcmateus.kalisfit.data.parsearEjercicioFirestore
 import com.jcmateus.kalisfit.data.saveOrUpdateUserCustomRoutine
 import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
+import com.jcmateus.kalisfit.model.GrupoMuscular
+import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.TipoDeEjercicio
 import com.jcmateus.kalisfit.model.UserCustomRoutine
@@ -22,14 +26,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
+import kotlin.io.path.exists
 
 object EditRoutineArgs {
     const val TEMPLATE_ID_ARG = "templateId"
     const val CUSTOM_ROUTINE_ID_ARG = "customRoutineId"
     const val USER_ID_ARG = "userId"
 }
-
 data class EditRoutineUiState(
     val isLoading: Boolean = false,
     val routineToEdit: UserCustomRoutine? = null,
@@ -42,20 +47,16 @@ data class EditRoutineUiState(
     val isUploadingCoverImage: Boolean = false
     // No hay picker global de ejercicios en esta fase
 )
-
 class EditRoutineViewModel(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-
     private val TAG = "EditRoutineViewModel_Phase1"
-
     private val _uiState = MutableStateFlow(EditRoutineUiState())
     val uiState: StateFlow<EditRoutineUiState> = _uiState.asStateFlow()
-
+    private var targetExerciseIndexForSelection: Int? = null
     private val templateRoutineIdArg: String? = savedStateHandle[EditRoutineArgs.TEMPLATE_ID_ARG]
     private val customRoutineIdArg: String? = savedStateHandle[EditRoutineArgs.CUSTOM_ROUTINE_ID_ARG]
     private val currentUserIdArg: String? = savedStateHandle[EditRoutineArgs.USER_ID_ARG]
-
     init {
         if (currentUserIdArg.isNullOrBlank()) {
             _uiState.value = _uiState.value.copy(
@@ -66,6 +67,10 @@ class EditRoutineViewModel(
             // En esta Fase 1, no cargamos una lista global de ejercicios base.
             loadInitialRoutine()
         }
+    }
+    fun prepareForExerciseSelection(index: Int?) {
+        targetExerciseIndexForSelection = index
+        Log.d(TAG, "Preparado para seleccionar ejercicio. Índice a reemplazar: $index")
     }
     private fun loadInitialRoutine() {
         // Resetear los estados relacionados con la imagen al iniciar la carga
@@ -330,7 +335,6 @@ class EditRoutineViewModel(
             }
         }
     }
-
     fun onCoverImageSelected(uri: Uri?) {
         _uiState.update { currentState ->
             currentState.copy(selectedCoverImageUri = uri)
@@ -364,12 +368,19 @@ class EditRoutineViewModel(
     }
     // --- Funciones para gestionar la lista de ejercicios en la rutina ---
     fun onRemoveExercise(exerciseIndex: Int) {
-        _uiState.value.routineToEdit?.let { currentRoutine ->
-            if (exerciseIndex in currentRoutine.ejercicios.indices) {
-                val updatedExercises = currentRoutine.ejercicios.toMutableList()
-                    .apply { removeAt(exerciseIndex) }
-                    .mapIndexed { index, ej -> ej.copy(orden = index.toDouble()) } // Reasignar orden
+        _uiState.value.routineToEdit?.let { currentRoutine -> // Obtiene la rutina actual del estado
+            if (exerciseIndex >= 0 && exerciseIndex < currentRoutine.ejercicios.size) { // Comprueba límites
+                val updatedExercises = currentRoutine.ejercicios.toMutableList() // 1. Crea una COPIA MUTABLE de la lista de ejercicios
+                    .apply { removeAt(exerciseIndex) } // 2. Elimina el ejercicio de ESTA COPIA
+                    .mapIndexed { index, ej -> ej.copy(orden = index.toDouble()) } // 3. Reasigna 'orden' en una NUEVA LISTA (inmutable por defecto de .mapIndexed)
+
+                // 4. Actualiza el estado:
+                //    - Se crea una NUEVA instancia de 'routineToEdit' usando .copy()
+                //    - A esta nueva instancia se le asigna la 'updatedExercises' (que es una nueva lista)
                 _uiState.value = _uiState.value.copy(routineToEdit = currentRoutine.copy(ejercicios = updatedExercises))
+                Log.d(TAG, "Ejercicio en índice $exerciseIndex eliminado. Nueva lista de ejercicios: ${updatedExercises.joinToString { it.nombre }}") // Añadido Log
+            } else {
+                Log.w(TAG, "Índice de ejercicio inválido para eliminar: $exerciseIndex. Tamaño de la lista: ${currentRoutine.ejercicios.size}") // Añadido Log de advertencia
             }
         }
     }
@@ -481,6 +492,14 @@ class EditRoutineViewModel(
                     fechaUltimaModificacion = Timestamp.now(),
                     userId = userId // Ya debería estar, pero se reasegura
                 )
+                // ***** LOG IMPORTANTE AQUÍ *****
+                Log.d(TAG, "Antes de llamar a saveOrUpdateUserCustomRoutine:")
+                Log.d(TAG, "  Routine ID: ${finalRoutineToSave.id}")
+                Log.d(TAG, "  Routine Nombre: ${finalRoutineToSave.nombrePersonalizado}")
+                Log.d(TAG, "  ViewModel.isNewRoutine: ${_uiState.value.isNewRoutine}")
+                Log.d(TAG, "  originalTemplateId: ${_uiState.value.originalTemplateId}")
+                Log.d(TAG, "  customRoutineIdArg: $customRoutineIdArg")
+                Log.d(TAG, "  templateRoutineIdArg: $templateRoutineIdArg")
                 // Esta función debe existir en tu FirestoreUtils.kt
                 // y ser capaz de guardar/actualizar una UserCustomRoutine.
                 saveOrUpdateUserCustomRoutine(userId, finalRoutineToSave)
@@ -502,5 +521,162 @@ class EditRoutineViewModel(
     }
     fun onSaveHandled() {
         _uiState.value = _uiState.value.copy(saveSuccess = false) // Resetea el flag de éxito
+    }
+    fun addOrReplaceExerciseFromSelection(selectedExerciseId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) } // Opcional: indicar carga
+            Log.d(TAG, "Intentando añadir/reemplazar desde selección. ID: $selectedExerciseId, Índice objetivo: $targetExerciseIndexForSelection")
+
+            // 1. Obtener el Ejercicio base completo (NECESITAS IMPLEMENTAR ESTO CORRECTAMENTE)
+            // Esto es un placeholder, debes tener una fuente real para tus ejercicios base.
+            val baseExerciseDetails: Ejercicio? = fetchBaseExerciseDetails(selectedExerciseId)
+
+            if (baseExerciseDetails == null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessages = it.errorMessages + "Ejercicio seleccionado no encontrado (ID: $selectedExerciseId)."
+                    )
+                }
+                targetExerciseIndexForSelection = null // Resetear
+                return@launch
+            }
+
+            _uiState.update { currentState ->
+                val currentRoutine = currentState.routineToEdit ?: return@update currentState.copy(isLoading = false, errorMessages = currentState.errorMessages + "Error: Rutina no disponible para editar.")
+
+                // 2. Crear una nueva instancia de Ejercicio para esta rutina
+                val newExerciseInstanceForRoutine = baseExerciseDetails.copy(
+                    id = UUID.randomUUID().toString(), // NUEVO ID para la instancia en la rutina
+                    nombre = baseExerciseDetails.nombre, // Mantener el nombre original del ejercicio base
+                    // Aquí decides qué campos deben ser personalizables por rutina y cuáles vienen del base.
+                    // Por ejemplo, las series y reps podrían ser por defecto del base, pero luego editables.
+                    numeroDeSeries = baseExerciseDetails.numeroDeSeries.takeIf { it > 0 } ?: 1, // Ej: default a 1 si el base no tiene
+                    repeticionesOriginal = baseExerciseDetails.repeticionesOriginal.ifBlank { "10" }, // Ej: default a "10"
+                    duracionSegundosOriginal = baseExerciseDetails.duracionSegundosOriginal,
+                    descansoEntreSeriesSegundos = baseExerciseDetails.descansoEntreSeriesSegundos.takeIf { it > 0 } ?: 30,
+                    notaTempo = baseExerciseDetails.notaTempo,
+                    esUnilateral = baseExerciseDetails.esUnilateral,
+                    tipoEjercicio = baseExerciseDetails.tipoEjercicio, // Heredar tipo
+                    componentes = baseExerciseDetails.componentes.map { it.copy(id = UUID.randomUUID().toString()) }, // Copia profunda de componentes con nuevos IDs si aplica
+                    orden = 0.0 // Se reasignará después
+                    // imagenUrl y videoUrl se heredan del baseExerciseDetails
+                )
+
+                val updatedExercises = currentRoutine.ejercicios.toMutableList()
+                val targetIndex = targetExerciseIndexForSelection
+
+                if (targetIndex != null && targetIndex >= 0 && targetIndex < updatedExercises.size) {
+                    // REEMPLAZAR
+                    Log.d(TAG, "Reemplazando ejercicio en índice: $targetIndex")
+                    updatedExercises[targetIndex] = newExerciseInstanceForRoutine
+                } else {
+                    // AÑADIR NUEVO
+                    Log.d(TAG, "Añadiendo nuevo ejercicio a la rutina")
+                    updatedExercises.add(newExerciseInstanceForRoutine)
+                }
+
+                // 3. Reasignar el campo 'orden' para asegurar consistencia
+                val reorderedExercises = updatedExercises.mapIndexed { index, ej -> ej.copy(orden = index.toDouble()) }
+
+                currentState.copy(
+                    routineToEdit = currentRoutine.copy(ejercicios = reorderedExercises),
+                    isLoading = false,
+                    errorMessages = currentState.errorMessages.filterNot { it.startsWith("Ejercicio seleccionado no encontrado") }
+                )
+            }
+            targetExerciseIndexForSelection = null // Resetear después de usarlo
+        }
+    }
+    private suspend fun fetchBaseExerciseDetails(exerciseId: String): Ejercicio? {
+        val db = FirebaseFirestore.getInstance() // O accede a través de tu capa de datos
+        Log.d(TAG, "Fetching base exercise details for ID: $exerciseId from Firestore 'ejercicios_todos'")
+        try {
+            val exerciseDocumentSnapshot = db.collection("ejercicios_todos") // <--- USA TU COLECCIÓN
+                .document(exerciseId)
+                .get()
+                .await()
+
+            if (exerciseDocumentSnapshot.exists()) {
+                // Mapear el documento de Firestore a tu data class EjercicioFirestore
+                val ejercicioFirestore = exerciseDocumentSnapshot.toObject(com.jcmateus.kalisfit.data.EjercicioFirestore::class.java)
+
+                if (ejercicioFirestore != null) {
+                    // Es buena práctica asegurarse de que el ID del documento se asigne al campo 'id'
+                    // de tu objeto, especialmente si 'id' en EjercicioFirestore no es var o si
+                    // tu documento tiene un campo 'id' separado (lo cual no parece ser tu caso aquí,
+                    // ya que el ID es el del documento).
+                    // Si 'id' en EjercicioFirestore es 'var', puedes hacer:
+                    // ejercicioFirestore.id = exerciseDocumentSnapshot.id
+                    // Si no es var pero el campo 'id' se lee directamente del documento, está bien.
+                    // Tu EjercicioFirestore tiene 'var id: String = ""', así que es bueno asignarlo.
+                    ejercicioFirestore.id = exerciseDocumentSnapshot.id
+
+
+                    // Mapeo de List<String> desde Firestore a List<Enum> para tu modelo de app
+                    val gruposMuscularesEnum = ejercicioFirestore.grupoMuscular.mapNotNull { str ->
+                        try {
+                            GrupoMuscular.valueOf(str.trim().uppercase().replace(" ", "_"))
+                        } catch (e: IllegalArgumentException) {
+                            Log.w(TAG, "Grupo muscular desconocido ('$str') en Firestore para ejercicio base ${ejercicioFirestore.id}")
+                            null
+                        }
+                    }
+
+                    val lugaresEntrenamientoEnum = ejercicioFirestore.lugarEntrenamiento.mapNotNull { str: String -> // Especificar tipo para str
+                        try {
+                            LugarEntrenamiento.valueOf(str.trim().uppercase())
+                        } catch (e: IllegalArgumentException) {
+                            Log.w(TAG, "Lugar de entrenamiento desconocido ('$str') en Firestore para ejercicio base ${ejercicioFirestore.id}")
+                            null
+                        }
+                    }
+
+                    // LLAMADA A TU FUNCIÓN DE PARSEO DE FirestoreUtils.kt
+                    // Asegúrate de que esta función es accesible (public y con los imports correctos)
+                    return parsearEjercicioFirestore(
+                        ef = ejercicioFirestore,
+                        gruposMuscularesEnum = gruposMuscularesEnum,
+                        lugaresEntrenamientoEnum = lugaresEntrenamientoEnum
+                    )
+
+                } else {
+                    Log.e(TAG, "Error al mapear documento de 'ejercicios_todos' (ID: $exerciseId) a EjercicioFirestore.")
+                    return null
+                }
+            } else {
+                Log.w(TAG, "Ejercicio base con ID '$exerciseId' no encontrado en 'ejercicios_todos'.")
+                return null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al obtener ejercicio base (ID: $exerciseId) desde 'ejercicios_todos'.", e)
+            return null
+        }
+    }
+    fun onExerciseNameChanged(exerciseIndex: Int, newName: String) {
+        _uiState.value.routineToEdit?.let { currentRoutine ->
+            if (exerciseIndex in currentRoutine.ejercicios.indices) {
+                val updatedExercises = currentRoutine.ejercicios.toMutableList()
+                val oldExercise = updatedExercises[exerciseIndex]
+                // Solo actualiza el nombre si sigue siendo un "ejercicio en blanco"
+                // o si decides permitir cambiar el nombre de cualquier ejercicio aquí.
+                // Si el nombre solo viene del ejercicio base, este campo es solo visual
+                // hasta que se elija uno de la biblioteca.
+                if (oldExercise.id.isBlank() || oldExercise.nombre == "Nuevo Ejercicio") { // O una lógica más robusta para identificar ejercicios en blanco
+                    updatedExercises[exerciseIndex] = oldExercise.copy(nombre = newName)
+                    _uiState.update { it.copy(routineToEdit = currentRoutine.copy(ejercicios = updatedExercises)) }
+                }
+            }
+        }
+    }
+    fun onExercisePostRestChanged(exerciseIndex: Int, newRestString: String) {
+        val newRest = newRestString.toIntOrNull()
+        _uiState.value.routineToEdit?.let { currentRoutine ->
+            if (exerciseIndex in currentRoutine.ejercicios.indices && newRest != null && newRest >= 0) {
+                val updatedExercises = currentRoutine.ejercicios.toMutableList()
+                updatedExercises[exerciseIndex] = updatedExercises[exerciseIndex].copy(descansoDespuesEjercicioSegundos = newRest)
+                _uiState.update { it.copy(routineToEdit = currentRoutine.copy(ejercicios = updatedExercises)) }
+            }
+        }
     }
 }
