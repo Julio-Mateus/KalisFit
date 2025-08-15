@@ -197,7 +197,6 @@ fun obtenerHistorialProgreso(
             onError(it.message ?: "Error al obtener historial")
         }
 }
-
 suspend fun getAllCalisthenicsProgressions(): List<Progression> {
     val db = FirebaseFirestore.getInstance()
     val progressionsList = mutableListOf<Progression>()
@@ -496,7 +495,7 @@ fun parsearEjercicioFirestore(
     }
     // 2. Determinar el tipo de ejercicio y procesar componentes
     // PRIORIDAD 1: Si EjercicioFirestore YA TIENE componentes y un tipoEjercicio explícito
-    if (ef.tipoEjercicio == "SUPERSET_SEQUENCIAL" && ef.componentes.isNotEmpty()) {
+    if (ef.tipoEjercicio == "SUPERSET_SECUENCIAL" && ef.componentes.isNotEmpty()) {
         tipoFinal = TipoDeEjercicio.SUPERSET_SEQUENCIAL
         ef.componentes.forEach { compFirestore ->
             componentesFinales.add(

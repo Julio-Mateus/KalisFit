@@ -364,6 +364,29 @@
     <string name="nothing_next_end_of_routine">Fin de la rutina</string>
     <string name="desc_collapse_section">Contraer sección</string>
     <string name="desc_expand_section">Expandir sección</string>
+    <!-- Para ExerciseContent y relacionados -->
+    <string name="no_current_exercise_info">No hay información del ejercicio actual.</string>
+    <string name="routine_time_component">Tiempo del Componente</string>
+    <string name="rest_after_component">Descanso post-componente: %1$d seg</string>
+    <string name="no_active_component_info">No hay información del componente activo.</string>
+    <string name="previous_step">Paso Anterior</string>
+    <string name="previous_step_short">Anterior</string> <!-- Opción más corta para el botón -->
+    <!-- Strings para getNextButtonText (revisa si ya los tienes o si los nombres coinciden) -->
+    <string name="next_exercise_button">Siguiente Ejercicio</string>
+    <string name="next_set_button">Siguiente Serie</string>
+    <string name="finish_exercise_button">Finalizar Ejercicio</string>
+    <string name="next_round_button">Siguiente Ronda</string>
+    <string name="finish_round_button">Finalizar Ronda</string>
+    <string name="finish_routine_button">Finalizar Rutina</string>
+    <string name="next_component_button">Siguiente Componente</string>
+    <string name="start_exercise_button">Comenzar Ejercicio</string> <!-- Añadido por si acaso -->
+    <!-- Strings para getNextUpMessage (revisa si ya los tienes o si los nombres coinciden) -->
+    <string name="next_up_component">Siguiente: %1$s</string>
+    <string name="next_up_nothing">¡Último esfuerzo!</string> <!-- O algo similar -->
+    <string name="drawer_default_username">Usuario</string>
+    <string name="drawer_default_level">Nivel de Usuario</string>
+    <string name="desc_profile_picture">Foto de perfil del usuario</string>
+
 </resources>
 
 

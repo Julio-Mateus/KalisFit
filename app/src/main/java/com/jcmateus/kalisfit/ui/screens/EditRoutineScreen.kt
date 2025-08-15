@@ -611,7 +611,8 @@ fun EditableExerciseItem(
                 Button(
                     onClick = onReplaceExerciseClicked,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    shape = MaterialTheme.shapes.small
+                    shape = MaterialTheme.shapes.small,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Text("Cambiar Ejercicio", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
@@ -669,6 +670,7 @@ fun EditableExerciseItem(
                                 label = { Text("Repeticiones") },
                                 modifier = fieldModifier,
                                 enabled = !isLoadingDuringSave,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true
                             )
                         }

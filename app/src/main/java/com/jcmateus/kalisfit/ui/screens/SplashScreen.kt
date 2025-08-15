@@ -27,8 +27,6 @@ import com.jcmateus.kalisfit.R
 
 @Composable
 fun SplashScreen(
-    // Ya no pasamos NavController directamente, usamos callbacks
-    // navController: NavController --> ELIMINAR
     onUserLoggedIn: () -> Unit,
     onUserNotLoggedIn: () -> Unit
 ) {
@@ -53,7 +51,6 @@ fun SplashScreen(
         // Si el delay de 4000 en tu código original era el *total* de la splash,
         // entonces este delay debería ser 2000 (4000 total - 2000 para showText).
         delay(2000) // Espera adicional (total 4 segundos desde el inicio de la splash)
-
         // Verificar estado de autenticación de Firebase
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
@@ -61,14 +58,12 @@ fun SplashScreen(
         } else {
             onUserNotLoggedIn()
         }
-
         // El código de navegación original se elimina de aquí,
         // porque se manejará mediante los callbacks en KalisNavGraph
         // navController.navigate(Routes.LOGIN) {
         //    popUpTo(Routes.SPLASH) { inclusive = true }
         // }
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()

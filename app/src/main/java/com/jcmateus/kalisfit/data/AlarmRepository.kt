@@ -12,7 +12,6 @@ interface AlarmRepository {
     fun deleteAlarm(alarmId: Int)
     fun clearAllAlarms() // Podría ser útil
 }
-
 class SharedPreferencesAlarmRepository(context: Context) : AlarmRepository {
     private val prefs = context.getSharedPreferences("kalisfit_alarms_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()

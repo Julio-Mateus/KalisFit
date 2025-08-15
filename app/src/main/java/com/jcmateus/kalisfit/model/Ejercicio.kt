@@ -87,7 +87,10 @@ data class ComponenteEjercicio(
     val repeticiones: String? = null,     // Ej: "12", "25". String para mantener "AMRAP" o similares si fuera necesario.
     val duracionSegundos: Int? = null,    // Ej: 30 (para "30s")
     val imagenUrl: String? = null,        // Si este componente tiene una imagen específica.
-    val orden: Int = 0                    // Orden del componente dentro del ejercicio padre.
+    val orden: Int = 0,                    // Orden del componente dentro del ejercicio padre.
+    val notaTempo: String? = null,      // <--- AÑADIR SI FALTA
+    val esUnilateral: Boolean = false, // <--- AÑADIR SI FALTA
+    val descansoPostComponenteSegundos: Int = 0
 )
 
 // Estructura de datos para un ejercicio (ACTUALIZADA)

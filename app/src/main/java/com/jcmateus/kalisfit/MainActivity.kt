@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -13,6 +14,7 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.rememberNavController
 import com.jcmateus.kalisfit.navigation.KalisNavGraph
@@ -20,6 +22,7 @@ import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
 import com.jcmateus.kalisfit.viewmodel.AppTheme
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
@@ -29,12 +32,9 @@ import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 
 
 class MainActivity : ComponentActivity() {
-
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val authViewModel: AuthViewModel by viewModels()
-
     private lateinit var navController: NavHostController
-
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             settingsViewModel.refreshNotificationPermissionStatus()
@@ -50,7 +50,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-
     internal fun askNotificationPermissionInternal() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
@@ -78,13 +77,11 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
     override fun onResume() {
         super.onResume()
         settingsViewModel.refreshNotificationPermissionStatus()
         intent?.let { handleIntentExtras(it, true) }
     }
-
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,13 +90,34 @@ class MainActivity : ComponentActivity() {
         intent?.let { handleIntentExtras(it, false) }
 
         setContent {
-            navController = rememberNavController() // Inicializa la propiedad de la clase
+            // Es preferible inicializar navController donde se usa KalisNavGraph
+            // y si MainActivity necesita la instancia, obtenerla desde allí o
+            // usar .also {} como se discutió antes.
+            // this.navController = rememberNavController() // Si la propiedad de clase es necesaria inmediatamente.
 
             val currentAppTheme by settingsViewModel.appTheme.collectAsState()
             val useDarkTheme = when (currentAppTheme) {
                 AppTheme.LIGHT -> false
                 AppTheme.DARK -> true
-                AppTheme.SYSTEM -> isSystemInDarkTheme()
+                AppTheme.SYSTEM -> isSystemInDarkTheme() // isSystemInDarkTheme() es @Composable
+            }
+
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    val window = (view.context as Activity).window
+                    val insetsController = WindowCompat.getInsetsController(window, view)
+
+                    // Para la barra de estado (iconos: wifi, batería, hora)
+                    insetsController.isAppearanceLightStatusBars = !useDarkTheme
+
+                    // --- AÑADIR ESTA LÍNEA ---
+                    // Para la barra de navegación (iconos: atrás, home, recientes)
+                    // La lógica es la misma: si no es tema oscuro (es decir, es tema claro),
+                    // los iconos de navegación del sistema deben ser oscuros.
+                    insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+                    // --- FIN DE LA LÍNEA AÑADIDA ---
+                }
             }
 
             KalisFitTheme(
@@ -107,8 +125,10 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = false
             ) {
                 Surface {
+                    // Inicializa y asigna navController aquí si KalisNavGraph es el lugar principal
+                    // donde se recuerda y tu MainActivity necesita la referencia.
                     KalisNavGraph(
-                        navController = navController, // Pasa la propiedad de la clase
+                        navController = rememberNavController().also { this.navController = it },
                         settingsViewModel = settingsViewModel,
                         authViewModel = authViewModel
                     )
@@ -116,7 +136,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP) // onNewIntent(Intent) está disponible desde API 1, pero
     // para ser más precisos con las versiones recientes de ComponentActivity y sus dependencias.
     // En la práctica, suele funcionar sin esta anotación específica si tus minSdk es razonable.
@@ -129,7 +148,6 @@ class MainActivity : ComponentActivity() {
         setIntent(intent) // MUY IMPORTANTE: actualiza el intent que la actividad retornará con getIntent()
         handleIntentExtras(intent, false)
     }
-
     private fun handleIntentExtras(intent: Intent, fromOnResume: Boolean = false) {
         val routineIdToNavigate = intent.getStringExtra("NAVIGATE_TO_ROUTINE_ID")
 
@@ -138,7 +156,6 @@ class MainActivity : ComponentActivity() {
                 "MainActivity",
                 "Recibido intent para navegar a rutina ID: $routineIdToNavigate. Desde onResume: $fromOnResume"
             )
-
             if (::navController.isInitialized) {
                 // USAREMOS TU FUNCIÓN Routes.routineDetail()
                 // Al abrir desde una notificación, generalmente no tenemos un contexto de usuario específico

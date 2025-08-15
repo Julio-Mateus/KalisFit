@@ -46,8 +46,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     companion object {
         // ID único y estable para la alarma de recordatorio diario general
         const val DAILY_REMINDER_ALARM_ID = 99001
-        const val DAILY_REMINDER_HOUR = 10 // Ejemplo: 10 AM
-        const val DAILY_REMINDER_MINUTE = 0  // Ejemplo: 00 minutos
+        const val DAILY_REMINDER_HOUR = 11 // Ejemplo: 10 AM
+        const val DAILY_REMINDER_MINUTE = 56  // Ejemplo: 00 minutos
         val DAILY_REMINDER_INITIALLY_SCHEDULED =
             booleanPreferencesKey("daily_reminder_initially_scheduled")
     }

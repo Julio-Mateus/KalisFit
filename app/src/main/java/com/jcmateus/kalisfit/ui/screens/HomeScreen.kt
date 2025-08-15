@@ -330,32 +330,7 @@ fun UserCustomRoutineCard(
     )
     Card(
         onClick = {
-            // Lógica de navegación:
-            // Si la rutina personalizada tiene un 'originalTemplateId' Y NO es una rutina
-            // que solo exista como personalizada (es decir, el usuario quiere ver los detalles
-            // de la plantilla base en lugar de ejecutar su versión directamente),
-            // entonces navega al detalle de la plantilla.
-            // SI NO, o si el usuario siempre debe ejecutar SU versión,
-            // entonces navega a la pantalla de ejecución con el customRoutineId.
-
-            // CASO 1: El usuario quiere iniciar SU versión personalizada de la rutina.
-            // Esta es la acción más probable para "Mis Rutinas Guardadas".
-            //navController.navigate(Routes.startCustomRoutine(userRoutine.id))
-
-            // CASO 2: (Alternativa o si quieres ofrecer ambas opciones en otro lugar)
-            // Si quieres que al hacer clic se vea el detalle de la PLANTILLA ORIGINAL
-            // (si existe) en lugar de iniciar la rutina personalizada:
-
-            if (userRoutine.originalTemplateId != null && userRoutine.originalTemplateId.isNotBlank()) {
-                // Navega al detalle de la plantilla original si existe
-                navController.navigate(Routes.routineDetail(userRoutine.originalTemplateId))
-            } else {
-                // Si no hay plantilla original (es 100% custom) O si siempre se ejecuta la custom,
-                // navega para iniciar la rutina personalizada
-                navController.navigate(
-                    Routes.startRoutineExecution(customRoutineId = userRoutine.id)
-                )
-            }
+            navController.navigate(Routes.startRoutineExecution(userRoutine.id))
         },
         interactionSource = interactionSource,
         modifier = modifier

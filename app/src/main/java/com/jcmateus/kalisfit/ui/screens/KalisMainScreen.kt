@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,8 +37,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -90,16 +90,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
-import androidx.core.graphics.forEach
-import androidx.core.graphics.values
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -107,6 +109,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.jcmateus.kalisfit.MainActivity
@@ -114,13 +118,19 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.repositories.AuthRepositoryImpl
 import com.jcmateus.kalisfit.data.repositories.CartRepositoryImpl
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
+import com.jcmateus.kalisfit.model.WaveSide
+import com.jcmateus.kalisfit.model.WavyBottomHeaderShape
 import com.jcmateus.kalisfit.navigation.BottomNavItem
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
 import com.jcmateus.kalisfit.viewmodel.CartViewModel
 import com.jcmateus.kalisfit.viewmodel.CartViewModelFactory
+import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import com.jcmateus.kalisfit.model.WavyDrawerShape
+import com.jcmateus.kalisfit.model.WavyNavigationBarShape
+import com.jcmateus.kalisfit.model.WavyTopAppBarShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.O)
@@ -131,7 +141,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? Activity // Cambio a Activity genérica para más flexibilidad
-
     // ViewModels y Repositories (sin cambios)
     val cartRepository = remember { CartRepositoryImpl(FirebaseFirestore.getInstance()) }
     val authRepository = remember { AuthRepositoryImpl(FirebaseAuth.getInstance()) }
@@ -140,19 +149,19 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     }
     val cartViewModel: CartViewModel = viewModel(factory = cartViewModelFactory)
     val cartUiState by cartViewModel.uiState.collectAsState()
-
+    val userProfileViewModel: UserProfileViewModel = viewModel()
     // LaunchedEffect para permisos (sin cambios, pero asegúrate de que askNotificationPermissionInternal exista en tu Activity)
     LaunchedEffect(key1 = activity) {
         if (activity is MainActivity) { // Chequeo más seguro
             activity.askNotificationPermissionInternal()
         }
     }
-
     val mainNavBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentMainRoute = mainNavBackStackEntry?.destination?.route
-    val currentPlaceFilterArgument = mainNavBackStackEntry?.arguments?.getString(Routes.Args.PLACE_ARG)
-    val currentLevelFilterArgument = mainNavBackStackEntry?.arguments?.getString(Routes.Args.LEVEL_ARG)
-
+    val currentPlaceFilterArgument =
+        mainNavBackStackEntry?.arguments?.getString(Routes.Args.PLACE_ARG)
+    val currentLevelFilterArgument =
+        mainNavBackStackEntry?.arguments?.getString(Routes.Args.LEVEL_ARG)
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Calisthenics,
@@ -160,10 +169,8 @@ fun KalisMainScreen(mainNavController: NavHostController) {
         BottomNavItem.Running,
         BottomNavItem.Store
     )
-
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentBottomRoute = navBackStackEntry?.destination?.route
-
     val topBarTitle = when (currentBottomRoute) {
         BottomNavItem.Home.route -> stringResource(R.string.title_home)
         BottomNavItem.Calisthenics.route -> stringResource(R.string.title_calisthenics)
@@ -172,7 +179,6 @@ fun KalisMainScreen(mainNavController: NavHostController) {
         BottomNavItem.Store.route -> stringResource(R.string.title_store)
         else -> stringResource(R.string.app_name)
     }
-
     // Asegúrate de que tu tema KalisFitTheme maneje los colores oscuros/claros apropiadamente.
     KalisFitTheme {
         ModalNavigationDrawer(
@@ -185,7 +191,8 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     scope = scope,
                     currentMainRoute = currentMainRoute,
                     currentPlaceFilterArgument = currentPlaceFilterArgument,
-                    currentLevelFilterArgument = currentLevelFilterArgument
+                    currentLevelFilterArgument = currentLevelFilterArgument,
+                    userProfileViewModel = userProfileViewModel
                 )
             }
         ) {
@@ -195,8 +202,12 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                 // Scaffold maneja los insets para TopAppBar y BottomAppBar si están presentes.
                 // Para que la BottomBar extienda su color, su propio windowInsets debe ser (0,0,0,0)
                 // y los items dentro de ella deben aplicar el navigationBarsPadding.
-                contentWindowInsets = WindowInsets(0,0,0,0), // Permite que el contenido principal se extienda si es necesario
-
+                contentWindowInsets = WindowInsets(
+                    0,
+                    0,
+                    0,
+                    0
+                ), // Permite que el contenido principal se extienda si es necesario
                 topBar = {
                     TopAppBar(
                         title = { Text(topBarTitle) },
@@ -238,18 +249,38 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                             navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
-                        // Aplicar padding para la barra de estado si la TopAppBar no es transparente
-                        // modifier = Modifier.statusBarsPadding() // Descomentar si es necesario y la TopAppBar no es transparente
+                        modifier = Modifier
+                            .fillMaxWidth() // Es bueno tenerlo por si acaso
+                            .graphicsLayer {
+                                shape = WavyTopAppBarShape(
+                                    period = 1.2f,
+                                    amplitudeFactor = 0.06f
+                                ) // Ajusta estos valores
+                                clip = true
+                            }
                     )
                 },
                 bottomBar = {
                     NavigationBar(
-                        modifier = Modifier.fillMaxWidth(),
-                        // El containerColor de NavigationBar se extenderá hasta el borde.
-                        // Los items dentro aplicarán el padding necesario.
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        /*
+                            .graphicsLayer { // <<< SÍ ESTÁ AQUÍ
+                                shape = WavyNavigationBarShape(
+                                    period = 1.2f,
+                                    amplitudeFactor = 0.08f
+                                ) // Ajusta estos valores
+                                clip = true
+                            },
+                         */
                         containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp), // Un poco de elevación
                         contentColor = MaterialTheme.colorScheme.onSurface,
-                        windowInsets = WindowInsets(0,0,0,0) // Importante para que el color de fondo se extienda
+                        windowInsets = WindowInsets(
+                            0,
+                            0,
+                            0,
+                            0
+                        ) // Importante para que el color de fondo se extienda
                     ) {
                         bottomNavItems.forEach { item ->
                             val selected = currentBottomRoute == item.route
@@ -266,7 +297,12 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                                         }
                                     }
                                 },
-                                icon = { Icon(item.icon, contentDescription = stringResource(item.labelResource)) },
+                                icon = {
+                                    Icon(
+                                        item.icon,
+                                        contentDescription = stringResource(item.labelResource)
+                                    )
+                                },
                                 label = { Text(stringResource(item.labelResource)) },
                                 // Este modifier asegura que los items no queden debajo de la barra de gestos/navegación del sistema
                                 modifier = Modifier.navigationBarsPadding(),
@@ -325,8 +361,18 @@ fun KalisDrawerContent(
     scope: CoroutineScope,
     currentMainRoute: String?,
     currentPlaceFilterArgument: String?,
-    currentLevelFilterArgument: String?
+    currentLevelFilterArgument: String?,
+    userProfileViewModel: UserProfileViewModel
 ) {
+    // Observa el estado del perfil del usuario desde el ViewModel
+    val userProfileState by userProfileViewModel.user.collectAsState() // Esto te da UserProfile?
+    // Extrae los datos que necesitas, proveyendo valores por defecto o manejando el caso nulo
+    val userImageUrl = userProfileState?.fotoUrl ?: ""
+    val userName = userProfileState?.nombre?.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.drawer_default_username) // "Nombre de Usuario" o similar
+    val userLevelOrInfo = userProfileState?.nivel?.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.drawer_default_level) // "Nivel" o información por defecto
+
     ModalDrawerSheet(
         modifier = Modifier
             .widthIn(max = 300.dp) // Limitar el ancho máximo, se ajustará si es menor
@@ -338,11 +384,18 @@ fun KalisDrawerContent(
         var expandExplorarRutinas by remember { mutableStateOf(false) }
         var expandPorLugar by remember { mutableStateOf(false) }
         var expandPorNivel by remember { mutableStateOf(false) }
-
         // --- Encabezado del Drawer ---
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .graphicsLayer {
+                    // Usaremos una nueva shape para el borde inferior
+                    shape = WavyBottomHeaderShape(
+                        amplitude = 10f,     // Amplitud de la onda (altura)
+                        periodFactor = 0.3f  // Factor para la longitud de onda (más pequeño = más ondas a lo ancho)
+                    )
+                    clip = true
+                }
                 .background(MaterialTheme.colorScheme.primaryContainer) // Color primario para destacar
                 .padding(
                     top = (WindowInsets.statusBars.asPaddingValues()
@@ -351,26 +404,85 @@ fun KalisDrawerContent(
                     start = 24.dp,
                     end = 24.dp
                 ),
-            horizontalAlignment = Alignment.Start
+            verticalAlignment = Alignment.Top, // Alinear al tope para que los textos queden bien bajo sus iconos
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-             Icon( // Puedes añadir un logo aquí si lo tienes
-                 painterResource(id = R.drawable.ic_logo2), // Reemplaza con tu logo
-                 contentDescription = stringResource(R.string.app_name),
-                 modifier = Modifier.size(56.dp).clip(CircleShape), // Ejemplo de logo circular
-                 tint = MaterialTheme.colorScheme.tertiary
-             )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text( // Podrías mostrar el email del usuario si está logueado
-            "usuario@example.com",
-                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
+            // --- Columna Izquierda: Logo y Nombre de la App ---
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally, // Centrar el logo y el texto debajo
+                modifier = Modifier.weight(1f) // Darle peso para que ocupe espacio
+            ) {
+                Icon(
+                    painterResource(id = R.drawable.ic_logo2),
+                    contentDescription = null, // El texto de abajo sirve de descripción
+                    modifier = Modifier
+                        .size(64.dp) // Un poco más grande si quieres
+                    // .clip(CircleShape) // Quita el clip si tu logo no es circular o no se ve bien
+                    ,
+                    tint = MaterialTheme.colorScheme.tertiary
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleMedium, // Ajusta el estilo como prefieras
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Spacer(Modifier.width(16.dp)) // Espacio entre las dos columnas principales
+            // --- Columna Derecha: Foto de Perfil, Nombre y Nivel del Usuario ---
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally, // Centrar la foto y los textos debajo
+                modifier = Modifier
+                    .weight(1f) // Darle peso
+                    .padding(end = 10.dp) // Espacio a la derecha
+            ) {
+                if (userImageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(userImageUrl)
+                            .crossfade(true)
+                            .placeholder(R.drawable.ic_default_placeholder) // Asegúrate que existe
+                            .error(R.drawable.ic_error_placeholder)       // Asegúrate que existe
+                            .build(),
+                        contentDescription = stringResource(R.string.desc_profile_picture),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(64.dp) // Un poco más grande
+                            .clip(CircleShape)
+                            .border(1.5.dp, MaterialTheme.colorScheme.tertiary, CircleShape)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.AccountCircle,
+                        contentDescription = stringResource(R.string.desc_profile_picture),
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    userName,
+                    style = MaterialTheme.typography.titleSmall, // Ajusta el estilo
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                if (userLevelOrInfo.isNotBlank() && userLevelOrInfo != stringResource(R.string.drawer_default_level)) {
+                    // Solo mostrar el nivel si es significativo y no es el string por defecto
+                    Text(
+                        userLevelOrInfo,
+                        style = MaterialTheme.typography.bodySmall, // Ajusta el estilo
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
         LazyColumn(
             modifier = Modifier
@@ -387,7 +499,9 @@ fun KalisDrawerContent(
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.PROFILE_SCREEN) {
-                            mainNavController.navigate(Routes.PROFILE_SCREEN) { launchSingleTop = true }
+                            mainNavController.navigate(Routes.PROFILE_SCREEN) {
+                                launchSingleTop = true
+                            }
                         }
                     }
                 )
@@ -399,7 +513,9 @@ fun KalisDrawerContent(
                     selected = currentMainRoute == Routes.MY_CUSTOM_ROUTINES_SCREEN,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) { launchSingleTop = true }
+                        mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -412,7 +528,9 @@ fun KalisDrawerContent(
                         scope.launch { drawerState.close() }
                         mainNavController.navigate(Routes.allExercises(isSelectingForRoutine = false)) {
                             launchSingleTop = true
-                            popUpTo(mainNavController.graph.findStartDestination().id) { saveState = true }
+                            popUpTo(mainNavController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
                         }
                     }
                 )
@@ -425,12 +543,13 @@ fun KalisDrawerContent(
                     onClick = {
                         scope.launch { drawerState.close() }
                         if (currentMainRoute != Routes.ACTIVITY_HISTORY_SCREEN) {
-                            mainNavController.navigate(Routes.ACTIVITY_HISTORY_SCREEN) { launchSingleTop = true }
+                            mainNavController.navigate(Routes.ACTIVITY_HISTORY_SCREEN) {
+                                launchSingleTop = true
+                            }
                         }
                     }
                 )
             }
-
             item { ListDivider1() } // Divisor personalizado
             // --- Sección Explorar Rutinas (Desplegable) ---
             item {
@@ -454,10 +573,11 @@ fun KalisDrawerContent(
                             selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN && currentPlaceFilterArgument == null && currentLevelFilterArgument == null,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) { launchSingleTop = true }
+                                mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) {
+                                    launchSingleTop = true
+                                }
                             }
                         )
-
                         DrawerCollapsibleSectionHeader(
                             icon = Icons.Filled.LocationOn, // Icono para la subsección
                             text = stringResource(R.string.drawer_explore_by_place),
@@ -541,6 +661,7 @@ fun KalisDrawerContent(
         } // Fin de LazyColumn
         // --- Ítems Inferiores (fijos al final del DrawerSheet) ---
         ListDivider()
+        /*
         DrawerMainItem(
             icon = Icons.Filled.Edit,
             text = stringResource(R.string.desc_edit_profile),
@@ -552,6 +673,7 @@ fun KalisDrawerContent(
                 }
             }
         )
+         */
         DrawerMainItem(
             icon = Icons.Filled.Settings,
             text = stringResource(R.string.menu_settings),
@@ -566,7 +688,12 @@ fun KalisDrawerContent(
         // Logout con un estilo ligeramente diferente o un divisor antes
         // ListDivider() // Opcional si quieres separar más el logout
         NavigationDrawerItem(
-            icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.menu_logout)) },
+            icon = {
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = stringResource(R.string.menu_logout)
+                )
+            },
             label = { Text(stringResource(R.string.menu_logout)) },
             selected = false,
             onClick = {
@@ -577,7 +704,12 @@ fun KalisDrawerContent(
                     launchSingleTop = true
                 }
             },
-            shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 24.dp, bottomEnd = 24.dp), // Forma asimétrica
+            shape = RoundedCornerShape(
+                topStart = 0.dp,
+                bottomStart = 0.dp,
+                topEnd = 24.dp,
+                bottomEnd = 24.dp
+            ), // Forma asimétrica
             colors = NavigationDrawerItemDefaults.colors(
                 // Opcional: colores que indiquen "salida"
                 unselectedTextColor = MaterialTheme.colorScheme.error,
@@ -600,11 +732,19 @@ fun DrawerMainItem(
     selected: Boolean,
     onClick: () -> Unit,
     contentDescription: String? = text,
-    shape: Shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp) // Forma de píldora hacia la derecha
+    shape: Shape = RoundedCornerShape(
+        topEnd = 24.dp,
+        bottomEnd = 24.dp
+    ) // Forma de píldora hacia la derecha
 ) {
     NavigationDrawerItem(
         icon = { Icon(icon, contentDescription = contentDescription) },
-        label = { Text(text, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
+        label = {
+            Text(
+                text,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            )
+        },
         selected = selected,
         onClick = onClick,
         colors = NavigationDrawerItemDefaults.colors(
@@ -621,7 +761,6 @@ fun DrawerMainItem(
             .padding(horizontal = 12.dp, vertical = 4.dp) // Padding entre items y bordes del drawer
     )
 }
-
 @Composable
 fun DrawerCollapsibleSectionHeader(
     text: String,
@@ -665,7 +804,9 @@ fun DrawerCollapsibleSectionHeader(
         }
         Icon(
             imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-            contentDescription = if (isExpanded) stringResource(R.string.desc_collapse_section) else stringResource(R.string.desc_expand_section),
+            contentDescription = if (isExpanded) stringResource(R.string.desc_collapse_section) else stringResource(
+                R.string.desc_expand_section
+            ),
             tint = MaterialTheme.colorScheme.primary // Icono de expansión más destacado
         )
     }
@@ -683,19 +824,31 @@ fun DrawerSubItem(
     // Calcula el padding inicial basado en el nivel de indentación.
     // NavigationDrawerItemDefaults.ItemPadding ya tiene un padding horizontal (start/end).
     // Queremos añadir a ese padding inicial.
-    val baseStartPadding = NavigationDrawerItemDefaults.ItemPadding.calculateStartPadding(LayoutDirection.Ltr)
-    val totalStartPadding = baseStartPadding + ( (indentLevel + 1) * 20.dp) // +1 porque ya es subitem
+    val baseStartPadding =
+        NavigationDrawerItemDefaults.ItemPadding.calculateStartPadding(LayoutDirection.Ltr)
+    val totalStartPadding =
+        baseStartPadding + ((indentLevel + 1) * 20.dp) // +1 porque ya es subitem
 
     NavigationDrawerItem(
         icon = {
             if (icon != null) {
-                Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp)) // Iconos de sub-items un poco más pequeños
+                Icon(
+                    icon,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(20.dp)
+                ) // Iconos de sub-items un poco más pequeños
             } else {
                 // Spacer para alinear texto si otros sub-items tienen icono y este no
                 Spacer(Modifier.width(20.dp))
             }
         },
-        label = { Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal) },
+        label = {
+            Text(
+                text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+            )
+        },
         selected = selected,
         onClick = onClick,
         colors = NavigationDrawerItemDefaults.colors(
@@ -721,7 +874,6 @@ fun DrawerSubItem(
             .padding(horizontal = 12.dp) // Padding general del contenedor del sub-item
     )
 }
-
 @Composable
 fun ListDivider1() {
     HorizontalDivider(

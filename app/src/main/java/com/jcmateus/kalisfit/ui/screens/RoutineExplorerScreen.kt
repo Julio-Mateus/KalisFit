@@ -202,8 +202,6 @@ fun RoutineExplorerScreen(
         }
     }
 }
-
-
 @Composable
 fun RutinaCardEnhanced(rutina: Rutina, onClick: () -> Unit) {
     Log.d("RutinaCardEnhanced", "ID Rutina: ${rutina.id}, Nombre: ${rutina.nombre}, ImageURL: ${rutina.imagenUrl}")
@@ -286,7 +284,6 @@ fun RutinaCardEnhanced(rutina: Rutina, onClick: () -> Unit) {
         }
     }
 }
-
 @Composable
 fun RutinaDetailItemWithIcon(icon: ImageVector, label: String, value: String) {
     Row(
@@ -315,7 +312,6 @@ fun RutinaDetailItemWithIcon(icon: ImageVector, label: String, value: String) {
         )
     }
 }
-
 // Helper para determinar el icono del lugar
 @Composable
 fun determinePlaceIcon(lugarNombre: String?): ImageVector {

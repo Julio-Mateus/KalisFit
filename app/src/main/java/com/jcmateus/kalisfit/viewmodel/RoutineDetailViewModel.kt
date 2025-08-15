@@ -76,7 +76,6 @@ class RoutineDetailViewModel(
                         // Simplemente deja que continúe para intentar como plantilla.
                     }
                 }
-
                 // 2. Si NO se cargó como custom (o no había userId), INTENTAR cargar como plantilla
                 if (rutinaCargada == null) { // Solo intenta como plantilla si no se encontró como personalizada O si no había userId
                     Log.d(TAG, "Intentando cargar como Rutina de plantilla...")
@@ -89,7 +88,6 @@ class RoutineDetailViewModel(
                         // rutinaCargada sigue siendo null
                     }
                 }
-
                 // 3. Evaluar el resultado final y actualizar la UI
                 if (rutinaCargada != null) {
                     Log.d(TAG, "Rutina '${rutinaCargada.nombre}' preparada para UI con ${rutinaCargada.ejercicios.size} ejercicios.")

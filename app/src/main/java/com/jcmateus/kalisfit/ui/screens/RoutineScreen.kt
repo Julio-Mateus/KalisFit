@@ -61,6 +61,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -270,7 +272,68 @@ fun RoutineScreen(
                     }
                 }
             )
-        }
+        },
+        floatingActionButton = {
+            // Solo mostrar el FAB si estamos en el estado de EJERCICIO_ACTIVO
+            // y hay una rutina cargada con un ejercicio actual.
+            if (uiState.estado == RoutineExecutionState.EXERCISE_ACTIVE &&
+                uiState.rutina != null && uiState.ejercicioActual != null) {
+
+                val currentEjercicio = uiState.ejercicioActual!! // Sabemos que no es nulo por la condición
+                val repeticionesNumericas = currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
+                val esEjercicioSimplePrincipalmentePorTiempo =
+                    currentEjercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
+                            currentEjercicio.duracionSegundosOriginal > 0 &&
+                            repeticionesNumericas <= 0
+
+                val isButtonEnabledCondition = if (esEjercicioSimplePrincipalmentePorTiempo) {
+                    uiState.tiempoRestante <= 0
+                } else {
+                    true
+                }
+                val buttonText = getNextButtonText(uiState, context)
+
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            viewModel.saltarSiguientePaso()
+                        }
+                    },
+                    // Habilitar/deshabilitar el FAB según la misma lógica que tu botón anterior
+                    // También, asegúrate de que esté habilitado solo cuando sea relevante.
+                    // enabled = isButtonEnabledCondition, // Usa tu lógica de habilitación
+                    modifier = Modifier.padding(16.dp) // Añade padding si es necesario
+                ) {
+                    // Puedes usar un Icono o Texto, o ambos.
+                    // Para un FAB, a menudo se usa un icono, pero el texto también es válido.
+                    // Si el buttonText es corto, puede funcionar.
+                    // Si es largo, considera un icono + texto o solo un icono con buen contentDescription.
+
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Ejemplo con icono y texto animado:
+                        AnimatedContent(
+                            targetState = buttonText,
+                            transitionSpec = {
+                                ContentTransform(
+                                    targetContentEnter = slideInHorizontally { width -> width } + fadeIn(),
+                                    initialContentExit = slideOutHorizontally { width -> -width } + fadeOut()
+                                )
+                            },
+                            label = "fabButtonTextAnimation"
+                        ) { text ->
+                            Text(text, fontWeight = FontWeight.SemiBold)
+                        }
+                        // Opcional: añade un icono si lo deseas
+                        Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.skip_step))
+                    }
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
         Surface(
             modifier = Modifier
@@ -473,7 +536,9 @@ fun RoutineScreen(
                                     )
                                 }
                                 else -> {
-                                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.1f)))
+                                    Box(modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.1f)))
                                 }
                             }
                         }
@@ -583,7 +648,6 @@ fun RoutineScreen(
             }
         }
     }
-
     if (uiState.showExitConfirmation) {
         AlertDialog(
             onDismissRequest = { viewModel.setShowExitConfirmation(false) },
@@ -902,6 +966,7 @@ fun ExerciseContent(
             }
         }
         Spacer(modifier = Modifier.weight(1f, fill = false)) // Empuja el botón hacia abajo
+        /*
         // Botón de Siguiente/Finalizar
         Button(
             onClick = onNextClick,
@@ -928,6 +993,7 @@ fun ExerciseContent(
                 Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }
+         */
     }
 }
 @Composable

@@ -90,7 +90,7 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                     }
                 },
                 onUserNotLoggedIn = {
-                    navController.navigate(Routes.LOGIN) {
+                    navController.navigate(Routes.REGISTER) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 }
