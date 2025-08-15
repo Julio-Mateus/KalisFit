@@ -85,24 +85,19 @@ fun SettingsScreen(
     settingsViewModel: SettingsViewModel = viewModel()
 ) {
     val context = LocalContext.current
-
-    val notificationsEnabled by settingsViewModel.notificationsEnabled.collectAsState()
+    val userPreferenceEnabled by settingsViewModel.userNotificationsPreference.collectAsState()
     val currentAppTheme by settingsViewModel.appTheme.collectAsState()
     val currentWeightUnit by settingsViewModel.weightUnit.collectAsState()
     val appVersionName = remember { getAppVersionName(context) }
     val appVersionCode = remember { getAppVersionCode(context) }
-
     var showThemeDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showOpenSourceLicensesDialog by remember { mutableStateOf(false) }
-
     val appNameString = stringResource(id = R.string.app_name)
     val playStoreLink = "https://play.google.com/store/apps/details?id=${context.packageName}"
     val shareBodyString = stringResource(R.string.settings_share_app_text, appNameString, playStoreLink)
     val shareUsingString = stringResource(R.string.settings_share_using) // Para el chooser
     val finalSupportSubject = stringResource(R.string.settings_support_email_subject, appNameString)
-
-
 
     Scaffold(
         topBar = {
@@ -135,8 +130,8 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_enable_notifications),
                 description = stringResource(R.string.settings_enable_notifications_desc),
                 icon = Icons.Default.Notifications,
-                checked = notificationsEnabled,
-                onCheckedChange = { settingsViewModel.setNotificationsEnabled(it) }
+                checked = userPreferenceEnabled,
+                onCheckedChange = { settingsViewModel.setUserNotificationsPreference(it) }
             )
             ClickableSettingItem(
                 title = stringResource(R.string.settings_app_theme),
@@ -295,7 +290,6 @@ fun SettingsScreen(
         )
     }
 }
-
 // -- Composable para "Acerca de" más elaborado --
 @Composable
 fun AboutAppItem(versionName: String, versionCode: Int) {
@@ -329,7 +323,6 @@ fun AboutAppItem(versionName: String, versionCode: Int) {
     }
     ListDivider()
 }
-
 @Composable
 fun SettingsSectionTitle(title: String) {
     Text(
@@ -340,7 +333,6 @@ fun SettingsSectionTitle(title: String) {
         modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp, end = 16.dp)
     )
 }
-
 @Composable
 fun SettingItem(
     icon: ImageVector? = null,
@@ -375,8 +367,6 @@ fun SettingItem(
     }
     ListDivider() // Usar un divisor más estándar o personalizado
 }
-
-
 @Composable
 fun SwitchSettingItem(
     title: String,
@@ -414,7 +404,6 @@ fun SwitchSettingItem(
         )
     }
 }
-
 @Composable
 fun ClickableSettingItem(
     title: String,
@@ -453,7 +442,6 @@ fun ClickableSettingItem(
         }
     }
 }
-
 @Composable
 fun InfoSettingItem(
     title: String,
@@ -484,8 +472,6 @@ fun InfoSettingItem(
         )
     }
 }
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> SingleChoiceDialog(
@@ -549,7 +535,6 @@ fun getAppVersionName(context: Context): String {
         "N/A"
     }.toString()
 }
-
 fun getAppVersionCode(context: Context): Int {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -562,7 +547,6 @@ fun getAppVersionCode(context: Context): Int {
         0
     }
 }
-
 private fun getPackageInfo(context: Context): PackageInfo {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))

@@ -140,7 +140,6 @@ fun RoutineScreen(
     }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
     // MODIFICADO: LaunchedEffect para iniciar la rutina
     LaunchedEffect(rutinaId, customRutinaId, userProfileState, uiState.estado) {
         val currentUserProfile = userProfileState
@@ -150,9 +149,7 @@ fun RoutineScreen(
             // viewModel.setLoadingMessage("Esperando perfil de usuario...") // Si tienes esta función
             return@LaunchedEffect
         }
-
         val idParaIniciar = customRutinaId ?: rutinaId // Prioriza customRutinaId
-
         // Solo intentar iniciar si:
         // 1. Aún no hay una rutina cargada (uiState.rutina == null)
         // 2. El estado actual es IDLE (no se está cargando, ni en error, etc.)
@@ -190,25 +187,21 @@ fun RoutineScreen(
             }
         }
     }
-
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
             viewModel.clearErrorMessage()
         }
     }
-
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let { message ->
             snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
             viewModel.clearSuccessMessage()
         }
     }
-
     BackHandler(enabled = uiState.estado != RoutineExecutionState.IDLE && uiState.estado != RoutineExecutionState.FINISHED) {
         viewModel.setShowExitConfirmation(true)
     }
-
     if (uiState.estado !in listOf(
             RoutineExecutionState.IDLE,
             RoutineExecutionState.LOADING,
@@ -218,7 +211,6 @@ fun RoutineScreen(
         )) {
         KeepScreenOn() // Asumiendo que KeepScreenOn es un Composable que maneja esto
     }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -284,7 +276,7 @@ fun RoutineScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            color = MaterialTheme.colorScheme.background
+            //color = MaterialTheme.colorScheme.background
         ) {
             when (uiState.estado) {
                 RoutineExecutionState.IDLE, RoutineExecutionState.LOADING -> {
@@ -348,7 +340,6 @@ fun RoutineScreen(
                             } else {
                                 true
                             }
-
                             ExerciseContent(
                                 currentEjercicio = currentEjercicio,
                                 componenteActivo = uiState.componenteEjercicioActual,
@@ -419,7 +410,6 @@ fun RoutineScreen(
                 RoutineExecutionState.PAUSED -> {
                     val currentEjercicio = uiState.ejercicioActual
                     val previousState = uiState.previousState // Este debe estar en tu UiState y ser actualizado por el ViewModel
-
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Mostrar el contenido de fondo (ejercicio o descanso) semitransparente
                         if (uiState.rutina != null) {
@@ -487,7 +477,6 @@ fun RoutineScreen(
                                 }
                             }
                         }
-
                         // Overlay de Pausa
                         Box(
                             modifier = Modifier
@@ -640,7 +629,7 @@ fun ExerciseContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(12.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -669,7 +658,6 @@ fun ExerciseContent(
                 modifier = Modifier.weight(1f)
             )
         }
-
         // Nombre del ejercicio y descripción
         Text(
             text = componenteActivo?.nombreEspecifico ?: currentEjercicio.nombre, // Muestra nombre componente si activo
@@ -694,7 +682,6 @@ fun ExerciseContent(
         // Si ninguna está disponible, se mostrará el placeholder.
         val primaryImageUrl: String? = componenteActivo?.imagenUrl?.takeIf { it.isNotBlank() }
             ?: currentEjercicio.imagenUrl?.takeIf { it.isNotBlank() }
-
         // Para el carrusel, si no hay componente activo con imagen,
         // usamos las imágenes del ejercicio padre. Si hay componente activo con imagen,
         // el carrusel solo tendrá esa imagen.
@@ -702,7 +689,6 @@ fun ExerciseContent(
         componenteActivo?.imagenUrl?.takeIf { it.isNotBlank() }?.let {
             displayImageUrls.add(it)
         }
-
         if (displayImageUrls.isEmpty()) { // Si el componente activo no tiene imagen o no hay componente activo
             currentEjercicio.imagenUrl?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
             currentEjercicio.imagenUrl1?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
@@ -710,8 +696,6 @@ fun ExerciseContent(
             // Añade más campos de imagen si los tienes (ej: imagenUrl3, imagenUrl4)
             // currentEjercicio.imagenUrl3?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
         }
-
-
         if (displayImageUrls.isNotEmpty()) {
             val pagerState = rememberPagerState(pageCount = { displayImageUrls.size })
             Card(
@@ -775,7 +759,6 @@ fun ExerciseContent(
                 Text(stringResource(R.string.no_image_available))
             }
         }
-
         // --- Mostrar información según TipoDeEjercicio ---
         when (currentEjercicio.tipoEjercicio) {
             TipoDeEjercicio.SIMPLE -> {
@@ -818,7 +801,6 @@ fun ExerciseContent(
                 // Aquí, el ViewModel controla `segundosRestantes`.
                 // Si el componente activo tiene su propia duración/reps, se muestra en DisplayComponent.
                 // Si el ejercicio padre es por tiempo (ej. circuito temporizado), se muestra el tiempo total.
-
                 if (componenteActivo != null) {
                     // Si hay un componente activo, mostrar sus detalles de tiempo/reps
                     // si los tiene definidos Y no es un circuito general donde el tiempo es global
@@ -847,8 +829,6 @@ fun ExerciseContent(
                         isUnilateral = currentEjercicio.esUnilateral
                     )
                 }
-
-
                 if (currentEjercicio.componentes.isNotEmpty()) {
                     Text(
                         text = stringResource(R.string.exercise_components_title),
@@ -897,7 +877,6 @@ fun ExerciseContent(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-
         // Botón para ver video
         // El videoUrl debe ser del ejercicio padre o del componente activo si lo tiene.
         // Asumimos que el ViewModel podría actualizar currentEjercicio.videoUrl si el componente tiene uno específico.
@@ -922,9 +901,7 @@ fun ExerciseContent(
                 }
             }
         }
-
         Spacer(modifier = Modifier.weight(1f, fill = false)) // Empuja el botón hacia abajo
-
         // Botón de Siguiente/Finalizar
         Button(
             onClick = onNextClick,
@@ -934,8 +911,8 @@ fun ExerciseContent(
                 .height(56.dp),
             shape = MaterialTheme.shapes.medium,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         ) {
             AnimatedContent(
@@ -1107,7 +1084,11 @@ fun IntegratedRestDialog(
                 Button(
                     onClick = onSkip,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 ) {
                     Text(stringResource(R.string.skip_rest_button))
                 }

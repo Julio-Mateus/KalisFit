@@ -120,7 +120,6 @@ fun HomeScreen(
             // No es necesario llamar a refreshUserCustomRoutines directamente si refreshHomeScreenData ya lo hace
         }
     }
-
     // Observa los estados de carga para finalizar el refresh
     // *** ACTUALIZADO LaunchedEffect para endRefresh ***
     LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines, isLoadingUserCustomRoutines) {
@@ -200,7 +199,6 @@ fun HomeScreen(
                             }
                         }
                     }
-
                     // --- MIS RUTINAS (PERSONALIZADAS) --- // *** NUEVA SECCIÓN ***
                     item(key = "my_custom_routines") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
@@ -209,7 +207,7 @@ fun HomeScreen(
                                 actionText = if (userCustomRoutines.isNotEmpty()) "Ver todas" else null, // Opcional
                                 onActionClick = if (userCustomRoutines.isNotEmpty()) {
                                     {
-                                        // mainNavController.navigate(Routes.MY_ROUTINES_SCREEN) // Navegar a una pantalla de "Mis Rutinas" si la tienes
+                                        mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) // Navegar a una pantalla de "Mis Rutinas" si la tienes
                                     }
                                 } else null
                             )
@@ -225,7 +223,7 @@ fun HomeScreen(
                                     NoDataCard(message = "Aún no has guardado ninguna rutina personalizada.") {
                                         // Opcionalmente, un botón para ir a crear/explorar rutinas
                                         Button(
-                                            onClick = { mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) },
+                                            onClick = { mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                                         ) {
                                             Text("Explorar Rutinas")
@@ -253,8 +251,7 @@ fun HomeScreen(
                         }
                     }
                     // --- FIN NUEVA SECCIÓN ---
-
-
+                    // --- RUTINAS RECOMENDADAS --
                     item(key = "recommendations") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
                             SectionTitle1("🏋️‍♂️ Tus Rutinas Recomendadas")
@@ -405,7 +402,6 @@ fun UserCustomRoutineCard(
                     )
                 }
             }
-
             Column(
                 modifier = Modifier
                     .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -418,14 +414,12 @@ fun UserCustomRoutineCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
                 if (userRoutine.ejercicios.isNotEmpty()) {
                     DetailRow(
                         icon = Icons.Filled.FitnessCenter,
                         text = "${userRoutine.ejercicios.size} ejercicios",
                     )
                 }
-
                 if (userRoutine.numeroDeRondas > 0) {
                     DetailRow(
                         icon = Icons.Filled.Timelapse,

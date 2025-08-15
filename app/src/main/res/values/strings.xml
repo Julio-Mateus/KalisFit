@@ -362,6 +362,8 @@
     <string name="next_up_set">Siguiente: Serie %1$d de %2$s</string> <!-- %1$d serie actual, %2$s nombre ejercicio -->
     <string name="next_up_round">Siguiente: Ronda %1$d</string> <!-- %1$d número de ronda -->
     <string name="nothing_next_end_of_routine">Fin de la rutina</string>
+    <string name="desc_collapse_section">Contraer sección</string>
+    <string name="desc_expand_section">Expandir sección</string>
 </resources>
 
 

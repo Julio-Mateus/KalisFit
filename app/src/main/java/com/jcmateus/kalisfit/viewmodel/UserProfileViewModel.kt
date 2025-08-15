@@ -47,14 +47,12 @@ data class UserProfile(
     val progresoActual: String = "",
     val fotoUrl: String = ""
 )
-
 // --- Data Class para el Resumen Semanal del HomeScreen ---
 data class ResumenSemanal(
     val rutinasCompletadas: Int = 0,
     val tiempoTotalEntrenadoSegundos: Int = 0,
     // Podrías añadir más campos como calorías o días activos si los calculas
 )
-
 // --- Sealed class para la Última Actividad del HomeScreen ---
 sealed class LastActivityItem {
     data class Routine(val progreso: ProgresoRutina) : LastActivityItem()
@@ -62,8 +60,6 @@ sealed class LastActivityItem {
     object None : LastActivityItem()
     object Loading : LastActivityItem()
 }
-
-
 class UserProfileViewModel(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -171,10 +167,8 @@ class UserProfileViewModel(
             _recommendedRoutines.value = emptyList()
             return
         }
-
         _isLoadingUser.value = true
         _userErrorMessage.value = null
-
         firestore.collection("users").document(uid).get()
             .addOnSuccessListener { doc ->
                 if (doc != null && doc.exists()) {
@@ -182,6 +176,7 @@ class UserProfileViewModel(
                     _user.value = userProfile
                     populateEditableFields(userProfile)
                     loadRecommendedRoutines(userProfile) // Cargar recomendaciones después del perfil
+                    loadUserCustomRoutines()
                 } else {
                     Log.w(TAG, "El documento del usuario no existe para UID: $uid")
                     _user.value = null
@@ -537,8 +532,8 @@ class UserProfileViewModel(
                 // *** ASUME que tienes una colección "userCustomRoutines" anidada bajo "users/{userId}/userCustomRoutines" ***
                 // *** O si es una colección de nivel raíz, ajusta la ruta y añade .whereEqualTo("userId", uid) ***
                 val querySnapshot = firestore.collection("users").document(uid)
-                    .collection("userCustomRoutines") // AJUSTA ESTA RUTA SI ES DIFERENTE
-                    // .orderBy("fechaCreacion", Query.Direction.DESCENDING) // Opcional: ordenar por fecha
+                    .collection("customRoutines") // AJUSTA ESTA RUTA SI ES DIFERENTE
+                    .orderBy("fechaCreacion", Query.Direction.DESCENDING) // Opcional: ordenar por fecha
                     .get()
                     .await()
 
@@ -557,7 +552,6 @@ class UserProfileViewModel(
             }
         }
     }
-
     fun refreshUserCustomRoutines() { // Para pull-to-refresh
         loadUserCustomRoutines()
     }

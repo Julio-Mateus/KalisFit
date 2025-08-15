@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,9 +74,14 @@ fun RoutineExplorerScreen(
     navController: NavController,
     placeFilterArgument: String?,
     levelFilterArgument: String?,
-    routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = RoutineExplorerViewModelFactory()),
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // Obtener la instancia de Application desde el LocalContext
+    val application = LocalContext.current.applicationContext as Application
+    // Crear la factory con la aplicación
+    val factory = RoutineExplorerViewModelFactory(application)
+    // Instanciar el ViewModel usando la factory
+    val routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = factory)
     val rutinas: List<Rutina> by routineExplorerViewModel.rutinasFiltradas.collectAsState()
     val isLoading by routineExplorerViewModel.isLoading.collectAsState()
     val errorMessage by routineExplorerViewModel.errorMessage.collectAsState()

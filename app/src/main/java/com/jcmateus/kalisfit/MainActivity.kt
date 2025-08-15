@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,9 @@ import com.jcmateus.kalisfit.viewmodel.AppTheme
 import com.jcmateus.kalisfit.viewmodel.SettingsViewModel
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.navigation.NavHostController
+import com.jcmateus.kalisfit.navigation.Routes
 import kotlin.getValue
 import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 
@@ -29,90 +33,143 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val authViewModel: AuthViewModel by viewModels()
 
-    // --- INICIO: LÓGICA PARA PERMISO DE NOTIFICACIONES ---
-    /**
-     * Lanzador para la solicitud de permiso de notificaciones.
-     */
+    private lateinit var navController: NavHostController
+
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            settingsViewModel.refreshNotificationPermissionStatus()
             if (isGranted) {
-                Log.d("NotificationPermission", "Permiso POST_NOTIFICATIONS concedido desde MainActivity.")
-                // Aquí podrías, si quisieras, disparar alguna lógica si el permiso se concede
-                // en este momento, pero generalmente la acción de programar notificaciones
-                // se hará desde un ViewModel o una acción específica del usuario.
+                Log.d(
+                    "NotificationPermission",
+                    "Permiso POST_NOTIFICATIONS concedido desde MainActivity."
+                )
             } else {
-                Log.d("NotificationPermission", "Permiso POST_NOTIFICATIONS denegado desde MainActivity.")
-                // Considera mostrar un mensaje al usuario si el permiso es crucial
-                // y es denegado, guiándole a la configuración de la app.
+                Log.d(
+                    "NotificationPermission",
+                    "Permiso POST_NOTIFICATIONS denegado desde MainActivity."
+                )
             }
         }
 
-    /**
-     * Verifica y solicita el permiso POST_NOTIFICATIONS si es necesario (para Android 13+).
-     * Marcada como 'internal' para que pueda ser llamada desde otros archivos
-     * dentro del mismo módulo (como tus pantallas Composable).
-     */
     internal fun askNotificationPermissionInternal() {
-        // Esta función solo es relevante para Android 13 (API 33, TIRAMISU) y versiones posteriores.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
                 ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Permiso ya concedido por el usuario.
-                    Log.d("NotificationPermission", "Permiso POST_NOTIFICATIONS ya está concedido (verificado desde MainActivity).")
+                    Log.d("NotificationPermission", "Permiso POST_NOTIFICATIONS ya está concedido.")
                 }
+
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
-                    // El usuario ha denegado el permiso previamente, pero no seleccionó "No volver a preguntar".
-                    // Deberías mostrar una UI explicando por qué necesitas el permiso.
-                    Log.d("NotificationPermission", "Mostrando rationale para POST_NOTIFICATIONS (desde MainActivity).")
-                    // En una app real, aquí mostrarías un diálogo/Snackbar antes de lanzar.
+                    Log.d("NotificationPermission", "Mostrando rationale para POST_NOTIFICATIONS.")
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
+
                 else -> {
-                    // El permiso no ha sido solicitado antes o el usuario lo denegó
-                    // y seleccionó "No volver a preguntar".
-                    Log.d("NotificationPermission", "Solicitando permiso POST_NOTIFICATIONS (desde MainActivity).")
+                    Log.d("NotificationPermission", "Solicitando permiso POST_NOTIFICATIONS.")
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
         } else {
-            // En versiones anteriores a Android 13, el permiso se considera otorgado
-            // si está en el Manifest.
-            Log.d("NotificationPermission", "No se requiere solicitud en tiempo de ejecución para POST_NOTIFICATIONS (API < 33, verificado desde MainActivity).")
+            Log.d(
+                "NotificationPermission",
+                "No se requiere solicitud en tiempo de ejecución para POST_NOTIFICATIONS (API < 33)."
+            )
         }
     }
-    // --- FIN: LÓGICA PARA PERMISO DE NOTIFICACIONES ---
 
-    @RequiresApi(Build.VERSION_CODES.O) // Esta anotación ya la tenías
+    override fun onResume() {
+        super.onResume()
+        settingsViewModel.refreshNotificationPermissionStatus()
+        intent?.let { handleIntentExtras(it, true) }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // NO LLAMAMOS a askNotificationPermissionInternal() aquí directamente.
-        // Se llamará desde LoginScreen o KalisMainScreen usando LaunchedEffect.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        intent?.let { handleIntentExtras(it, false) }
 
         setContent {
-            val currentAppTheme by settingsViewModel.appTheme.collectAsState()
+            navController = rememberNavController() // Inicializa la propiedad de la clase
 
+            val currentAppTheme by settingsViewModel.appTheme.collectAsState()
             val useDarkTheme = when (currentAppTheme) {
                 AppTheme.LIGHT -> false
                 AppTheme.DARK -> true
                 AppTheme.SYSTEM -> isSystemInDarkTheme()
-                else -> isSystemInDarkTheme()
             }
 
             KalisFitTheme(
                 darkTheme = useDarkTheme,
-                dynamicColor = true
+                dynamicColor = false
             ) {
                 Surface {
-                    val navController = rememberNavController()
                     KalisNavGraph(
-                        navController = navController,
+                        navController = navController, // Pasa la propiedad de la clase
                         settingsViewModel = settingsViewModel,
                         authViewModel = authViewModel
                     )
                 }
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP) // onNewIntent(Intent) está disponible desde API 1, pero
+    // para ser más precisos con las versiones recientes de ComponentActivity y sus dependencias.
+    // En la práctica, suele funcionar sin esta anotación específica si tus minSdk es razonable.
+    // Si tienes problemas de compatibilidad, revisa la documentación de la versión exacta de androidx.activity:activity-ktx que usas.
+    // Generalmente no se necesita la anotación @RequiresApi para este método tan fundamental.
+    override fun onNewIntent(intent: Intent) { // <-- Cambiado Intent? a Intent
+        super.onNewIntent(intent)
+        // Ahora 'intent' es no-nullable aquí, así que podemos pasarlo directamente.
+        // También actualizamos el intent de la actividad para que onResume pueda acceder al más reciente.
+        setIntent(intent) // MUY IMPORTANTE: actualiza el intent que la actividad retornará con getIntent()
+        handleIntentExtras(intent, false)
+    }
+
+    private fun handleIntentExtras(intent: Intent, fromOnResume: Boolean = false) {
+        val routineIdToNavigate = intent.getStringExtra("NAVIGATE_TO_ROUTINE_ID")
+
+        if (!routineIdToNavigate.isNullOrBlank()) {
+            Log.d(
+                "MainActivity",
+                "Recibido intent para navegar a rutina ID: $routineIdToNavigate. Desde onResume: $fromOnResume"
+            )
+
+            if (::navController.isInitialized) {
+                // USAREMOS TU FUNCIÓN Routes.routineDetail()
+                // Al abrir desde una notificación, generalmente no tenemos un contexto de usuario específico
+                // para el deep link, a menos que la notificación sea PARA un usuario.
+                // Si no se necesita un userId específico aquí, pasamos null.
+                // Tu función routineDetail ya maneja el caso de userId nulo.
+                val route = Routes.routineDetail(routineId = routineIdToNavigate, userId = null)
+
+                Log.d("MainActivity", "Navegando a ruta: $route")
+
+                navController.navigate(route) {
+                    launchSingleTop = true
+                }
+
+                val isLaunchedFromHistory =
+                    intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+                if (!isLaunchedFromHistory) {
+                    intent.removeExtra("NAVIGATE_TO_ROUTINE_ID")
+                    Log.d("MainActivity", "Extra NAVIGATE_TO_ROUTINE_ID removido del intent.")
+                } else {
+                    Log.d(
+                        "MainActivity",
+                        "Extra NAVIGATE_TO_ROUTINE_ID NO removido, intent desde historial."
+                    )
+                }
+
+            } else {
+                Log.w(
+                    "MainActivity",
+                    "NavController no inicializado al intentar manejar extras del intent."
+                )
             }
         }
     }

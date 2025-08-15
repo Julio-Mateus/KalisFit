@@ -19,6 +19,9 @@ object Routes {
         const val TEMPLATE_ID_ARG = "templateId"
         const val CUSTOM_ROUTINE_ID_ARG = "customRoutineId"
         const val IS_SELECTING_FOR_ROUTINE_ARG = "isSelectingForRoutine"
+        // --- NUEVOS ARGUMENTOS PARA FILTROS EN ROUTINES_EXPLORER_SCREEN ---
+        const val PLACE_ARG = "place"
+        const val LEVEL_ARG = "level"
     }
 
     // --- Rutas de Autenticación y Onboarding ---

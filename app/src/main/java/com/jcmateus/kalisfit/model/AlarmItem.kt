@@ -12,7 +12,8 @@ data class AlarmItem(
     val channelId: String,
     val isRepeating: Boolean = false, // ¿Es una alarma repetitiva?
     val intervalMillis: Long? = null, // Intervalo de repetición en milisegundos si isRepeating es true
-    val dataPayload: String? = null // Opcional: para datos adicionales que necesites
+    val dataPayload: String? = null, // Opcional: para datos adicionales que necesites
+    val largeIconResId: Int? = null, // <--- CAMPO IMPORTANTE
 ) : Parcelable {
     // Es importante que 'id' sea lo suficientemente único para diferenciar PendingIntents
     // si varias alarmas pueden tener el mismo 'id' de notificación pero diferentes 'requestCode'
