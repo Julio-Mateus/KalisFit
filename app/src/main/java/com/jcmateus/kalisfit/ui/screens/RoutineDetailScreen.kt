@@ -108,7 +108,6 @@ fun RoutineDetailScreen(
             routineDetailViewModel.onNavigationToEditRoutineDone() // Muy importante para resetear el estado
         }
     }
-
     // Manejar inicio de ejecución de rutina
     LaunchedEffect(routineIdToExecute) { // Cambiado de rutinaParaEjecutar a routineIdToExecute
         routineIdToExecute?.let { id -> // 'id' ahora es el String del routineId
@@ -121,7 +120,6 @@ fun RoutineDetailScreen(
             routineDetailViewModel.onRutinaExecutionStarted() // Resetea el estado en el ViewModel
         }
     }
-
     Scaffold(
         topBar = {
             TopAppBar(

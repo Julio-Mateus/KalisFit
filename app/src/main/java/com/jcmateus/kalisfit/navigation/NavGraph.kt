@@ -37,10 +37,12 @@ import com.jcmateus.kalisfit.ui.screens.RegisterScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineDetailScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineExplorerScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineScreen
+import com.jcmateus.kalisfit.ui.screens.RoutineSelectionScreen
 import com.jcmateus.kalisfit.ui.screens.RoutineSuccessScreen
 import com.jcmateus.kalisfit.ui.screens.SettingsScreen
 import com.jcmateus.kalisfit.ui.screens.SplashScreen
 import com.jcmateus.kalisfit.ui.screens.TipsScreen
+import com.jcmateus.kalisfit.ui.screens.WeeklyPlanScreen
 import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineDetailViewModel
@@ -296,6 +298,48 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 navController = navController,
                 isSelectingForRoutine = isSelecting
             )
+        }
+        // =======================================================================
+        //          NUEVA RUTA: PLAN SEMANAL
+        // =======================================================================
+        composable(Routes.WEEKLY_PLAN_SCREEN) {
+            // Asumiendo que WeeklyPlanScreen.kt existe y está importada
+            // El UserProfileViewModel se inyectará por defecto o con la factory en WeeklyPlanScreen
+            WeeklyPlanScreen(navController = navController)
+        }
+
+        // =======================================================================
+        //          NUEVA RUTA: SELECCIÓN DE RUTINA PARA UNA FECHA
+        // =======================================================================
+        composable(
+            route = Routes.ROUTINE_SELECTION_SCREEN_ROUTE_TEMPLATE, // Usa la plantilla de la ruta
+            arguments = listOf(
+                navArgument(Routes.Args.DATE_IN_MILLIS_ARG) { // Usa la constante del argumento
+                    type = NavType.LongType
+                    // defaultValue no es necesario aquí si la ruta siempre lo incluye
+                }
+            )
+        ) { backStackEntry ->
+            val dateInMillis = backStackEntry.arguments?.getLong(Routes.Args.DATE_IN_MILLIS_ARG)
+
+            if (dateInMillis != null) {
+                // Asumiendo que RoutineSelectionScreen.kt existe y está importada
+                // El UserProfileViewModel (o el ViewModel que necesite RoutineSelectionScreen)
+                // se inyectará por defecto o con la factory dentro de RoutineSelectionScreen
+                RoutineSelectionScreen(
+                    navController = navController,
+                    dateInMillis = dateInMillis
+                    // Aquí pasarías cualquier ViewModel que RoutineSelectionScreen necesite,
+                    // por ejemplo, si necesita acceder al UserProfileViewModel para
+                    // obtener información del usuario o actualizar el plan:
+                    // userViewModel = viewModel() // O el viewModel específico
+                )
+            } else {
+                // Manejo de error si el argumento no se pasa correctamente.
+                // Esto no debería suceder si siempre navegas usando Routes.selectRoutineForDate().
+                Text("Error: Faltan argumentos para la selección de rutina.")
+                // Considera navController.popBackStack() para volver a la pantalla anterior.
+            }
         }
         composable(Routes.EDIT_PROFILE_SCREEN) { // Usando tu nueva constante
             EditProfileScreen(navController = navController)

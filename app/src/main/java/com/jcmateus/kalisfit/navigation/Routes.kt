@@ -22,6 +22,7 @@ object Routes {
         // --- NUEVOS ARGUMENTOS PARA FILTROS EN ROUTINES_EXPLORER_SCREEN ---
         const val PLACE_ARG = "place"
         const val LEVEL_ARG = "level"
+        const val DATE_IN_MILLIS_ARG = "dateInMillis"
     }
 
     // --- Rutas de Autenticación y Onboarding ---
@@ -47,6 +48,11 @@ object Routes {
     const val ACTIVITY_HISTORY_SCREEN = "activity_history_screen"
     const val TIPS_SCREEN = "tips_screen"
     const val CART_SCREEN = "cart_screen" // Movida para agrupar con otras de nivel superior
+    // --- NUEVAS RUTAS PARA PLAN SEMANAL Y SELECCIÓN DE RUTINA ---
+    const val WEEKLY_PLAN_SCREEN = "weekly_plan_screen" // Ruta para la pantalla del plan semanal
+    const val ROUTINE_SELECTION_PREFIX = "routine_selection" // Prefijo para la selección de rutina
+    const val ROUTINE_SELECTION_SCREEN_ROUTE_TEMPLATE = // Plantilla de ruta con el argumento
+        "$ROUTINE_SELECTION_PREFIX/{${Args.DATE_IN_MILLIS_ARG}}"
     // --- Rutas con Argumentos (Usando el objeto Args) ---
     // Rutina Detalle
     const val ROUTINE_DETAIL_PREFIX = "routine_detail"
@@ -133,5 +139,15 @@ object Routes {
     // Nueva función helper para AllExercisesScreen
     fun allExercises(isSelectingForRoutine: Boolean): String { // <--- NUEVA FUNCIÓN HELPER
         return "$ALL_EXERCISES_SCREEN_BASE/$isSelectingForRoutine"
+    }
+
+    // --- NUEVA FUNCIÓN HELPER PARA ROUTINE_SELECTION_SCREEN ---
+    /**
+     * Construye la ruta para navegar a RoutineSelectionScreen.
+     * @param dateInMillis La fecha para la cual se seleccionará la rutina, en milisegundos desde epoch.
+     * @return El string de la ruta formateada.
+     */
+    fun selectRoutineForDate(dateInMillis: Long): String {
+        return "$ROUTINE_SELECTION_PREFIX/$dateInMillis"
     }
 }

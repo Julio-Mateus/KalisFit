@@ -18,6 +18,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import com.jcmateus.kalisfit.data.ResumenSemanal
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Autorenew
@@ -71,9 +74,12 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -90,6 +96,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -99,6 +107,7 @@ import androidx.compose.ui.text.font.FontWeight
 //import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -122,6 +131,7 @@ import com.jcmateus.kalisfit.data.captureComposableAsImage
 import com.jcmateus.kalisfit.model.UserActivity
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
+import com.jcmateus.kalisfit.viewmodel.ResumenSemanalConFechas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -388,6 +398,7 @@ fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido 
 @SuppressLint("SimpleDateFormat")
 private val activityDateFormatter = SimpleDateFormat("EEE, d MMM yyyy HH:mm",
     Locale.getDefault())
+private val resumenSemanalFechaFormatter = SimpleDateFormat("dd MMM", Locale.getDefault())
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -396,9 +407,11 @@ fun HistorialScreen(navController: NavHostController) {
     val viewModel: HistoryViewModel = viewModel()
     val historyState by viewModel.historyState.collectAsState()
 
+    // Extraer los nuevos datos del estado
     val historialRutinas = historyState.historialRutinas
-    val resumenRutinas = historyState.resumenRutinas
+    val listaResumenesSemanales = historyState.listaResumenesSemanales // <- NUEVO
     val isLoadingRutinas = historyState.isLoadingRutinas
+    val isLoadingResumenesSemanales = historyState.isLoadingResumenesSemanales // <- NUEVO
 
     val historialActividadesLibres = historyState.historialActividadesLibres
     val isLoadingActividadesLibres = historyState.isLoadingActividadesLibres
@@ -408,7 +421,7 @@ fun HistorialScreen(navController: NavHostController) {
     LaunchedEffect(errorMessage) {
         if (errorMessage != null) {
             Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-            viewModel.clearErrorMessage() // Buena práctica para no mostrarlo repetidamente
+            viewModel.clearErrorMessage()
         }
     }
 
@@ -454,15 +467,24 @@ fun HistorialScreen(navController: NavHostController) {
                 }
             }
 
+            // Determinar el mensaje de error específico para la pestaña de Rutinas
+            // Basado en si las rutinas o los resúmenes están cargando, o si hay un error y ambos están vacíos.
+            val errorRutinasTab = when {
+                (isLoadingRutinas || isLoadingResumenesSemanales) -> null // Si algo está cargando, no mostrar error aún
+                errorMessage != null && historialRutinas.isEmpty() && listaResumenesSemanales.isEmpty() -> errorMessage
+                else -> null
+            }
+
+
             when (selectedTabIndex) {
                 0 -> HistorialRutinasContent(
-                    historialRutinas = historialRutinas,
-                    resumenRutinas = resumenRutinas,
-                    isLoading = isLoadingRutinas,
-                    errorMessage = if (isLoadingRutinas || historialRutinas.isNotEmpty()) null else errorMessage,
+                    listaResumenesSemanales = listaResumenesSemanales, // <- CAMBIADO
+                    historialRutinasCompleto = historialRutinas,      // <- Puedes pasar el historial completo si aún lo necesitas por separado, o eliminarlo si ResumenSemanalCard ya no lo usa directamente.
+                    isLoading = isLoadingRutinas || isLoadingResumenesSemanales, // <- CAMBIADO
+                    errorMessage = errorRutinasTab, // <- CAMBIADO
                     navController = navController,
                     context = context,
-                    onRetryLoadRutinas = { viewModel.loadRoutineHistory() } // Añadido callback de reintento
+                    onRetryLoadRutinas = { viewModel.loadRoutineHistory() }
                 )
                 1 -> HistorialActividadesLibresContent(
                     historialActividades = historialActividadesLibres,
@@ -471,7 +493,7 @@ fun HistorialScreen(navController: NavHostController) {
                     onDeleteActivity = { activityId ->
                         viewModel.deleteFreeActivity(activityId)
                     },
-                    onRetryLoadActividades = { viewModel.loadFreeActivityHistory() }, // Añadido callback
+                    onRetryLoadActividades = { viewModel.loadFreeActivityHistory() },
                     context = context,
                     navController = navController
                 )
@@ -483,8 +505,8 @@ fun HistorialScreen(navController: NavHostController) {
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HistorialRutinasContent(
-    historialRutinas: List<ProgresoRutina>,
-    resumenRutinas: ResumenSemanal?,
+    listaResumenesSemanales: List<ResumenSemanalConFechas>, // <- CAMBIADO
+    historialRutinasCompleto: List<ProgresoRutina>, // <- MANTENIDO (para los gráficos por ahora)
     isLoading: Boolean,
     errorMessage: String?,
     navController: NavHostController,
@@ -498,10 +520,12 @@ fun HistorialRutinasContent(
         return
     }
 
-    if (errorMessage != null && historialRutinas.isEmpty() && resumenRutinas == null) {
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp), contentAlignment = Alignment.Center) {
+    if (errorMessage != null && listaResumenesSemanales.isEmpty() && historialRutinasCompleto.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp), contentAlignment = Alignment.Center
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Error al cargar historial de rutinas: $errorMessage", textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -513,42 +537,39 @@ fun HistorialRutinasContent(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        resumenRutinas?.let { resumen ->
-            ResumenSemanalCard(resumen = resumen, historialRutinas = historialRutinas, context = context)
-        }
-
-        if (historialRutinas.isEmpty() && resumenRutinas == null && !isLoading && errorMessage == null) {
-            EmptyStateHistorial(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.historial_rutinas_vacio_titulo),
-                subtitle = stringResource(R.string.historial_rutinas_vacio_subtitulo),
-                buttonText = stringResource(R.string.comenzar_rutina),
-                onButtonClick = {
-                     navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN)
-                }
-            )
-        } else if (historialRutinas.isNotEmpty()) {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(
-                    start = 16.dp, end = 16.dp,
-                    top = if (resumenRutinas == null) 16.dp else 8.dp,
-                    bottom = 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(
-                    items = historialRutinas,
-                    // Convertir el Timestamp a milisegundos (Long) para una clave más estable
-                    // y combinarlo con el nombre de la rutina para mayor unicidad.
-                    key = { progreso -> "${progreso.fecha.seconds}-${progreso.fecha.nanoseconds}-${progreso.nombreRutina}" }
-                ) { progreso ->
-                    ProgresoRutinaCard(progreso = progreso)
-                }
+    if (listaResumenesSemanales.isEmpty() && historialRutinasCompleto.isEmpty() && !isLoading && errorMessage == null) {
+        EmptyStateHistorial(
+            modifier = Modifier.fillMaxSize(), // Quitado el .weight(1f) si no hay otros elementos que compitan por espacio
+            title = stringResource(R.string.historial_rutinas_vacio_titulo),
+            subtitle = stringResource(R.string.historial_rutinas_vacio_subtitulo),
+            buttonText = stringResource(R.string.comenzar_rutina),
+            onButtonClick = {
+                navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN)
             }
+        )
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp), // Padding general
+            verticalArrangement = Arrangement.spacedBy(16.dp) // Espacio entre cada tarjeta de resumen
+        ) {
+            items(
+                items = listaResumenesSemanales,
+                key = { resumenConFechas -> "${resumenConFechas.anio}-${resumenConFechas.semanaDelAnio}" }
+            ) { resumenConFechas ->
+                ResumenSemanalCard(
+                    resumenConFechas = resumenConFechas, // <- CAMBIADO
+                    context = context
+                    // historialRutinas (para los gráficos) ahora viene de resumenConFechas.progresosDeLaSemana
+                )
+            }
+
+            // Opcional: Si aún quieres mostrar la lista de todas las rutinas individuales debajo de los resúmenes semanales
+            // podrías añadir otra sección aquí, pero usualmente los resúmenes ya agrupan esta info.
+            // Si decides mostrar rutinas individuales, considera si deben estar *dentro* de cada tarjeta de resumen
+            // o como una lista separada más abajo.
+            // Por simplicidad, y dado que `ResumenSemanalConFechas` contiene `progresosDeLaSemana`,
+            // nos enfocaremos en mostrar los resúmenes y sus detalles/gráficos internos.
         }
     }
 }
@@ -556,46 +577,56 @@ fun HistorialRutinasContent(
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ResumenSemanalCard(
-    resumen: ResumenSemanal,
-    historialRutinas: List<ProgresoRutina>,
+    resumenConFechas: ResumenSemanalConFechas, // <- CAMBIADO
     context: Context
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var selectedChartTab by remember { mutableIntStateOf(0) }
+    val resumen = resumenConFechas.resumen // Acceso al ResumenSemanal interno
+
+    // Formatear las fechas de inicio y fin de la semana
+    val inicioSemanaStr = resumenSemanalFechaFormatter.format(resumenConFechas.fechaInicioSemana.toDate())
+    val finSemanaStr = resumenSemanalFechaFormatter.format(resumenConFechas.fechaFinSemana.toDate())
+    val tituloSemana = "Semana ${resumenConFechas.semanaDelAnio} ($inicioSemanaStr - $finSemanaStr, ${resumenConFechas.anio})"
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-            .animateContentSize(), // Para animar el cambio de tamaño al expandir/colapsar
+            .padding(horizontal = 16.dp) // Quitado el vertical, ya que LazyColumn lo maneja
+            .animateContentSize(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        // No necesitamos onClick en toda la Card si el icono de expandir es claro
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // --- CABECERA CON BOTÓN DE EXPANSIÓN ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    "📊 Resumen Semanal de Rutinas", // Podrías añadir fechas aquí si las tienes
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold // Un poco más de énfasis
-                )
+                Column(modifier = Modifier.weight(1f)) { // Para que el texto se ajuste
+                    Text(
+                        "📊 Resumen Semanal",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        // "Semana ${resumenConFechas.semanaDelAnio}, ${resumenConFechas.anio}",
+                        tituloSemana,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 IconButton(onClick = { isExpanded = !isExpanded }) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                         contentDescription = if (isExpanded) "Colapsar" else "Expandir",
-                        tint = MaterialTheme.colorScheme.primary // Hacerlo más notorio
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp)) // Aumentar un poco el espacio
-            // --- MÉTRICAS PRINCIPALES ---
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround // Distribuye el espacio
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
                 MetricItem(
                     icon = Icons.Filled.FitnessCenter,
@@ -604,22 +635,20 @@ fun ResumenSemanalCard(
                     modifier = Modifier.weight(1f)
                 )
                 MetricItem(
-                    icon = Icons.Filled.Timer, // Un icono más específico para tiempo
+                    icon = Icons.Filled.Timer,
                     label = "Tiempo Total",
-                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()), // Usar HMS para consistencia
+                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()),
                     modifier = Modifier.weight(1f)
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- CONTENIDO EXPANDIBLE ---
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
                 exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300))
             ) {
                 Column {
-                    // Detalles Adicionales
                     Text("Detalles Adicionales:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                     InfoRowResumen("Total ejercicios realizados:", resumen.totalEjercicios.toString())
                     if (resumen.ejerciciosPorTiempo > 0) {
@@ -636,9 +665,10 @@ fun ResumenSemanalCard(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Gráficos (sin cambios en su lógica interna por ahora)
-                    if (historialRutinas.isNotEmpty()) {
-                        Text("Actividad Diaria:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                    // Usar progresosDeLaSemana del ResumenSemanalConFechas para los gráficos
+                    val progresosDeEstaSemana = resumenConFechas.progresosDeLaSemana
+                    if (progresosDeEstaSemana.isNotEmpty()) {
+                        Text("Actividad Diaria (Semana ${resumenConFechas.semanaDelAnio}):", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
                         TabRow(selectedTabIndex = selectedChartTab) {
                             Tab(selected = selectedChartTab == 0, onClick = { selectedChartTab = 0 }) {
                                 Text("Rutinas/día", modifier = Modifier.padding(vertical = 12.dp))
@@ -654,21 +684,20 @@ fun ResumenSemanalCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             when (selectedChartTab) {
-                                0 -> RutinasBarChart(historialRutinas, modifier = Modifier
+                                0 -> RutinasBarChart(progresosDeEstaSemana, modifier = Modifier // <- CAMBIADO
                                     .height(150.dp)
                                     .padding(8.dp))
-                                1 -> TiempoBarChart(historialRutinas, modifier = Modifier
+                                1 -> TiempoBarChart(progresosDeEstaSemana, modifier = Modifier // <- CAMBIADO
                                     .height(150.dp)
                                     .padding(8.dp))
                             }
                         }
                     } else {
-                        // Podríamos mejorar este mensaje
                         Box(modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
                             Text(
-                                "No hay suficientes datos para mostrar gráficos aún.",
+                                "No hay datos de rutinas esta semana para mostrar gráficos.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -678,17 +707,14 @@ fun ResumenSemanalCard(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-            // --- BOTONES DE COMPARTIR ---
-            // Los mantendremos como están por ahora, enfocándonos primero en el contenido de la tarjeta
-            // pero podríamos estilizarlos más adelante.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp), // Añadir padding si está colapsado
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End) // Un poco más de espacio y alineados al final
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
             ) {
                 OutlinedButton(onClick = {
-                    val mensaje = buildSemanalShareText(resumen) // Necesitaremos crear esta función
+                    val mensaje = buildSemanalShareText(resumen) // buildSemanalShareText sigue usando ResumenSemanal
                     val sendIntent = Intent().apply {
                         action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, mensaje)
@@ -703,8 +729,8 @@ fun ResumenSemanalCard(
                 }
 
                 Button(onClick = {
-                    // AÚN NO HEMOS CREADO/MODIFICADO ResumenVisualCard, así que esto es un placeholder
-                    captureComposableAsImage(context, { ResumenSemanalVisualCard(resumen = resumen) }) { file ->
+                    // Pasar el ResumenSemanal interno a ResumenSemanalVisualCard
+                    captureComposableAsImage(context, { ResumenSemanalVisualCardModern(resumen = resumen, resumenConFechas = resumenConFechas) }) { file -> // <- Añadido resumenConFechas
                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "image/png"
@@ -714,7 +740,7 @@ fun ResumenSemanalCard(
                         context.startActivity(Intent.createChooser(intent, "Compartir imagen del resumen"))
                     }
                 }) {
-                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen", tint = Color.Black) // Usar Icono de Imagen
+                    Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen", tint = Color.Black)
                     Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
                     Text("Imagen", color = Color.Black)
                 }
@@ -741,145 +767,181 @@ fun MetricItem(icon: ImageVector, label: String, value: String, modifier: Modifi
     }
 }
 @Composable
-fun ResumenSemanalVisualCard(
+fun ResumenSemanalVisualCardModern( // Nuevo nombre para diferenciar
     resumen: ResumenSemanal,
-    // Puedes añadir más parámetros si necesitas, como el nombre de usuario, fechas específicas del resumen, etc.
+    resumenConFechas: ResumenSemanalConFechas? = null
 ) {
-    // --- COLORES DEFINIDOS (puedes ajustarlos o tomarlos de un tema si la captura lo permite bien) ---
-    // Estos son los que sugerí antes para consistencia con UserActivityVisualCard
-    val cardBackgroundColor = Color(0xFFFFF0C9) // Un color crema/amarillo pálido
-    val onCardColor = Color(0xFF1C1C1E)      // Texto principal (casi negro)
-    val primaryAppColor = Color(0xFFC2850B)  // Tu color primario/acento (mostaza oscuro)
-    val secondaryColorIcons = Color(0xFF1976D2) // Un color secundario para iconos o detalles (azul)
-    val tertiaryColorHashtag = Color(0xFF388E3C) // Un color para hashtags (verde)
+    // --- COLORES MODERNOS ---
+    val backgroundColorStart = Color(0xFFFDFCFB) // Blanco casi puro
+    val backgroundColorEnd = Color(0xFFF5F5F5)   // Gris muy claro
+    val primaryTextColor = Color(0xFF2C2C2E)     // Texto principal oscuro
+    val secondaryTextColor = Color(0xFF6B6B6B)   // Texto secundario más claro
+    val accentColor = Color(0xFFC2850B)           // Tu color de acento principal (dorado/naranja)
+    val iconColor = accentColor // Usar el color de acento para iconos
 
-    Card(
+    val visualCardDateFormat = remember { SimpleDateFormat("dd MMM", Locale.getDefault()) }
+
+    Box( // Usamos un Box para poder poner un gradiente de fondo
         modifier = Modifier
-            .width(380.dp) // Ancho fijo para la imagen generada, similar a UserActivityVisualCard
+            .width(400.dp) // Un poco más ancha para más espacio
             .wrapContentHeight()
-            .background(cardBackgroundColor), // El fondo de la Card en sí
-        colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para la captura limpia
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(backgroundColorStart, backgroundColorEnd)
+                )
+            )
+            .border(
+                1.dp, Color.LightGray.copy(alpha = 0.5f),
+                RoundedCornerShape(16.dp)
+            ) // Borde sutil
+            .padding(24.dp) // Más padding
     ) {
         Column(
-            modifier = Modifier
-                .padding(20.dp) // Un padding generoso para que no se vea apretado
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start // Alineación general a la izquierda para un look más "editorial"
         ) {
-            // --- 1. Encabezado con Logo y Título ---
+            // --- ENCABEZADO ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                // horizontalArrangement = Arrangement.Center // Opcional, si quieres centrar todo el bloque
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_logo2), // ¡TU LOGO!
+                    painter = painterResource(id = R.drawable.ic_logo2), // Asegúrate que el logo tenga fondo transparente o se adapte
                     contentDescription = "Logo KalisFit",
                     modifier = Modifier
-                        .size(52.dp) // Un poco más grande para la imagen
-                        .padding(end = 12.dp)
+                        .size(50.dp) // Un poco más pequeño y elegante
+                        .clip(CircleShape) // Si el logo se ve bien circular
                 )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.Start // Alinea el texto a la izquierda
-                ) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Resumen Semanal",
-                        style = MaterialTheme.typography.headlineSmall.copy(color = primaryAppColor),
-                        fontWeight = FontWeight.ExtraBold
+                        "RESUMEN SEMANAL", // MAYÚSCULAS para un toque de diseño
+                        style = MaterialTheme.typography.labelLarge.copy(color = secondaryTextColor, letterSpacing = 0.1.em), // Tracking
+                        fontWeight = FontWeight.Medium
                     )
-                    // Opcional: Si tienes las fechas exactas del resumen, ponlas aquí
-                    // Text(
-                    //     "Del [Fecha Inicio] al [Fecha Fin]",
-                    //     style = MaterialTheme.typography.bodySmall.copy(color = onCardColor.copy(alpha = 0.7f))
-                    // )
+                    resumenConFechas?.let {
+                        val inicioStr = visualCardDateFormat.format(it.fechaInicioSemana.toDate())
+                        val finStr = visualCardDateFormat.format(it.fechaFinSemana.toDate())
+                        Text(
+                            "Semana ${it.semanaDelAnio}: $inicioStr - $finStr, ${it.anio}",
+                            style = MaterialTheme.typography.titleMedium.copy(color = primaryTextColor),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // --- 2. Métricas Principales (Visuales y Claras) ---
+            // --- MÉTRICAS PRINCIPALES ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                VisualMetricItem( // Usaremos un Composable específico para esto
-                    icon = Icons.Filled.FitnessCenter,
+                ModernMetricItem(
+                    icon = Icons.Outlined.FitnessCenter, // Iconos Outlined para un look más ligero
                     value = resumen.rutinas.toString(),
-                    label = "Rutinas",
-                    iconColor = secondaryColorIcons,
-                    textColor = onCardColor
+                    label = "Rutinas Completadas",
+                    iconColor = iconColor,
+                    textColor = primaryTextColor,
+                    accentColor = accentColor
                 )
-                VisualMetricItem(
-                    icon = Icons.Filled.Timer,
-                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()), // Usas tu función de formato
-                    label = "Tiempo Total",
-                    iconColor = secondaryColorIcons,
-                    textColor = onCardColor
+                ModernMetricItem(
+                    icon = Icons.Outlined.Timer, // Iconos Outlined
+                    value = formatSecondsToHMS(resumen.tiempoTotal.toLong()),
+                    label = "Tiempo Total Activo",
+                    iconColor = iconColor,
+                    textColor = primaryTextColor,
+                    accentColor = accentColor
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            // Métrica adicional si es relevante y hay espacio
-            if (resumen.totalEjercicios > 0) {
-                VisualMetricItem(
-                    icon = Icons.Filled.ListAlt,
-                    value = resumen.totalEjercicios.toString(),
-                    label = "Ejercicios Totales",
-                    iconColor = secondaryColorIcons,
-                    textColor = onCardColor,
-                    modifier = Modifier.fillMaxWidth() // Para que ocupe el ancho si es una sola métrica aquí
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-
-            // --- 3. Logro Destacado o Foco Principal ---
-            if (resumen.objetivosRecurrentes.isNotEmpty()) {
-                Text(
-                    "🎯 Enfocado en:",
-                    style = MaterialTheme.typography.titleMedium.copy(color = onCardColor),
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    resumen.objetivosRecurrentes.take(2).joinToString(" • "), // Mostrar los 2 más importantes
-                    style = MaterialTheme.typography.titleSmall.copy(color = primaryAppColor),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-
-            // --- 4. Frase Motivacional / Cierre ---
-            Text(
-                "¡Excelente progreso esta semana!", // O algo como "¡Sigue así!"
-                style = MaterialTheme.typography.titleMedium.copy(color = primaryAppColor),
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- 5. Pie de Página con Hashtags y Nombre de la App ---
+            if (resumen.totalEjercicios > 0) {
+                ModernMetricItem( // Usando el mismo estilo para consistencia
+                    icon = Icons.Outlined.Checklist,
+                    value = resumen.totalEjercicios.toString(),
+                    label = "Ejercicios Registrados",
+                    iconColor = iconColor,
+                    textColor = primaryTextColor,
+                    accentColor = accentColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp) // Centrado si es único
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+            // --- ENFOQUE ---
+            if (resumen.objetivosRecurrentes.isNotEmpty()) {
+                Text(
+                    "🎯 PRINCIPAL ENFOQUE:",
+                    style = MaterialTheme.typography.labelMedium.copy(color = secondaryTextColor, letterSpacing = 0.08.em),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 4.dp) // Pequeña indentación
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    resumen.objetivosRecurrentes.take(2).joinToString("  •  ") { it.uppercase() }, // Mayúsculas y más espacio
+                    style = MaterialTheme.typography.titleSmall.copy(color = accentColor),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
+            // --- MENSAJE FINAL Y PIE DE PÁGINA ---
+            Divider(color = Color.LightGray.copy(alpha = 0.5f), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom // Alinear al fondo
             ) {
                 Text(
-                    "Compartido desde KalisFit",
-                    style = MaterialTheme.typography.labelMedium.copy(color = onCardColor.copy(alpha = 0.7f)),
+                    "Generado por KalisFit",
+                    style = MaterialTheme.typography.bodySmall.copy(color = secondaryTextColor),
                 )
                 Text(
-                    "#KalisFit #ProgresoSemanal #Fitness", // Hashtags relevantes
-                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColorHashtag, fontWeight = FontWeight.Medium),
-                    textAlign = TextAlign.End
+                    "#KalisFitProgreso", // Hashtag más corto y conciso
+                    style = MaterialTheme.typography.bodySmall.copy(color = accentColor, fontWeight = FontWeight.Medium),
                 )
             }
         }
     }
 }
-
+@Composable
+fun ModernMetricItem( // Composable auxiliar para las nuevas métricas
+    icon: ImageVector,
+    value: String,
+    label: String,
+    iconColor: Color,
+    textColor: Color,
+    accentColor: Color, // Para destacar el valor
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(vertical = 8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconColor,
+            modifier = Modifier.size(36.dp) // Iconos un poco más pequeños pero claros
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall.copy(color = accentColor), // Valor destacado
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label.uppercase(), // Etiqueta en mayúsculas para un look más pro
+            style = MaterialTheme.typography.labelSmall.copy(color = textColor.copy(alpha = 0.7f), letterSpacing = 0.05.em),
+            textAlign = TextAlign.Center
+        )
+    }
+}
 @Composable
 fun VisualMetricItem( // Composable auxiliar para las métricas visuales
     icon: ImageVector,

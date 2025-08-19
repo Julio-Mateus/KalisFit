@@ -3,6 +3,7 @@ package com.jcmateus.kalisfit.viewmodel
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.util.Log
+//import androidx.compose.animation.core.copy
 //import androidx.compose.ui.text.intl.Locale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,7 +19,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.Timestamp // <--- AÑADE ESTA LÍNEA
 import com.google.firebase.firestore.Query
+import com.jcmateus.kalisfit.model.DiaDeEntrenamientoPlanificado
+import com.jcmateus.kalisfit.model.PlanSemanalUsuario
 import com.jcmateus.kalisfit.model.ProgresoRutina
+import com.jcmateus.kalisfit.model.TipoDiaEntrenamiento
 import com.jcmateus.kalisfit.model.UserActivity
 import com.jcmateus.kalisfit.model.UserCustomRoutine
 import kotlinx.coroutines.async
@@ -49,9 +53,18 @@ data class UserProfile(
 )
 // --- Data Class para el Resumen Semanal del HomeScreen ---
 data class ResumenSemanal(
-    val rutinasCompletadas: Int = 0,
-    val tiempoTotalEntrenadoSegundos: Int = 0,
-    // Podrías añadir más campos como calorías o días activos si los calculas
+    // Datos anteriores renombrados para claridad
+    val rutinasCompletadasEstaSemana: Int = 0, // Anteriormente 'rutinasCompletadas'
+    val tiempoTotalEntrenadoSegundosEstaSemana: Int = 0, // Anteriormente 'tiempoTotalEntrenadoSegundos'
+
+    // Nuevos campos basados en la discusión
+    val frecuenciaSemanalObjetivo: Int = 0, // Tomado de UserProfile.frecuenciaSemanal
+    val diasActivosEstaSemana: Int = 0, // Cuántos días distintos tuvo actividad
+
+    // Campos que ya tenías, mantenidos por si los usas o planeas usar
+    val objetivosCompletados: List<String> = emptyList(), // Considera renombrar si refleja otra cosa
+    val insigniasObtenidas: List<String> = emptyList(),
+    val progresoActual: String = "" // Podría tomarse de UserProfile.progresoActual
 )
 // --- Sealed class para la Última Actividad del HomeScreen ---
 sealed class LastActivityItem {
@@ -118,6 +131,14 @@ class UserProfileViewModel(
     val isLoadingHomeScreenData: StateFlow<Boolean> = _isLoadingHomeScreenData.asStateFlow()
     private val _homeScreenErrorMessage = MutableStateFlow<String?>(null)
     val homeScreenErrorMessage: StateFlow<String?> = _homeScreenErrorMessage.asStateFlow()
+    private val _planSemanal = MutableStateFlow<PlanSemanalUsuario?>(null)
+    val planSemanal: StateFlow<PlanSemanalUsuario?> = _planSemanal.asStateFlow()
+    private val _rutinaDeHoy = MutableStateFlow<DiaDeEntrenamientoPlanificado?>(null)
+    val rutinaDeHoy: StateFlow<DiaDeEntrenamientoPlanificado?> = _rutinaDeHoy.asStateFlow()
+    private val _isLoadingPlanSemanal = MutableStateFlow(false)
+    val isLoadingPlanSemanal: StateFlow<Boolean> = _isLoadingPlanSemanal.asStateFlow()
+    private val _planSemanalErrorMessage = MutableStateFlow<String?>(null)
+    val planSemanalErrorMessage: StateFlow<String?> = _planSemanalErrorMessage.asStateFlow()
     companion object {
         private const val TAG = "UserProfileViewModel"
         // Formateador de fecha para mostrar en la UI si es necesario
@@ -137,12 +158,13 @@ class UserProfileViewModel(
     init {
         if (firebaseAuth.currentUser != null) {
             loadUserProfile()
-            loadHomeScreenData() // Cargar datos del home screen al iniciar si el usuario está logueado
         } else {
             _userErrorMessage.value = "Usuario no autenticado."
             _isLoadingUser.value = false
             _homeScreenErrorMessage.value = "Usuario no autenticado."
             _lastActivity.value = LastActivityItem.None
+            _planSemanal.value = null // Limpiar plan si no hay perfil
+            _rutinaDeHoy.value = null
         }
     }
     // --- Funciones para Actualizar Campos Editables desde la UI ---
@@ -161,10 +183,12 @@ class UserProfileViewModel(
             _isLoadingUser.value = false
             _user.value = null
             clearEditableFields()
-            // También podría ser útil limpiar datos del home screen si el usuario se desloguea
             _homeScreenSummary.value = null
             _lastActivity.value = LastActivityItem.None
             _recommendedRoutines.value = emptyList()
+            _userCustomRoutines.value = emptyList()
+            _planSemanal.value = null
+            _rutinaDeHoy.value = null
             return
         }
         _isLoadingUser.value = true
@@ -172,16 +196,24 @@ class UserProfileViewModel(
         firestore.collection("users").document(uid).get()
             .addOnSuccessListener { doc ->
                 if (doc != null && doc.exists()) {
-                    val userProfile = doc.toObject(UserProfile::class.java) // No es necesario .copy() aquí
+                    val userProfile = doc.toObject(UserProfile::class.java)
                     _user.value = userProfile
                     populateEditableFields(userProfile)
-                    loadRecommendedRoutines(userProfile) // Cargar recomendaciones después del perfil
+                    loadRecommendedRoutines(userProfile)
                     loadUserCustomRoutines()
+                    loadHomeScreenData()
+                    userProfile?.let { loadPlanSemanalActual(forceRegenerate = false) } // Modificado
                 } else {
                     Log.w(TAG, "El documento del usuario no existe para UID: $uid")
                     _user.value = null
                     _userErrorMessage.value = "No se encontró el perfil del usuario."
                     clearEditableFields()
+                    _homeScreenSummary.value = null
+                    _lastActivity.value = LastActivityItem.None
+                    _recommendedRoutines.value = emptyList()
+                    _userCustomRoutines.value = emptyList()
+                    _planSemanal.value = null
+                    _rutinaDeHoy.value = null
                 }
                 _isLoadingUser.value = false
             }
@@ -191,7 +223,359 @@ class UserProfileViewModel(
                 _isLoadingUser.value = false
                 _userErrorMessage.value = "Error al cargar el perfil: ${exception.localizedMessage}"
                 clearEditableFields()
+                _homeScreenSummary.value = null
+                _lastActivity.value = LastActivityItem.None
+                _recommendedRoutines.value = emptyList()
+                _userCustomRoutines.value = emptyList()
+                _planSemanal.value = null
+                _rutinaDeHoy.value = null
             }
+    }
+    // Modificamos loadPlanSemanalActual para aceptar un parámetro forceRegenerate
+    fun loadPlanSemanalActual(forceRegenerate: Boolean = false) {
+        val uid = firebaseAuth.currentUser?.uid
+        val currentUserProfile = _user.value
+        if (uid == null || currentUserProfile == null) {
+            _planSemanalErrorMessage.value = "Usuario o perfil no disponible para cargar el plan semanal."
+            _isLoadingPlanSemanal.value = false
+            _planSemanal.value = null
+            _rutinaDeHoy.value = null
+            return
+        }
+
+        _isLoadingPlanSemanal.value = true
+        _planSemanalErrorMessage.value = null
+        viewModelScope.launch {
+            try {
+                val calendar = Calendar.getInstance()
+                val year = calendar.get(Calendar.YEAR)
+                val weekOfYear = calendar.get(Calendar.WEEK_OF_YEAR)
+                val planSemanalDocId = "semana_${year}_${weekOfYear}"
+
+                if (forceRegenerate) {
+                    Log.d(TAG, "Forzando regeneración del plan semanal para $planSemanalDocId.")
+                    generarNuevoPlanSemanal(uid, currentUserProfile, planSemanalDocId)
+                } else {
+                    val planDoc = firestore.collection("users").document(uid)
+                        .collection("planesSemanales")
+                        .document(planSemanalDocId)
+                        .get()
+                        .await()
+
+                    if (planDoc.exists()) {
+                        val plan = planDoc.toObject(PlanSemanalUsuario::class.java)
+                        _planSemanal.value = plan
+                        determinarRutinaDeHoy()
+                    } else {
+                        Log.d(TAG, "No se encontró plan para $planSemanalDocId, generando uno nuevo.")
+                        generarNuevoPlanSemanal(uid, currentUserProfile, planSemanalDocId)
+                    }
+                }
+                _planSemanalErrorMessage.value = null // Limpiar error si todo fue bien
+            } catch (e: Exception) {
+                Log.e(TAG, "Error durante la carga/generación del plan semanal", e)
+                _planSemanalErrorMessage.value = "Error con plan: ${e.localizedMessage}"
+                _planSemanal.value = null
+                _rutinaDeHoy.value = null
+            } finally {
+                _isLoadingPlanSemanal.value = false
+            }
+        }
+    }
+    // NUEVA FUNCIÓN PÚBLICA PARA REGENERAR EL PLAN
+    fun regenerateWeeklyPlan() {
+        Log.d(TAG, "regenerateWeeklyPlan() llamado")
+        // Simplemente llamamos a loadPlanSemanalActual con forceRegenerate = true
+        // Esto reutilizará la lógica existente y los estados de carga/error.
+        loadPlanSemanalActual(forceRegenerate = true)
+    }
+    private suspend fun generarNuevoPlanSemanal(userId: String, perfil: UserProfile, planSemanalDocId: String) {
+        // ... (El contenido de esta función se mantiene exactamente igual que antes)
+        // Solo asegúrate de que _isLoadingPlanSemanal se maneje correctamente, lo cual
+        // ya debería ser el caso si es llamado desde loadPlanSemanalActual.
+        // Si llamas a generarNuevoPlanSemanal directamente desde otro lugar,
+        // asegúrate de setear _isLoadingPlanSemanal = true al inicio y false en un finally.
+        // En este caso, como lo llama loadPlanSemanalActual, ese manejo ya está hecho.
+
+        // ----- INICIO DE generarNuevoPlanSemanal (sin cambios en su lógica interna) -----
+        // _isLoadingPlanSemanal.value = true; // Ya gestionado por el llamador (loadPlanSemanalActual)
+
+        try {
+            val calendar = Calendar.getInstance()
+            // Configurar para el inicio de la semana (Lunes o Domingo según Locale)
+            calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
+            // Normalizar a medianoche para consistencia
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val fechaInicioSemana = Timestamp(calendar.time)
+
+            // Avanzar 6 días para el fin de la semana
+            calendar.add(Calendar.DAY_OF_WEEK, 6)
+            // Normalizar a fin del día para consistencia
+            calendar.set(Calendar.HOUR_OF_DAY, 23)
+            calendar.set(Calendar.MINUTE, 59)
+            calendar.set(Calendar.SECOND, 59)
+            calendar.set(Calendar.MILLISECOND, 999)
+            val fechaFinSemana = Timestamp(calendar.time)
+
+            val diasPlanificados = mutableListOf<DiaDeEntrenamientoPlanificado>()
+            val frecuencia = perfil.frecuenciaSemanal.coerceIn(0, 7)
+
+            val tempCal = Calendar.getInstance()
+            tempCal.time = fechaInicioSemana.toDate() // Empezar desde el inicio de la semana normalizado
+
+            var diasEntrenamientoAsignados = 0
+            val diasLaborablesPreferidos = listOf(Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY)
+
+            for (i in 0..6) {
+                val diaFecha = Timestamp(tempCal.time)
+                val sdfDia = SimpleDateFormat("EEEE", Locale.getDefault())
+                val nombreDia = sdfDia.format(tempCal.time).uppercase(Locale.getDefault())
+
+                // Lógica de asignación mejorada (ejemplo):
+                // Prioriza días laborables, luego fines de semana si es necesario.
+                var esDiaDeEntrenamiento = false
+                if (diasEntrenamientoAsignados < frecuencia) {
+                    if (diasLaborablesPreferidos.contains(tempCal.get(Calendar.DAY_OF_WEEK))) {
+                        esDiaDeEntrenamiento = true
+                    }
+                }
+                // Si aún no hemos asignado suficientes y quedan días de la semana (incluyendo fines de semana)
+                if (!esDiaDeEntrenamiento && diasEntrenamientoAsignados < frecuencia) {
+                    esDiaDeEntrenamiento = true // Asigna a cualquier día restante hasta cumplir frecuencia
+                }
+
+
+                if (esDiaDeEntrenamiento) {
+                    diasPlanificados.add(
+                        DiaDeEntrenamientoPlanificado(
+                            fecha = diaFecha,
+                            diaDeLaSemana = nombreDia,
+                            tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name, // Por defecto entrenamiento
+                            completada = false
+                            // rutinaIdAsignada, nombreRutinaAsignada, etc., pueden ser null inicialmente
+                        )
+                    )
+                    diasEntrenamientoAsignados++
+                } else {
+                    diasPlanificados.add(
+                        DiaDeEntrenamientoPlanificado(
+                            fecha = diaFecha,
+                            diaDeLaSemana = nombreDia,
+                            tipoDeDia = TipoDiaEntrenamiento.DESCANSO.name,
+                            completada = false // El descanso también es un estado
+                        )
+                    )
+                }
+                tempCal.add(Calendar.DAY_OF_MONTH, 1)
+            }
+
+            val nuevoPlan = PlanSemanalUsuario(
+                id = planSemanalDocId,
+                userId = userId,
+                fechaInicioSemana = fechaInicioSemana,
+                fechaFinSemana = fechaFinSemana,
+                diasPlanificados = diasPlanificados.toMutableList(), // Asegúrate de que el modelo use MutableList si es necesario
+                frecuenciaObjetivoOriginal = perfil.frecuenciaSemanal,
+                ultimaActualizacion = Timestamp.now() // Añadir timestamp de creación/actualización
+            )
+
+            firestore.collection("users").document(userId)
+                .collection("planesSemanales")
+                .document(planSemanalDocId)
+                .set(nuevoPlan)
+                .await()
+
+            _planSemanal.value = nuevoPlan
+            determinarRutinaDeHoy()
+            Log.d(TAG, "Nuevo plan semanal generado y guardado para $planSemanalDocId")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al generar nuevo plan semanal", e)
+            _planSemanalErrorMessage.value = "Error al generar plan: ${e.localizedMessage}"
+            // No reseteamos _planSemanal.value aquí, porque loadPlanSemanalActual lo hará si es necesario
+            // _planSemanal.value = null
+            // _rutinaDeHoy.value = null
+            throw e // Relanzar para que el llamador (loadPlanSemanalActual) lo maneje en su bloque catch
+        } finally {
+            // _isLoadingPlanSemanal.value = false; // Ya gestionado por el llamador
+        }
+        // ----- FIN DE generarNuevoPlanSemanal -----
+    }
+    private fun determinarRutinaDeHoy() {
+        val planActual = _planSemanal.value
+        if (planActual == null) {
+            _rutinaDeHoy.value = null
+            return
+        }
+
+        val calendarHoy = Calendar.getInstance()
+        // Normalizar 'hoy' a medianoche para comparar solo fechas
+        calendarHoy.set(Calendar.HOUR_OF_DAY, 0)
+        calendarHoy.set(Calendar.MINUTE, 0)
+        calendarHoy.set(Calendar.SECOND, 0)
+        calendarHoy.set(Calendar.MILLISECOND, 0)
+        val hoyTimestampNormalized = Timestamp(calendarHoy.time)
+
+        val diaDeHoyPlanificado = planActual.diasPlanificados.find { diaPlan ->
+            val calPlan = Calendar.getInstance()
+            calPlan.time = diaPlan.fecha.toDate()
+            calPlan.set(Calendar.HOUR_OF_DAY, 0)
+            calPlan.set(Calendar.MINUTE, 0)
+            calPlan.set(Calendar.SECOND, 0)
+            calPlan.set(Calendar.MILLISECOND, 0)
+            val planTimestampNormalized = Timestamp(calPlan.time)
+            planTimestampNormalized == hoyTimestampNormalized
+        }
+
+        _rutinaDeHoy.value = diaDeHoyPlanificado
+        Log.d(TAG, "Rutina de hoy determinada: ${diaDeHoyPlanificado?.nombreRutinaAsignada ?: diaDeHoyPlanificado?.tipoRutina ?: "Ninguna"}")
+    }
+    fun updateDayInWeeklyPlan(
+        dateToUpdate: Date, // La fecha exacta del día a actualizar
+        rutinaId: String?,
+        rutinaNombre: String?,
+        esCustom: Boolean?,
+        tipoDeDia: String // Ej: TipoDiaEntrenamiento.ENTRENAMIENTO.name o TipoDiaEntrenamiento.DESCANSO.name
+    ) {
+        val currentUser = _user.value ?: run {
+            Log.w(TAG, "updateDayInWeeklyPlan: Usuario no disponible.")
+            _planSemanalErrorMessage.value = "Usuario no disponible para actualizar el plan."
+            return
+        }
+        val currentPlan = _planSemanal.value ?: run {
+            Log.w(TAG, "updateDayInWeeklyPlan: Plan semanal no disponible.")
+            _planSemanalErrorMessage.value = "Plan semanal no disponible para actualizar."
+            return
+        }
+        val uid = currentUser.uid
+
+        viewModelScope.launch {
+            _isLoadingPlanSemanal.value = true
+            try {
+                // CORRECCIÓN: Usar 'diasPlanificados' en lugar de 'diasDelPlan'
+                val updatedDiasPlanificados = currentPlan.diasPlanificados.map { dia ->
+                    // Compara solo día, mes y año para la fecha
+                    val calDia = Calendar.getInstance().apply { time = dia.fecha.toDate() }
+                    val calDateToUpdate = Calendar.getInstance().apply { time = dateToUpdate }
+
+                    if (calDia.get(Calendar.DAY_OF_YEAR) == calDateToUpdate.get(Calendar.DAY_OF_YEAR) &&
+                        calDia.get(Calendar.YEAR) == calDateToUpdate.get(Calendar.YEAR)
+                    ) {
+                        // La función .copy() aquí es la generada para la data class DiaDeEntrenamientoPlanificado
+                        dia.copy(
+                            rutinaIdAsignada = rutinaId,
+                            nombreRutinaAsignada = rutinaNombre,
+                            esRutinaPersonalizada = esCustom, // Ya es Boolean?, no necesita ?: false aquí a menos que el modelo lo requiera no nulo
+                            tipoDeDia = tipoDeDia,
+                            // Si se cambia a día de DESCANSO o se quita la rutina, se resetea 'completada' y 'progresoRutinaIdCompletada'
+                            completada = if (tipoDeDia == TipoDiaEntrenamiento.DESCANSO.name || rutinaId == null) false else dia.completada,
+                            progresoRutinaIdCompletada = if (tipoDeDia == TipoDiaEntrenamiento.DESCANSO.name || rutinaId == null) null else dia.progresoRutinaIdCompletada
+                        )
+                    } else {
+                        dia
+                    }
+                }
+
+                // CORRECCIÓN: Usar 'diasPlanificados' al crear la copia del plan
+                // Asegúrate de que PlanSemanalUsuario.diasPlanificados sea MutableList si quieres modificarlo directamente
+                // o que la copia cree una nueva lista mutable si es necesario.
+                // Si tu modelo PlanSemanalUsuario.diasPlanificados es List y no MutableList, toList() está bien.
+                // Si es MutableList, .toMutableList() es redundante si updatedDiasPlanificados ya es una nueva lista,
+                // pero no dañino. Si es MutableList y quieres modificar la instancia original (no recomendado aquí),
+                // la lógica sería diferente.
+                val updatedPlan = currentPlan.copy(diasPlanificados = updatedDiasPlanificados.toMutableList()) // Asumiendo que PlanSemanalUsuario.diasPlanificados es MutableList<DiaDeEntrenamientoPlanificado>
+
+                firestore.collection("users").document(uid)
+                    .collection("planesSemanales").document(currentPlan.id)
+                    .set(updatedPlan) // .set() sobrescribe el documento. También puedes usar .update()
+                    .await()
+
+                _planSemanal.value = updatedPlan
+                Log.d(TAG, "Plan semanal actualizado para el día: $dateToUpdate con rutina: $rutinaNombre")
+                determinarRutinaDeHoy() // Re-evaluar la rutina de hoy
+                _planSemanalErrorMessage.value = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al actualizar día en plan semanal", e)
+                _planSemanalErrorMessage.value = "Error al actualizar plan: ${e.localizedMessage ?: e.message}"
+                // Considera no cambiar _planSemanal.value aquí para mantener el estado anterior
+                // o revertirlo al 'currentPlan' original si la UI lo necesita.
+            } finally {
+                _isLoadingPlanSemanal.value = false
+            }
+        }
+    }
+    fun marcarDiaComoCompletado(fechaDiaCompletado: Timestamp, progresoRutinaId: String, rutinaNombre: String?, esCustom: Boolean?) {
+        val uid = firebaseAuth.currentUser?.uid
+        val currentPlan = _planSemanal.value
+        if (uid == null || currentPlan == null) {
+            Log.e(TAG, "No se puede marcar como completado: usuario o plan no disponible.")
+            _planSemanalErrorMessage.value = "No se puede marcar como completado: información faltante."
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoadingPlanSemanal.value = true // Indicar que estamos modificando el plan
+            try {
+                val calendarCompletado = Calendar.getInstance()
+                calendarCompletado.time = fechaDiaCompletado.toDate()
+                calendarCompletado.set(Calendar.HOUR_OF_DAY, 0)
+                calendarCompletado.set(Calendar.MINUTE, 0)
+                calendarCompletado.set(Calendar.SECOND, 0)
+                calendarCompletado.set(Calendar.MILLISECOND, 0)
+                val completadoTimestampNormalized = Timestamp(calendarCompletado.time)
+
+
+                // CORRECCIÓN: Usar 'diasPlanificados'
+                val updatedDiasPlanificados = currentPlan.diasPlanificados.map { dia ->
+                    val calPlan = Calendar.getInstance()
+                    calPlan.time = dia.fecha.toDate()
+                    calPlan.set(Calendar.HOUR_OF_DAY, 0)
+                    calPlan.set(Calendar.MINUTE, 0)
+                    calPlan.set(Calendar.SECOND, 0)
+                    calPlan.set(Calendar.MILLISECOND, 0)
+                    val planTimestampNormalized = Timestamp(calPlan.time)
+
+                    if (planTimestampNormalized == completadoTimestampNormalized) {
+                        dia.copy(
+                            completada = true,
+                            progresoRutinaIdCompletada = progresoRutinaId,
+                            // Si la rutina se seleccionó al momento de completar y no estaba preasignada,
+                            // actualizamos también la información de la rutina asignada.
+                            rutinaIdAsignada = dia.rutinaIdAsignada ?: progresoRutinaId, // Asumimos que progresoRutinaId es el ID de la Rutina o UserCustomRoutine
+                            nombreRutinaAsignada = rutinaNombre ?: dia.nombreRutinaAsignada,
+                            esRutinaPersonalizada = esCustom ?: dia.esRutinaPersonalizada,
+                            tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name // Marcar como entrenamiento si se completó una rutina
+                        )
+                    } else {
+                        dia
+                    }
+                }
+
+                // CORRECCIÓN: Usar 'diasPlanificados'
+                val updatedPlan = currentPlan.copy(diasPlanificados = updatedDiasPlanificados.toMutableList()) // Asumiendo que PlanSemanalUsuario.diasPlanificados es MutableList
+
+                firestore.collection("users").document(uid)
+                    .collection("planesSemanales").document(currentPlan.id)
+                    .set(updatedPlan)
+                    .await()
+
+                _planSemanal.value = updatedPlan
+                determinarRutinaDeHoy()
+
+                // Actualizar ResumenSemanal ya que esta acción impacta las métricas
+                loadHomeScreenData()
+                _planSemanalErrorMessage.value = null
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al marcar día como completado", e)
+                _planSemanalErrorMessage.value = "Error al marcar completado: ${e.localizedMessage ?: e.message}"
+            } finally {
+                _isLoadingPlanSemanal.value = false
+            }
+        }
     }
     private fun populateEditableFields(userProfile: UserProfile?) {
         userProfile?.let {
@@ -267,58 +651,105 @@ class UserProfileViewModel(
     // --- Carga de Datos para HomeScreen ---
     fun loadHomeScreenData() {
         val uid = firebaseAuth.currentUser?.uid
+        val currentUserProfile = _user.value // Obtener el perfil actual
+
         if (uid == null) {
-            _homeScreenErrorMessage.value = "Usuario no autenticado."
+            _homeScreenErrorMessage.value = "Usuario no autenticado para datos del home."
             _isLoadingHomeScreenData.value = false
             _lastActivity.value = LastActivityItem.None
             _homeScreenSummary.value = null
             return
         }
 
+        // Si el perfil aún no está cargado, es posible que loadUserProfile aún no haya terminado
+        // o falló. En un escenario ideal, esta función se llamaría solo después de una carga exitosa del perfil.
+        // Por ahora, si no está, mostraremos un mensaje y no procederemos con todos los cálculos.
+        if (currentUserProfile == null) {
+            _homeScreenErrorMessage.value = "Perfil de usuario no disponible para calcular resumen semanal."
+            _isLoadingHomeScreenData.value = true // Aún intentando (puede que el perfil cargue pronto)
+            // No reseteamos _lastActivity aquí, podría estar cargando de una llamada anterior
+            // o ya tener un valor. Si quieres un reset más agresivo:
+            // _lastActivity.value = LastActivityItem.Loading
+            // _homeScreenSummary.value = null
+            // Considera no continuar si el perfil es esencial para TODOS los datos del HomeScreen.
+            // Opcionalmente, podrías intentar cargar solo la última actividad si no depende del perfil.
+            // Para este ejemplo, seremos estrictos: si no hay perfil, no hay resumen nuevo.
+            // La llamada desde loadUserProfile() debería mitigar esto.
+            // Si init llama a loadHomeScreenData antes que loadUserProfile termine, _user.value será null.
+            // Por eso la llamada en loadUserProfile es importante.
+
+            // Si llegamos aquí DESPUÉS de que loadUserProfile falló, _isLoadingUser será false.
+            // Si loadUserProfile está en progreso, _isLoadingUser será true.
+            // Si queremos ser menos estrictos y cargar lo que se pueda:
+            // viewModelScope.launch { loadLastActivityOnly(uid) } // Función hipotética
+            return // Salir si no hay perfil para el resumen
+        }
+
         _isLoadingHomeScreenData.value = true
         _homeScreenErrorMessage.value = null
-        _lastActivity.value = LastActivityItem.Loading // Mostrar estado de carga para última actividad
+        _lastActivity.value = LastActivityItem.Loading
 
         viewModelScope.launch {
             try {
-                // Usar coroutineScope para lanzar tareas paralelas y esperar a que todas terminen
-                // Esto puede hacer la carga un poco más rápida si las latencias de red lo permiten.
                 coroutineScope {
                     // 1. Cargar Resumen Semanal de Rutinas (tarea asíncrona)
                     val resumenAsync = async {
                         val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, -7)
-                        val unaSemanaAtrasTimestamp = Timestamp(calendar.time)
+                        // Establecer la hora a medianoche para el inicio del día
+                        calendar.set(Calendar.HOUR_OF_DAY, 0)
+                        calendar.set(Calendar.MINUTE, 0)
+                        calendar.set(Calendar.SECOND, 0)
+                        calendar.set(Calendar.MILLISECOND, 0)
+                        // Retroceder 6 días para obtener los últimos 7 días incluyendo hoy
+                        calendar.add(Calendar.DAY_OF_YEAR, -6)
+                        val inicioSemanaTimestamp = Timestamp(calendar.time)
 
+                        // Query a la subcolección "progresoRutinas"
+                        // No es necesario .whereEqualTo("userId", uid) si las reglas de seguridad
+                        // ya garantizan el acceso solo a los datos del usuario autenticado
+                        // y si "progresoRutinas" está anidada bajo el documento del usuario.
+                        // Si "progresoRutinas" es una colección raíz y tiene un campo "userId", entonces sí es necesario.
+                        // Asumiremos que está anidada y `ProgresoRutina` NO tiene un campo `userId` redundante.
                         val rutinasQuerySnapshot = firestore.collection("users").document(uid)
-                            .collection("progresoRutinas") // APUNTA A SUBCOLECCIÓN
-                            // El filtro .whereEqualTo("userId", uid) es redundante si la regla de seguridad ya lo cubre por ruta,
-                            // pero se mantiene si tu modelo ProgresoRutina tiene un campo 'userId'.
-                            // Si ProgresoRutina NO tiene 'userId', elimina la siguiente línea:
-                            .whereEqualTo("userId", uid)
-                            .whereGreaterThanOrEqualTo("fecha", unaSemanaAtrasTimestamp)
-                            .orderBy("fecha", Query.Direction.DESCENDING)
+                            .collection("progresoRutinas")
+                            .whereGreaterThanOrEqualTo("fecha", inicioSemanaTimestamp)
+                            // Ordenar por fecha es útil, pero no estrictamente necesario para los cálculos aquí
+                            // .orderBy("fecha", Query.Direction.DESCENDING)
                             .get()
                             .await()
 
-                        // Asegúrate de que ProgresoRutina tiene el campo `userId` si lo usas en la query
-                        // o si filtras por él aquí abajo.
                         val rutinasSemanales = rutinasQuerySnapshot.toObjects(ProgresoRutina::class.java)
                         val tiempoTotalSemanasSegundos = rutinasSemanales.sumOf { it.tiempoTotalSesionSegundos }
 
+                        // Calcular días activos distintos en la semana
+                        val diasActivos = rutinasSemanales
+                            .mapNotNull { progreso ->
+                                // Normalizar la fecha a solo día/mes/año para contar días únicos
+                                val cal = Calendar.getInstance()
+                                cal.time = progreso.fecha.toDate() // fecha es Timestamp
+                                // Crear una clave única para cada día
+                                cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
+                            }
+                            .distinct()
+                            .count()
+
                         ResumenSemanal(
-                            rutinasCompletadas = rutinasSemanales.size,
-                            tiempoTotalEntrenadoSegundos = tiempoTotalSemanasSegundos
+                            rutinasCompletadasEstaSemana = rutinasSemanales.size,
+                            tiempoTotalEntrenadoSegundosEstaSemana = tiempoTotalSemanasSegundos,
+                            frecuenciaSemanalObjetivo = currentUserProfile.frecuenciaSemanal,
+                            diasActivosEstaSemana = diasActivos,
+                            // Mantener los otros campos como estaban o decidir cómo poblarlos
+                            objetivosCompletados = _homeScreenSummary.value?.objetivosCompletados ?: emptyList(), // Mantener si ya existía
+                            insigniasObtenidas = _homeScreenSummary.value?.insigniasObtenidas ?: emptyList(),
+                            progresoActual = currentUserProfile.progresoActual // Tomar del perfil
                         )
                     }
 
                     // 2. Cargar Última Rutina (tarea asíncrona)
                     val ultimaRutinaAsync = async {
                         val ultimaRutinaQuery = firestore.collection("users").document(uid)
-                            .collection("progresoRutinas") // APUNTA A SUBCOLECCIÓN
-                            // Similar al comentario anterior sobre .whereEqualTo("userId", uid)
-                            // Si ProgresoRutina NO tiene 'userId', elimina la siguiente línea:
-                            .whereEqualTo("userId", uid)
+                            .collection("progresoRutinas")
+                            // .whereEqualTo("userId", uid) // Ver comentario anterior
                             .orderBy("fecha", Query.Direction.DESCENDING)
                             .limit(1)
                             .get()
@@ -328,14 +759,11 @@ class UserProfileViewModel(
 
                     // 3. Cargar Última Actividad Libre (tarea asíncrona)
                     val ultimaActividadLibreAsync = async {
-                        // *** IMPORTANTE: AJUSTA "activities" SI TU SUBCOLECCIÓN SE LLAMA "userActivities" ***
+                        val coleccionActividades = "activities" // O "userActivities", según tu estructura
                         val ultimaActividadLibreQuery = firestore.collection("users").document(uid)
-                            .collection("activities") // APUNTA A SUBCOLECCIÓN (ajusta si es "userActivities")
-                            // Similar al comentario anterior sobre .whereEqualTo("userId", uid)
-                            // Si UserActivity NO tiene 'userId', elimina la siguiente línea:
-                            //.whereEqualTo("userId", uid)
-                            // 'timestamp' es Date en UserActivity, pero Firestore lo maneja como Timestamp para la query
-                            .orderBy("timestamp", Query.Direction.DESCENDING)
+                            .collection(coleccionActividades)
+                            // .whereEqualTo("userId", uid) // Ver comentario anterior
+                            .orderBy("timestamp", Query.Direction.DESCENDING) // Asumiendo que UserActivity.timestamp es el campo de fecha
                             .limit(1)
                             .get()
                             .await()
@@ -343,14 +771,14 @@ class UserProfileViewModel(
                     }
 
                     // Esperar resultados de todas las tareas asíncronas
-                    val resumenSemanal = resumenAsync.await()
+                    val resumenSemanalCalculado = resumenAsync.await()
                     val ultimaRutina = ultimaRutinaAsync.await()
                     val ultimaActividadLibre = ultimaActividadLibreAsync.await()
 
                     // Actualizar los StateFlows con los resultados
-                    _homeScreenSummary.value = resumenSemanal
+                    _homeScreenSummary.value = resumenSemanalCalculado
 
-                    // Determinar cuál es la más reciente
+                    // Determinar cuál es la más reciente (lógica existente)
                     when {
                         ultimaRutina == null && ultimaActividadLibre == null -> {
                             _lastActivity.value = LastActivityItem.None
@@ -361,33 +789,23 @@ class UserProfileViewModel(
                         ultimaRutina == null && ultimaActividadLibre != null -> {
                             _lastActivity.value = LastActivityItem.FreeActivity(ultimaActividadLibre)
                         }
-                        // Ambos no son null, necesitamos comparar fechas
                         ultimaRutina != null && ultimaActividadLibre != null -> {
-                            // ultimaRutina.fecha es com.google.firebase.Timestamp
-                            // ultimaActividadLibre.timestamp es java.util.Date?
-
                             val actividadLibreTimestamp = ultimaActividadLibre.timestamp?.let { Timestamp(it) }
-
-                            if (actividadLibreTimestamp == null) {
-                                // Si la actividad libre no tiene fecha (o es null), la rutina es la más reciente
+                            if (actividadLibreTimestamp == null || ultimaRutina.fecha > actividadLibreTimestamp) {
                                 _lastActivity.value = LastActivityItem.Routine(ultimaRutina)
                             } else {
-                                // Ambas tienen fechas válidas para comparar
-                                if (ultimaRutina.fecha > actividadLibreTimestamp) {
-                                    _lastActivity.value = LastActivityItem.Routine(ultimaRutina)
-                                } else {
-                                    _lastActivity.value = LastActivityItem.FreeActivity(ultimaActividadLibre)
-                                }
+                                _lastActivity.value = LastActivityItem.FreeActivity(ultimaActividadLibre)
                             }
                         }
                     }
-                    _homeScreenErrorMessage.value = null // Limpiar error si todo fue exitoso
+                    _homeScreenErrorMessage.value = null
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error al cargar datos del home screen", e)
                 _homeScreenErrorMessage.value = "Error al cargar datos: ${e.localizedMessage}"
-                _lastActivity.value = LastActivityItem.None // Resetear a un estado no-cargando/error
-                _homeScreenSummary.value = null // Limpiar resumen en caso de error
+                // No necesariamente reseteamos el resumen aquí, podría mostrar el último válido
+                // _homeScreenSummary.value = null
+                _lastActivity.value = LastActivityItem.None // Indicar error o no actividad
             } finally {
                 _isLoadingHomeScreenData.value = false
             }

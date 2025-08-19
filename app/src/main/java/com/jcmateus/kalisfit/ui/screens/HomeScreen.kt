@@ -1,6 +1,7 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 //import android.icu.util.TimeUnit
@@ -13,13 +14,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
@@ -32,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.jcmateus.kalisfit.model.DiaDeEntrenamientoPlanificado
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.Rutina
 import com.jcmateus.kalisfit.model.UserActivity
@@ -68,22 +78,26 @@ fun HomeScreen(
     val user by userViewModel.user.collectAsState()
     val isLoadingUser by userViewModel.isLoadingUser.collectAsState()
     val userErrorMessage by userViewModel.userErrorMessage.collectAsState()
-
+    //
     val homeScreenSummary by userViewModel.homeScreenSummary.collectAsState()
     val lastActivity by userViewModel.lastActivity.collectAsState()
     val isLoadingHomeScreenData by userViewModel.isLoadingHomeScreenData.collectAsState()
     val homeScreenError by userViewModel.homeScreenErrorMessage.collectAsState()
-
+    // --- RUTINAS RECOMENDADAS ---
     val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState()
     val isLoadingRoutines by userViewModel.isLoadingRoutines.collectAsState()
     val routinesError by userViewModel.routinesErrorMessage.collectAsState()
-
     // --- Nuevos estados para Rutinas Personalizadas ---
     val userCustomRoutines by userViewModel.userCustomRoutines.collectAsState()
     val isLoadingUserCustomRoutines by userViewModel.isLoadingUserCustomRoutines.collectAsState()
     val userCustomRoutinesError by userViewModel.userCustomRoutinesError.collectAsState()
     // --- Fin nuevos estados ---
-
+    // --- Estados para el Plan Semanal y Rutina de Hoy ---
+    val planSemanal by userViewModel.planSemanal.collectAsState() // No lo usaremos directamente en UI aquí, pero es bueno tenerlo
+    val rutinaDeHoy by userViewModel.rutinaDeHoy.collectAsState()
+    val isLoadingPlanSemanal by userViewModel.isLoadingPlanSemanal.collectAsState()
+    val planSemanalError by userViewModel.planSemanalErrorMessage.collectAsState()
+    // --- Fin nuevos estados ---
     val tipsGenerales = remember {
         listOf(
             "Mantén una buena postura durante los ejercicios.",
@@ -98,7 +112,6 @@ fun HomeScreen(
             "¡Disfruta el proceso! Encuentra actividades que te gusten."
         )
     }
-
     val tipDelDia = remember(tipsGenerales, user?.uid) {
         if (tipsGenerales.isNotEmpty()) {
             val seed = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)) + (user?.uid?.hashCode()?.toLong() ?: 0L)
@@ -107,27 +120,29 @@ fun HomeScreen(
             "¡Recuerda mantenerte activo hoy!"
         }
     }
-
     // Pull to refresh state
-    // *** ACTUALIZADO isRefreshing ***
-    val isRefreshing = isLoadingUser || isLoadingHomeScreenData || isLoadingRoutines || isLoadingUserCustomRoutines
+    val isRefreshingOverall = isLoadingUser || isLoadingHomeScreenData || isLoadingRoutines || isLoadingUserCustomRoutines || isLoadingPlanSemanal
     val pullToRefreshState = rememberPullToRefreshState()
-
+    // Función para recargar todos los datos
+    val refreshAllData = {
+        if (!isRefreshingOverall) { // Solo recargar si no hay una carga en curso
+            userViewModel.loadUserProfile() // Esta función debería recargar todo
+        }
+    }
     if (pullToRefreshState.isRefreshing) {
         LaunchedEffect(true) {
-            userViewModel.loadUserProfile() // Carga perfil, luego recomendaciones
-            userViewModel.refreshHomeScreenData() // Carga resumen, última actividad y rutinas personalizadas
-            // No es necesario llamar a refreshUserCustomRoutines directamente si refreshHomeScreenData ya lo hace
+            // loadUserProfile() se encarga de recargar perfil, homeScreenData, recomendaciones, rutinas custom Y EL PLAN SEMANAL
+            userViewModel.loadUserProfile()
+            // No es necesario llamar a userViewModel.loadPlanSemanalActual() aquí directamente
+            // si loadUserProfile() ya lo gestiona.
         }
     }
     // Observa los estados de carga para finalizar el refresh
-    // *** ACTUALIZADO LaunchedEffect para endRefresh ***
-    LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines, isLoadingUserCustomRoutines) {
-        if (!isLoadingUser && !isLoadingHomeScreenData && !isLoadingRoutines && !isLoadingUserCustomRoutines) {
+    LaunchedEffect(isLoadingUser, isLoadingHomeScreenData, isLoadingRoutines, isLoadingUserCustomRoutines, isLoadingPlanSemanal) { // <--- AÑADIDO isLoadingPlanSemanal
+        if (!isLoadingUser && !isLoadingHomeScreenData && !isLoadingRoutines && !isLoadingUserCustomRoutines && !isLoadingPlanSemanal) { // <--- AÑADIDO !isLoadingPlanSemanal
             pullToRefreshState.endRefresh()
         }
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -159,13 +174,50 @@ fun HomeScreen(
                         HeaderCard(
                             user = currentUser,
                             tipDelDia = tipDelDia,
+                            onRefreshClick = refreshAllData,
                             modifier = Modifier
                                 .animateItemPlacement(tween(durationMillis = 500))
                                 .background(MaterialTheme.colorScheme.background)
                                 .padding(bottom = 8.dp)
                         )
                     }
-
+                    // --- SECCIÓN RUTINA DE HOY --- // *** NUEVA SECCIÓN ***
+                    item(key = "todays_routine") {
+                        Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
+                            SectionTitle1(
+                                title = "🗓️ Tu Plan para Hoy",
+                                actionText = "Ver Plan Completo", // Texto para el botón/acción
+                                onActionClick = {
+                                    mainNavController.navigate(Routes.WEEKLY_PLAN_SCREEN) // Navega a la pantalla del plan semanal
+                                }
+                            )
+                            when {
+                                isLoadingPlanSemanal && rutinaDeHoy == null -> LoadingCard(text = "Cargando plan de hoy...")
+                                planSemanalError != null && rutinaDeHoy == null -> ErrorCard(
+                                    message = planSemanalError ?: "Error al cargar tu plan.",
+                                    onRetry = { userViewModel.loadPlanSemanalActual() }
+                                )
+                                rutinaDeHoy != null -> {
+                                    val diaPlanificado = rutinaDeHoy!!
+                                    TodaysRoutineCard(
+                                        diaPlanificado = diaPlanificado,
+                                        navController = mainNavController, // mainNavController ya se pasa
+                                        onStartRoutine = { rutinaId, esCustom ->
+                                            // Lógica existente para iniciar la rutina
+                                            if (esCustom) {
+                                                // Asume que si es custom, rutinaId es el ID de UserCustomRoutine
+                                                mainNavController.navigate(Routes.startRoutineExecution(customRoutineId = rutinaId))
+                                            } else {
+                                                // Asume que si no es custom, rutinaId es el slug/ID de Rutina
+                                                mainNavController.navigate(Routes.startRoutineExecution(routineId = rutinaId))
+                                            }
+                                        }
+                                    )
+                                }
+                                else -> NoDataCard(message = "No hay nada planificado para hoy o aún no se ha cargado tu plan.")
+                            }
+                        }
+                    }
                     item(key = "summary") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
                             SectionTitle1("📈 Tu Semana")
@@ -180,7 +232,6 @@ fun HomeScreen(
                             }
                         }
                     }
-
                     item(key = "last_activity") {
                         Column(modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))) {
                             SectionTitle1("⏱️ Última Actividad")
@@ -314,6 +365,150 @@ fun HomeScreen(
         )
     }
 }
+// --- NUEVO COMPOSABLE PARA LA RUTINA DE HOY ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TodaysRoutineCard(
+    diaPlanificado: DiaDeEntrenamientoPlanificado,
+    navController: NavHostController,
+    onStartRoutine: (rutinaId: String, esCustom: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+    // Opcional: podrías pasar el objeto UserCustomRoutine o Rutina si lo tienes
+    // userCustomRoutine: UserCustomRoutine? = null,
+    // recommendedRoutine: Rutina? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && diaPlanificado.tipoRutina != "DESCANSO" && !diaPlanificado.completada) 0.98f else 1f,
+        label = "todaysRoutineScaleAnimation"
+    )
+    val cardColors = when {
+        diaPlanificado.completada -> CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+        )
+        diaPlanificado.tipoRutina == "DESCANSO" -> CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+        )
+        else -> CardDefaults.cardColors( // Rutina pendiente
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    }
+
+    Card(
+        onClick = {
+            if (diaPlanificado.tipoRutina != "DESCANSO" && !diaPlanificado.completada && !diaPlanificado.rutinaIdAsignada.isNullOrBlank()) {
+                // *** IMPORTANTE: Determinar correctamente si es custom y el ID a usar ***
+                // Necesitas que DiaDeEntrenamientoPlanificado tenga un campo como `esRutinaPersonalizada: Boolean`
+                // o `tipoFuenteRutina: String` (ej: "GENERAL", "CUSTOM").
+                // Supongamos que tienes `diaPlanificado.esRutinaPersonalizada: Boolean`.
+
+                // Si diaPlanificado.rutinaIdAsignada siempre es el ID correcto (ya sea de Rutina o UserCustomRoutine)
+                // y DiaDeEntrenamientoPlanificado tiene un booleano `esRutinaPersonalizada`
+                val esCustom = diaPlanificado.esRutinaPersonalizada // EJEMPLO: Asegúrate de que este campo exista y esté poblado
+                onStartRoutine(diaPlanificado.rutinaIdAsignada!!, esCustom == true)
+
+            } else if (diaPlanificado.tipoRutina != "DESCANSO" && diaPlanificado.rutinaIdAsignada.isNullOrBlank() && !diaPlanificado.completada) {
+                // No hay rutina asignada, y no es día de descanso/completado.
+                // Opción 1: Navegar al explorador general
+                // navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN)
+
+                // Opción 2: Navegar a RoutineSelectionScreen para HOY
+                // Esto requiere que sepas la fecha del 'diaPlanificado'. Si DiaDeEntrenamientoPlanificado tiene
+                // un campo 'fechaMillis: Long', puedes usarlo.
+                // Si no, y "rutinaDeHoy" siempre es para el día actual, puedes calcularlo.
+                val hoyEnMillis = System.currentTimeMillis() // O la fecha específica del 'diaPlanificado'
+                navController.navigate(Routes.selectRoutineForDate(hoyEnMillis))
+
+            }
+        },
+        interactionSource = interactionSource,
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(16.dp),
+        colors = cardColors,
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icono representativo
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (diaPlanificado.completada) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        else if (diaPlanificado.tipoRutina == "DESCANSO") MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.secondary
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when {
+                        diaPlanificado.completada -> Icons.Filled.CheckCircle
+                        diaPlanificado.tipoRutina == "DESCANSO" -> Icons.Filled.SelfImprovement // Icono para descanso
+                        !diaPlanificado.rutinaIdAsignada.isNullOrBlank() -> Icons.Filled.FitnessCenter
+                        else -> Icons.Filled.PlaylistAdd // Icono para añadir rutina
+                    },
+                    contentDescription = "Estado del día",
+                    tint = if (diaPlanificado.completada || diaPlanificado.tipoRutina != "DESCANSO") MaterialTheme.colorScheme.onPrimary // O color apropiado
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                val title = when {
+                    diaPlanificado.completada && !diaPlanificado.nombreRutinaAsignada.isNullOrBlank() -> "¡Completado: ${diaPlanificado.nombreRutinaAsignada}!"
+                    diaPlanificado.completada -> "¡Día Completado!"
+                    diaPlanificado.tipoRutina == "DESCANSO" -> "Día de Descanso"
+                    !diaPlanificado.nombreRutinaAsignada.isNullOrBlank() -> diaPlanificado.nombreRutinaAsignada!!
+                    !diaPlanificado.rutinaIdAsignada.isNullOrBlank() -> "Rutina Asignada" // Placeholder si no hay nombre
+                    else -> "Elige tu entrenamiento"
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                val subtitle = when {
+                    diaPlanificado.completada -> "¡Buen trabajo! Sigue así."
+                    diaPlanificado.tipoRutina == "DESCANSO" -> "Recupérate y prepárate para mañana."
+                    !diaPlanificado.rutinaIdAsignada.isNullOrBlank() -> "Toca entrenar. ¡Vamos!"
+                    else -> "Selecciona una rutina para hoy."
+                }
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Flecha o botón de acción
+            if (diaPlanificado.tipoRutina != "DESCANSO" && !diaPlanificado.completada) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = if (!diaPlanificado.rutinaIdAsignada.isNullOrBlank()) "Comenzar rutina" else "Elegir rutina",
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+}
 // --- NUEVO COMPOSABLE PARA UserCustomRoutine ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -406,7 +601,7 @@ fun UserCustomRoutineCard(
     }
 }
 @Composable
-fun HeaderCard(user: UserProfile, tipDelDia: String, modifier: Modifier = Modifier) {
+fun HeaderCard(user: UserProfile, tipDelDia: String, onRefreshClick: () -> Unit, modifier: Modifier = Modifier) {
     // La card ya tiene su propio color, así que no se transparentará.
     // El 'modifier' que le pasamos desde el stickyHeader se encargará del fondo.
     Card(
@@ -422,15 +617,27 @@ fun HeaderCard(user: UserProfile, tipDelDia: String, modifier: Modifier = Modifi
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // Saludo principal
-            Text(
-                text = "Hola, ${user.nombre.takeIf { it.isNotBlank() } ?: "Usuario"} 👋",
-                style = MaterialTheme.typography.headlineSmall, // Ajustamos un poco el tamaño
-                fontWeight = FontWeight.Bold
-            )
-
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween // Para separar el título del icono
+            ){
+                // Saludo principal
+                Text(
+                    text = "Hola, ${user.nombre.takeIf { it.isNotBlank() } ?: "Usuario"} 👋",
+                    style = MaterialTheme.typography.headlineSmall, // Ajustamos un poco el tamaño
+                    fontWeight = FontWeight.Bold
+                )
+                // Icono de Recarga
+                IconButton(onClick = onRefreshClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = "Recargar datos",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
-
             // Separador con el Tip del Día
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -594,50 +801,126 @@ fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
         )
     }
 }
+
 @Composable
 fun WeeklySummaryCard(summary: ResumenSemanal) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally // Centrar el contenido de la columna
         ) {
-            SummaryItem(
-                value = summary.rutinasCompletadas.toString(),
-                label = "Rutinas"
-            )
-            Divider(
-                modifier = Modifier
-                    .height(50.dp)
-                    .width(1.dp),
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-            )
-            SummaryItem(
-                value = formatDuration(summary.tiempoTotalEntrenadoSegundos),
-                label = "Tiempo Total"
-            )
-            // Puedes añadir más items aquí si ResumenSemanal tiene más campos
+            // Fila superior con Rutinas, Días Activos y Tiempo Total
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround, // O SpaceEvenly
+                verticalAlignment = Alignment.Top // Alinear al top para mejor visualización de items con diferente altura
+            ) {
+                SummaryItem(
+                    value = "${summary.rutinasCompletadasEstaSemana}/${summary.frecuenciaSemanalObjetivo}",
+                    label = "Rutinas Sem.", // Etiqueta más corta
+                    modifier = Modifier.weight(1f) // Dar peso para distribución equitativa
+                )
+                VerticalDivider() // Usar un Composable separador
+                SummaryItem(
+                    value = summary.diasActivosEstaSemana.toString(),
+                    label = "Días Activos",
+                    modifier = Modifier.weight(1f)
+                )
+                VerticalDivider()
+                SummaryItem(
+                    value = formatDuration(summary.tiempoTotalEntrenadoSegundosEstaSemana),
+                    label = "Tiempo Total",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Barra de Progreso para Rutinas Completadas vs Objetivo
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Progreso Semanal de Rutinas",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                val progress = if (summary.frecuenciaSemanalObjetivo > 0) {
+                    (summary.rutinasCompletadasEstaSemana.toFloat() / summary.frecuenciaSemanalObjetivo.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f // Evitar división por cero y progreso si el objetivo es 0
+                }
+
+                LinearProgressIndicator(
+                    progress = { progress }, // Para la nueva API de Material 3
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp) // Un poco más gruesa para mejor visibilidad
+                        .clip(RoundedCornerShape(4.dp)), // Bordes redondeados
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${summary.rutinasCompletadasEstaSemana} completadas",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${summary.frecuenciaSemanalObjetivo} objetivo",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Opcional: Mostrar "Progreso Actual" del perfil si es relevante
+            if (summary.progresoActual.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Tu estado: \"${summary.progresoActual}\"",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
 @Composable
-fun SummaryItem(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun SummaryItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier, // Añadir modifier
+    valueStyle: TextStyle = MaterialTheme.typography.headlineMedium, // Hacer el estilo configurable
+    labelStyle: TextStyle = MaterialTheme.typography.bodyMedium // Hacer el estilo configurable
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineMedium,
+            style = valueStyle,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = labelStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -652,8 +935,20 @@ fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostCont
         label = "scaleAnimation"
     )
     Card(
-        onClick = { /* Podrías navegar al detalle del progreso si tienes esa pantalla */
-            // navController.navigate(Routes.progressDetail(progreso.id))
+        onClick = {
+            if (progreso.rutinaIdOriginal.isNotBlank()) {
+                // Usamos progreso.rutinaIdOriginal para navegar al detalle de la rutina base
+                navController.navigate(
+                    Routes.routineDetail(
+                        routineId = progreso.rutinaIdOriginal
+                        // , userId = userId // Descomenta si lo pasas y lo necesitas
+                    )
+                )
+            } else {
+                // Opcional: Log o manejo si rutinaIdOriginal está vacío,
+                // aunque la card probablemente no debería mostrarse si falta este dato crucial.
+                Log.w("LastActivityRoutineCard", "rutinaIdOriginal está vacío para ${progreso.nombreRutina}")
+            }
         },
         interactionSource = interactionSource,
         modifier = Modifier
@@ -701,7 +996,19 @@ fun LastActivityRoutineCard(progreso: ProgresoRutina, navController: NavHostCont
 fun LastActivityFreeCard(activity: UserActivity, navController: NavHostController) {
     Card(
         onClick = { /* Podrías navegar al detalle de la actividad libre */
-            // navController.navigate(Routes.activityDetail(activity.id))
+            // Opción 1: No hacer nada (dejar el lambda vacío o comentar la navegación)
+            // {}
+
+            // Opción 2: Navegar al historial general de actividades
+            navController.navigate(Routes.ACTIVITY_HISTORY_SCREEN)
+
+            // Opción 3 (si en el futuro creas una pantalla de detalle para UserActivity con ID):
+            // if (activity.id.isNotBlank()) { // Asumiendo que UserActivity tiene un 'id'
+            //     navController.navigate(Routes.freeActivityDetail(activity.id))
+            // }
+
+            // Opción 4: Mostrar un diálogo/BottomSheet (requiere más implementación aquí)
+            // showDetailsDialogFor(activity)
         },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -929,5 +1236,15 @@ fun formatDuration(totalSeconds: Int): String {
         minutes > 0 -> String.format("%dm %02ds", minutes, seconds)
         else -> String.format("%ds", seconds)
     }
+}
+// Pequeño Composable para el divisor vertical, si no lo tienes ya
+@Composable
+fun VerticalDivider(modifier: Modifier = Modifier) {
+    Divider(
+        modifier = modifier
+            .height(50.dp) // Ajusta la altura según necesites
+            .width(1.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    )
 }
 
