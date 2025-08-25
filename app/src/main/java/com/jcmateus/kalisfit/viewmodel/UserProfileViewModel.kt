@@ -290,72 +290,90 @@ class UserProfileViewModel(
         loadPlanSemanalActual(forceRegenerate = true)
     }
     private suspend fun generarNuevoPlanSemanal(userId: String, perfil: UserProfile, planSemanalDocId: String) {
-        // ... (El contenido de esta función se mantiene exactamente igual que antes)
-        // Solo asegúrate de que _isLoadingPlanSemanal se maneje correctamente, lo cual
-        // ya debería ser el caso si es llamado desde loadPlanSemanalActual.
-        // Si llamas a generarNuevoPlanSemanal directamente desde otro lugar,
-        // asegúrate de setear _isLoadingPlanSemanal = true al inicio y false en un finally.
-        // En este caso, como lo llama loadPlanSemanalActual, ese manejo ya está hecho.
-
-        // ----- INICIO DE generarNuevoPlanSemanal (sin cambios en su lógica interna) -----
-        // _isLoadingPlanSemanal.value = true; // Ya gestionado por el llamador (loadPlanSemanalActual)
-
         try {
-            val calendar = Calendar.getInstance()
-            // Configurar para el inicio de la semana (Lunes o Domingo según Locale)
-            calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-            // Normalizar a medianoche para consistencia
+            val calendar = Calendar.getInstance() // Obtiene la fecha y hora actual
+
+            // 1. Ajustar 'calendar' para que apunte al LUNES de la semana actual.
+            // Los días de la semana en Calendar van de SUNDAY (1) a SATURDAY (7).
+            // MONDAY es 2.
+            val currentDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+            var daysToSubtract = currentDayOfWeek - Calendar.MONDAY
+            if (daysToSubtract < 0) {
+                // Esto sucede si currentDayOfWeek es SUNDAY (1).
+                // Calendar.MONDAY es 2, entonces 1 - 2 = -1.
+                // Si hoy es Domingo, el Lunes de esta semana (considerando Lun-Dom) fue hace 6 días.
+                daysToSubtract += 7 // Ajusta para retroceder correctamente desde Domingo al Lunes anterior.
+            }
+            calendar.add(Calendar.DAY_OF_MONTH, -daysToSubtract)
+
+            // 2. Normalizar a medianoche para el inicio de la semana (Lunes)
             calendar.set(Calendar.HOUR_OF_DAY, 0)
             calendar.set(Calendar.MINUTE, 0)
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-            val fechaInicioSemana = Timestamp(calendar.time)
+            val fechaInicioSemana = Timestamp(calendar.time) // Este es el LUNES a las 00:00:00.000
 
-            // Avanzar 6 días para el fin de la semana
-            calendar.add(Calendar.DAY_OF_WEEK, 6)
-            // Normalizar a fin del día para consistencia
-            calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 59)
-            calendar.set(Calendar.MILLISECOND, 999)
-            val fechaFinSemana = Timestamp(calendar.time)
+            // 3. Calcular el fin de la semana (Domingo)
+            // Creamos una nueva instancia para no modificar 'calendar' que ya es Lunes
+            val finSemanaCal = Calendar.getInstance()
+            finSemanaCal.time = fechaInicioSemana.toDate() // Empezar desde el Lunes
+            finSemanaCal.add(Calendar.DAY_OF_YEAR, 6)    // Lunes + 6 días = Domingo
+
+            // Normalizar a fin del día para el fin de la semana (Domingo)
+            finSemanaCal.set(Calendar.HOUR_OF_DAY, 23)
+            finSemanaCal.set(Calendar.MINUTE, 59)
+            finSemanaCal.set(Calendar.SECOND, 59)
+            finSemanaCal.set(Calendar.MILLISECOND, 999)
+            val fechaFinSemana = Timestamp(finSemanaCal.time) // Este es el DOMINGO a las 23:59:59.999
 
             val diasPlanificados = mutableListOf<DiaDeEntrenamientoPlanificado>()
             val frecuencia = perfil.frecuenciaSemanal.coerceIn(0, 7)
 
+            // Usamos una copia de 'calendar' (que está en Lunes) para iterar
             val tempCal = Calendar.getInstance()
-            tempCal.time = fechaInicioSemana.toDate() // Empezar desde el inicio de la semana normalizado
+            tempCal.time = fechaInicioSemana.toDate() // Empezar desde el inicio de la semana (Lunes)
 
             var diasEntrenamientoAsignados = 0
-            val diasLaborablesPreferidos = listOf(Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY)
+            // Definir los días laborables según la numeración de Calendar
+            val diasLaborablesPreferidos = listOf(
+                Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY,
+                Calendar.THURSDAY, Calendar.FRIDAY
+            )
 
-            for (i in 0..6) {
+            // Usar un Locale específico (por ejemplo, español) para los nombres de los días si quieres consistencia
+            // o usa Locale.getDefault() si quieres que se adapte al idioma del dispositivo.
+            // Para consistencia en la base de datos, un Locale fijo puede ser mejor.
+            val sdfDia = SimpleDateFormat("EEEE", Locale("es", "ES")) // Ejemplo: Nombres en español
+
+            for (i in 0..6) { // Iterar 7 días (Lunes a Domingo)
                 val diaFecha = Timestamp(tempCal.time)
-                val sdfDia = SimpleDateFormat("EEEE", Locale.getDefault())
-                val nombreDia = sdfDia.format(tempCal.time).uppercase(Locale.getDefault())
+                // Usar el Locale especificado para formatear el nombre del día
+                val nombreDia = sdfDia.format(tempCal.time).replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale("es", "ES")) else it.toString()
+                }.uppercase(Locale("es", "ES")) // Asegurar mayúsculas y capitalización
 
-                // Lógica de asignación mejorada (ejemplo):
-                // Prioriza días laborables, luego fines de semana si es necesario.
                 var esDiaDeEntrenamiento = false
                 if (diasEntrenamientoAsignados < frecuencia) {
+                    // Priorizar días laborables (Mon-Fri)
                     if (diasLaborablesPreferidos.contains(tempCal.get(Calendar.DAY_OF_WEEK))) {
                         esDiaDeEntrenamiento = true
                     }
                 }
-                // Si aún no hemos asignado suficientes y quedan días de la semana (incluyendo fines de semana)
+                // Si aún no hemos asignado suficientes y quedan días (incluyendo fines de semana)
                 if (!esDiaDeEntrenamiento && diasEntrenamientoAsignados < frecuencia) {
-                    esDiaDeEntrenamiento = true // Asigna a cualquier día restante hasta cumplir frecuencia
+                    // Asigna a cualquier día restante hasta cumplir frecuencia
+                    // (Esto podría asignar a Sábado o Domingo si los laborables ya se llenaron
+                    // o si la frecuencia es alta)
+                    esDiaDeEntrenamiento = true
                 }
-
 
                 if (esDiaDeEntrenamiento) {
                     diasPlanificados.add(
                         DiaDeEntrenamientoPlanificado(
                             fecha = diaFecha,
                             diaDeLaSemana = nombreDia,
-                            tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name, // Por defecto entrenamiento
+                            tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name,
                             completada = false
-                            // rutinaIdAsignada, nombreRutinaAsignada, etc., pueden ser null inicialmente
                         )
                     )
                     diasEntrenamientoAsignados++
@@ -365,21 +383,21 @@ class UserProfileViewModel(
                             fecha = diaFecha,
                             diaDeLaSemana = nombreDia,
                             tipoDeDia = TipoDiaEntrenamiento.DESCANSO.name,
-                            completada = false // El descanso también es un estado
+                            completada = false
                         )
                     )
                 }
-                tempCal.add(Calendar.DAY_OF_MONTH, 1)
+                tempCal.add(Calendar.DAY_OF_MONTH, 1) // Avanzar al siguiente día
             }
 
             val nuevoPlan = PlanSemanalUsuario(
                 id = planSemanalDocId,
                 userId = userId,
-                fechaInicioSemana = fechaInicioSemana,
-                fechaFinSemana = fechaFinSemana,
-                diasPlanificados = diasPlanificados.toMutableList(), // Asegúrate de que el modelo use MutableList si es necesario
+                fechaInicioSemana = fechaInicioSemana, // Lunes
+                fechaFinSemana = fechaFinSemana,     // Domingo
+                diasPlanificados = diasPlanificados.toMutableList(),
                 frecuenciaObjetivoOriginal = perfil.frecuenciaSemanal,
-                ultimaActualizacion = Timestamp.now() // Añadir timestamp de creación/actualización
+                ultimaActualizacion = Timestamp.now()
             )
 
             firestore.collection("users").document(userId)
@@ -389,20 +407,15 @@ class UserProfileViewModel(
                 .await()
 
             _planSemanal.value = nuevoPlan
-            determinarRutinaDeHoy()
-            Log.d(TAG, "Nuevo plan semanal generado y guardado para $planSemanalDocId")
+            determinarRutinaDeHoy() // Esto debería seguir funcionando bien
+            Log.d(TAG, "Nuevo plan semanal (Lunes-Domingo) generado y guardado para $planSemanalDocId")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error al generar nuevo plan semanal", e)
             _planSemanalErrorMessage.value = "Error al generar plan: ${e.localizedMessage}"
-            // No reseteamos _planSemanal.value aquí, porque loadPlanSemanalActual lo hará si es necesario
-            // _planSemanal.value = null
-            // _rutinaDeHoy.value = null
-            throw e // Relanzar para que el llamador (loadPlanSemanalActual) lo maneje en su bloque catch
-        } finally {
-            // _isLoadingPlanSemanal.value = false; // Ya gestionado por el llamador
+            throw e // Relanzar para que el llamador (loadPlanSemanalActual) lo maneje
         }
-        // ----- FIN DE generarNuevoPlanSemanal -----
+        // El 'finally' para _isLoadingPlanSemanal está en la función llamadora (loadPlanSemanalActual)
     }
     private fun determinarRutinaDeHoy() {
         val planActual = _planSemanal.value

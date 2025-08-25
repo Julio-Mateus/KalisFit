@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -47,18 +49,15 @@ fun LoginScreen(
     val context = LocalContext.current
     val viewModel = remember { AuthViewModel() }
     val activity = context as? MainActivity
-
     LaunchedEffect(key1 = activity) {
         activity?.askNotificationPermissionInternal()
     }
-
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     val showFields = remember { mutableStateOf(true) }
-
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -83,7 +82,6 @@ fun LoginScreen(
             Toast.makeText(context, "Google Sign In cancelado o falló", Toast.LENGTH_SHORT).show()
         }
     }
-
     if (showSuccessDialog) {
         AlertDialog(
             onDismissRequest = {},
@@ -95,13 +93,11 @@ fun LoginScreen(
                 }
             }
         )
-
         LaunchedEffect(Unit) {
             delay(1500)
             onLoginSuccess()
         }
     }
-
     Box(modifier = Modifier
         .fillMaxSize()
         .background(MaterialTheme.colorScheme.background)) {
@@ -111,7 +107,6 @@ fun LoginScreen(
                     .align(Alignment.Center)
             )
         }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -126,24 +121,22 @@ fun LoginScreen(
                         contentDescription = "Logo",
                         modifier = Modifier.size(180.dp)
                     )
-
                     Text("Iniciar sesión", style = MaterialTheme.typography.displayLarge)
-
                     Spacer(modifier = Modifier.height(24.dp))
-
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email),
+                        singleLine = true,
                         label = { Text("Correo electrónico") },
                         modifier = Modifier.fillMaxWidth()
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
-
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         label = { Text("Contraseña") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -157,9 +150,7 @@ fun LoginScreen(
                             }
                         }
                     )
-
                     Spacer(modifier = Modifier.height(24.dp))
-
                     Button(
                         onClick = {
                             loading = true
@@ -172,6 +163,10 @@ fun LoginScreen(
                                 }
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
                         enabled = !loading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -189,6 +184,11 @@ fun LoginScreen(
                             val client = GoogleSignIn.getClient(context, gso)
                             launcher.launch(client.signInIntent)
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        enabled = !loading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(

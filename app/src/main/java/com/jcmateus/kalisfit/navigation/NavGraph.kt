@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -82,7 +83,6 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             )
         }
     ) {
-
         // --- Rutas de Autenticación y Onboarding ---
         composable(Routes.SPLASH, enterTransition = { null }, exitTransition = { null }) {
             SplashScreen(
@@ -118,7 +118,7 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                         }
                     }
                 },// O popUpTo(Routes.REGISTER) { inclusive = true } si prefieres
-                onNavigateToLogin = { navController.popBackStack(Routes.LOGIN, inclusive = false) }
+                onNavigateToLogin = { navController.navigate(Routes.LOGIN) }
             )
         }
         composable(Routes.FORGOT_PASSWORD) {
@@ -269,15 +269,16 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 viewModel = editRoutineViewModel
             )
         }
-        composable(Routes.ROUTINE_SUCCESS_SCREEN) { // Usando tu nueva constante
+        composable(Routes.ROUTINE_SUCCESS_SCREEN) {
             RoutineSuccessScreen(onFinish = {
-                // Decide a dónde navegar después del éxito de una rutina.
-                // Podría ser a la lista de rutinas, a home, o popBackStack.
-                navController.popBackStack(
-                    Routes.MAIN_CONTENT,
-                    inclusive = false
-                ) // Ejemplo: Volver a main sin incluir la pantalla de éxito
-                // o navController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) { popUpTo(Routes.MAIN_CONTENT) }
+                navController.navigate(Routes.MAIN_CONTENT) {
+                    // Limpia TODO el backstack hasta el inicio del grafo actual
+                    // y asegúrate de que MAIN_CONTENT sea la única instancia.
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = true
+                    }
+                    launchSingleTop = true // Evita múltiples copias de MAIN_CONTENT
+                }
             })
         }
         composable(Routes.MY_CUSTOM_ROUTINES_SCREEN) {
@@ -299,18 +300,11 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
                 isSelectingForRoutine = isSelecting
             )
         }
-        // =======================================================================
-        //          NUEVA RUTA: PLAN SEMANAL
-        // =======================================================================
         composable(Routes.WEEKLY_PLAN_SCREEN) {
             // Asumiendo que WeeklyPlanScreen.kt existe y está importada
             // El UserProfileViewModel se inyectará por defecto o con la factory en WeeklyPlanScreen
             WeeklyPlanScreen(navController = navController)
         }
-
-        // =======================================================================
-        //          NUEVA RUTA: SELECCIÓN DE RUTINA PARA UNA FECHA
-        // =======================================================================
         composable(
             route = Routes.ROUTINE_SELECTION_SCREEN_ROUTE_TEMPLATE, // Usa la plantilla de la ruta
             arguments = listOf(

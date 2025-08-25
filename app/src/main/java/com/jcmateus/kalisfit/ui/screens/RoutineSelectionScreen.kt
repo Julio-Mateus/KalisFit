@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +33,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.jcmateus.kalisfit.model.TipoDiaEntrenamiento
+import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlin.text.take
 
@@ -57,7 +60,6 @@ import kotlin.text.take
 @Composable
 fun RoutineSelectionScreen(
     navController: NavHostController,
-    userViewModel: UserProfileViewModel = viewModel(), // Compartir ViewModel o uno específico
     dateInMillis: Long
 ) {
     val context = LocalContext.current
@@ -68,15 +70,16 @@ fun RoutineSelectionScreen(
             Locale.getDefault()
         )
     }
-
-
     // Obtener rutinas generales y personalizadas del ViewModel
+    // Obtener el NavBackStackEntry de la ruta MAIN_CONTENT.
+    val mainContentEntry = remember(navController.currentBackStackEntry) {
+        navController.getBackStackEntry(Routes.MAIN_CONTENT)
+    }
+    val userViewModel: UserProfileViewModel = viewModel(viewModelStoreOwner = mainContentEntry)
     val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState() // O todas las rutinas
     val userCustomRoutines by userViewModel.userCustomRoutines.collectAsState()
     // Podrías necesitar cargar todas las rutinas si `recommendedRoutines` es limitado
     // LaunchedEffect(Unit) { userViewModel.loadAllRoutinesIfNeeded() }
-
-
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Rutinas Sugeridas", "Mis Rutinas")
 
@@ -88,7 +91,12 @@ fun RoutineSelectionScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             )
         }
     ) { paddingValues ->
@@ -102,7 +110,6 @@ fun RoutineSelectionScreen(
                     )
                 }
             }
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -156,7 +163,6 @@ fun RoutineSelectionScreen(
                         }
                     }
                 }
-
                 // Opción para marcar como día de descanso
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -172,6 +178,10 @@ fun RoutineSelectionScreen(
                             navController.popBackStack()
                             Toast.makeText(context, "Día marcado como descanso", Toast.LENGTH_SHORT).show()
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Marcar como Día de Descanso")

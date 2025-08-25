@@ -30,10 +30,19 @@ android {
                 "proguard-rules.pro"
             )
         }
+        debug {
+            // Por defecto, debuggable es true para el build type 'debug',
+            // lo que hace que BuildConfig.DEBUG también sea true.
+            // Puedes añadir explícitamente si quieres ser muy claro:
+            isDebuggable = true
+            buildConfigField("boolean", "DEBUG", "true")
+            versionNameSuffix = "-debug"   // Opcional: añade un sufijo al nombre de versión para debug
+        }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

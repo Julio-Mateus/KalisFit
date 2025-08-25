@@ -437,6 +437,22 @@ fun KalisDrawerContent(
                 modifier = Modifier
                     .weight(1f) // Darle peso
                     .padding(end = 10.dp) // Espacio a la derecha
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        // Acción de navegación al hacer clic
+                        scope.launch { drawerState.close() } // Cerrar el drawer primero
+                        // Navegar a la pantalla de perfil. Asegúrate de que Routes.PROFILE_SCREEN es correcta.
+                        if (currentMainRoute != Routes.PROFILE_SCREEN) { // Evitar navegar a la misma pantalla
+                            mainNavController.navigate(Routes.PROFILE_SCREEN) {
+                                launchSingleTop = true // Para evitar múltiples instancias de la pantalla de perfil
+                                // Opcional: popUpTo para limpiar el backstack si es necesario
+                                 popUpTo(mainNavController.graph.findStartDestination().id) {
+                                     saveState = true
+                                 }
+                            }
+                        }
+                    }
+                    .padding(8.dp)
             ) {
                 if (userImageUrl.isNotBlank()) {
                     AsyncImage(
@@ -458,7 +474,7 @@ fun KalisDrawerContent(
                         imageVector = Icons.Filled.AccountCircle,
                         contentDescription = stringResource(R.string.desc_profile_picture),
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -491,6 +507,7 @@ fun KalisDrawerContent(
             contentPadding = PaddingValues(vertical = 8.dp) // Padding vertical para los items
         ) {
             // --- Ítems Principales ---
+            /*
             item {
                 DrawerMainItem(
                     icon = Icons.Filled.Person,
@@ -506,6 +523,7 @@ fun KalisDrawerContent(
                     }
                 )
             }
+             */
             item {
                 DrawerMainItem(
                     icon = Icons.Filled.MenuBook,

@@ -36,9 +36,7 @@ fun RutinasBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifi
                 color = Color(0xFF3F51B5)
             )
         }
-
     val barChartData = BarChartData(barras)
-
     BarChart(
         barChartData = barChartData,
         modifier = modifier,
@@ -49,7 +47,6 @@ fun RutinasBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifi
         labelDrawer = SimpleLabelDrawer()
     )
 }
-
 @Composable
 fun TiempoBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifier) {
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())

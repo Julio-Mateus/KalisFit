@@ -3,8 +3,8 @@
     <string name="default_web_client_id">536221531880-5duscsap35v8eon0v4h0il2dqapa1ess.apps.googleusercontent.com</string>
     <!-- Títulos para el TopAppBar basados en la pestaña del BottomNav -->
     <string name="title_home">Inicio</string>
-    <string name="title_calisthenics">Calist.</string>
-    <string name="title_stoicism">Estoi.</string>
+    <string name="title_calisthenics">Calistenia</string>
+    <string name="title_stoicism">Estoicismo</string>
     <string name="title_running">Running</string>
     <!-- Descripciones de contenido y etiquetas para iconos/botones -->
     <string name="desc_edit_profile">Editar Perfil</string>

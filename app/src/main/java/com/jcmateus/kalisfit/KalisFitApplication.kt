@@ -6,11 +6,13 @@ import android.app.NotificationManager
 import android.graphics.Color
 import android.os.Build
 import android.content.Context
+import android.util.Log
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.BuildConfig
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.jcmateus.kalisfit.BuildConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 
@@ -25,27 +27,29 @@ class KalisFitApplication : Application() {
     }
     override fun onCreate() {
         super.onCreate()
+        Log.d("KalisFitApp", "onCreate INICIADO") // Log de inicio de onCreate
 
-        if (BuildConfig.DEBUG) {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+        FirebaseApp.initializeApp(this)
+        Log.d("KalisFitApp", "FirebaseApp inicializado")
+
+        val firebaseAppCheck = FirebaseAppCheck.getInstance()
+        Log.d("KalisFitApp", "FirebaseAppCheck instancia obtenida")
+
+        if (com.jcmateus.kalisfit.BuildConfig.DEBUG) {
+            Log.d("KalisFitApp", "BuildConfig.DEBUG es TRUE. Instalando DebugAppCheckProviderFactory.")
+            firebaseAppCheck.installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
         } else {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+            Log.d("KalisFitApp", "BuildConfig.DEBUG es FALSE. Instalando PlayIntegrityAppCheckProviderFactory.")
+            firebaseAppCheck.installAppCheckProviderFactory(
                 PlayIntegrityAppCheckProviderFactory.getInstance()
             )
         }
-        /*
-        // *** INICIO: CÓDIGO DE FIREBASE APP CHECK ***
-        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+        Log.d("KalisFitApp", "AppCheck provider factory instalado.")
 
-            PlayIntegrityAppCheckProviderFactory.getInstance(), // <--- ¡Aquí está el cambio!
-
-        )
-
-        // *** FIN: CÓDIGO DE FIREBASE APP CHECK ***
-         */
         createNotificationChannels()
+        Log.d("KalisFitApp", "Canales de notificación creados. onCreate FINALIZADO.")
     }
     private fun createNotificationChannels() {
         // La creación de canales solo es necesaria en Android Oreo (API 26) y superior

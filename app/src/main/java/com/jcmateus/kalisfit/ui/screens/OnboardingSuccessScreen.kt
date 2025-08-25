@@ -1,7 +1,6 @@
 package com.jcmateus.kalisfit.ui.screens
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -32,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.scale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,7 +44,6 @@ import com.jcmateus.kalisfit.R
 fun OnboardingSuccessScreen(onContinue: () -> Unit) {
     val scale = remember { Animatable(0.5f) }
     val alpha = remember { Animatable(0f) }
-
     LaunchedEffect(key1 = true) {
         scale.animateTo(
             targetValue = 1f,
@@ -58,7 +54,6 @@ fun OnboardingSuccessScreen(onContinue: () -> Unit) {
             animationSpec = tween(durationMillis = 500, delayMillis = 300)
         )
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -91,7 +86,6 @@ fun OnboardingSuccessScreen(onContinue: () -> Unit) {
                     .size(250.dp) // Ajusta el tamaño según tu animación
                     .padding(bottom = 16.dp)
             )
-
             Text(
                 text = stringResource(R.string.onboarding_success_title), // "¡Todo Listo!"
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
@@ -99,7 +93,6 @@ fun OnboardingSuccessScreen(onContinue: () -> Unit) {
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(
                 text = stringResource(R.string.onboarding_success_message), // "Tu perfil está completo y listo para empezar."
                 style = MaterialTheme.typography.titleMedium,
@@ -107,9 +100,7 @@ fun OnboardingSuccessScreen(onContinue: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 20.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
             Spacer(modifier = Modifier.height(48.dp))
-
             Button(
                 onClick = onContinue,
                 shape = RoundedCornerShape(50), // Botón más redondeado

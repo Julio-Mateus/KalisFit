@@ -278,7 +278,6 @@ fun RoutineScreen(
             // y hay una rutina cargada con un ejercicio actual.
             if (uiState.estado == RoutineExecutionState.EXERCISE_ACTIVE &&
                 uiState.rutina != null && uiState.ejercicioActual != null) {
-
                 val currentEjercicio = uiState.ejercicioActual!! // Sabemos que no es nulo por la condición
                 val repeticionesNumericas = currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
                 val esEjercicioSimplePrincipalmentePorTiempo =
@@ -308,7 +307,6 @@ fun RoutineScreen(
                     // Para un FAB, a menudo se usa un icono, pero el texto también es válido.
                     // Si el buttonText es corto, puede funcionar.
                     // Si es largo, considera un icono + texto o solo un icono con buen contentDescription.
-
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -333,7 +331,7 @@ fun RoutineScreen(
                 }
             }
         },
-        floatingActionButtonPosition = FabPosition.Center
+        //floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
         Surface(
             modifier = Modifier

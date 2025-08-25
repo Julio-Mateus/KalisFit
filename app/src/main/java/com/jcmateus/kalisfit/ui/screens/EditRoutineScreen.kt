@@ -425,6 +425,7 @@ fun EditRoutineContent(
             ) {
                 Text("Ejercicios", style = MaterialTheme.typography.titleLarge)
                 Row { // Para agrupar los botones de añadir
+                    /*
                     Button(
                         onClick = onAddNewBlankExercise,
                         enabled = !isLoadingDuringSave, // isLoadingDuringSave no está disponible aquí directamente, considera pasarlo o inferirlo
@@ -442,7 +443,8 @@ fun EditRoutineContent(
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
+                    */
+                    //Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = { onNavigateToSelectExercise(null) }, // null porque estamos añadiendo uno nuevo, no reemplazando
                         enabled = !isLoadingDuringSave,

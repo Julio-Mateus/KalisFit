@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -156,9 +159,7 @@ fun RegisterScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
-
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
@@ -168,6 +169,7 @@ fun RegisterScreen(
                         label = { Text("Correo electrónico") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email),
                         isError = emailError != null, // Indicar si hay error
                         supportingText = { // Mostrar mensaje de error debajo del campo
                             if (emailError != null) {
@@ -175,29 +177,25 @@ fun RegisterScreen(
                             }
                         }
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
-
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         label = { Text("Contraseña") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             val icon = if (passwordVisible)
                                 Icons.Filled.Visibility
                             else Icons.Filled.VisibilityOff
-
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(imageVector = icon, contentDescription = "Mostrar contraseña")
                             }
                         }
                     )
-
                     Spacer(modifier = Modifier.height(24.dp))
-
                     Button(
                         onClick = {
                             // --- VALIDACIÓN DEL EMAIL AQUÍ ---
@@ -214,7 +212,6 @@ fun RegisterScreen(
                                 Toast.makeText(context, "El nombre no puede estar vacío", Toast.LENGTH_LONG).show()
                                 return@Button
                             }
-
                             loading = true
                             emailError = null // Limpiar error si la validación pasó
                             viewModel.register(email, password, name, "", listOf()) { success, message ->
@@ -226,6 +223,10 @@ fun RegisterScreen(
                                 }
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
                         enabled = !loading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -235,7 +236,6 @@ fun RegisterScreen(
                             Text("Registrarse")
                         }
                     }
-
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
@@ -248,6 +248,10 @@ fun RegisterScreen(
                             val client = GoogleSignIn.getClient(context, gso)
                             launcher.launch(client.signInIntent)
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !loading // Deshabilitar si cualquier operación de carga está en curso
                     ) {

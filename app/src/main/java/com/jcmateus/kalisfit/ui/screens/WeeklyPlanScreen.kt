@@ -64,8 +64,11 @@ import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 @Composable
 fun WeeklyPlanScreen(
     navController: NavHostController,
-    userViewModel: UserProfileViewModel = viewModel()
 ) {
+    val mainContentEntry = remember(navController.currentBackStackEntry) {
+        navController.getBackStackEntry(Routes.MAIN_CONTENT)
+    }
+    val userViewModel: UserProfileViewModel = viewModel(viewModelStoreOwner = mainContentEntry)
     val planSemanal by userViewModel.planSemanal.collectAsState()
     val isLoading by userViewModel.isLoadingPlanSemanal.collectAsState()
     val error by userViewModel.planSemanalErrorMessage.collectAsState()
@@ -178,7 +181,6 @@ fun DayPlanCard(
         }
     )
     val borderColor = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent
-
     Card(
         onClick = onClick,
         modifier = Modifier
