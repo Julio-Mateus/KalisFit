@@ -707,57 +707,67 @@ class UserProfileViewModel(
                 coroutineScope {
                     // 1. Cargar Resumen Semanal de Rutinas (tarea asíncrona)
                     val resumenAsync = async {
-                        val calendar = Calendar.getInstance()
-                        // Establecer la hora a medianoche para el inicio del día
-                        calendar.set(Calendar.HOUR_OF_DAY, 0)
-                        calendar.set(Calendar.MINUTE, 0)
-                        calendar.set(Calendar.SECOND, 0)
-                        calendar.set(Calendar.MILLISECOND, 0)
-                        // Retroceder 6 días para obtener los últimos 7 días incluyendo hoy
-                        calendar.add(Calendar.DAY_OF_YEAR, -6)
-                        val inicioSemanaTimestamp = Timestamp(calendar.time)
+                        // --- INICIO: CÁLCULO DEL INICIO DE LA SEMANA (EJ. LUNES) ---
+                        val calendarInicioSemana = Calendar.getInstance()
+                        // Normalizar a hoy a las 00:00:00
+                        calendarInicioSemana.set(Calendar.HOUR_OF_DAY, 0)
+                        calendarInicioSemana.set(Calendar.MINUTE, 0)
+                        calendarInicioSemana.set(Calendar.SECOND, 0)
+                        calendarInicioSemana.set(Calendar.MILLISECOND, 0)
 
-                        // Query a la subcolección "progresoRutinas"
-                        // No es necesario .whereEqualTo("userId", uid) si las reglas de seguridad
-                        // ya garantizan el acceso solo a los datos del usuario autenticado
-                        // y si "progresoRutinas" está anidada bajo el documento del usuario.
-                        // Si "progresoRutinas" es una colección raíz y tiene un campo "userId", entonces sí es necesario.
-                        // Asumiremos que está anidada y `ProgresoRutina` NO tiene un campo `userId` redundante.
+                        // Ajustar al primer día de la semana (LUNES)
+                        // Calendar.MONDAY es 2. Calendar.SUNDAY es 1.
+                        val primerDiaDeLaSemana = Calendar.MONDAY // Puedes hacerlo configurable si es necesario
+                        var diasARetroceder = calendarInicioSemana.get(Calendar.DAY_OF_WEEK) - primerDiaDeLaSemana
+                        if (diasARetroceder < 0) {
+                            diasARetroceder += 7 // Si hoy es Domingo y la semana empieza Lunes, retrocede 6 días
+                        }
+                        calendarInicioSemana.add(Calendar.DAY_OF_YEAR, -diasARetroceder)
+                        val inicioSemanaRealTimestamp = Timestamp(calendarInicioSemana.time)
+                        // --- FIN: CÁLCULO DEL INICIO DE LA SEMANA ---
+
+                        Log.d(TAG, "Calculando resumen semanal desde: ${inicioSemanaRealTimestamp.toDate()}")
+
                         val rutinasQuerySnapshot = firestore.collection("users").document(uid)
                             .collection("progresoRutinas")
-                            .whereGreaterThanOrEqualTo("fecha", inicioSemanaTimestamp)
-                            // Ordenar por fecha es útil, pero no estrictamente necesario para los cálculos aquí
-                            // .orderBy("fecha", Query.Direction.DESCENDING)
+                            // Usar el inicio de semana real calculado
+                            .whereGreaterThanOrEqualTo("fecha", inicioSemanaRealTimestamp)
                             .get()
                             .await()
 
-                        val rutinasSemanales = rutinasQuerySnapshot.toObjects(ProgresoRutina::class.java)
-                        val tiempoTotalSemanasSegundos = rutinasSemanales.sumOf { it.tiempoTotalSesionSegundos }
+                        val rutinasDeEstaSemana = rutinasQuerySnapshot.toObjects(ProgresoRutina::class.java)
 
-                        // Calcular días activos distintos en la semana
-                        val diasActivos = rutinasSemanales
-                            .mapNotNull { progreso ->
-                                // Normalizar la fecha a solo día/mes/año para contar días únicos
+                        // Filtrar adicionalmente si la consulta pudiera traer datos de la "próxima" semana
+                        // (poco probable con >= inicioSemanaRealTimestamp, pero por seguridad si las fechas son futuras)
+                        // val hoyFinDia = Calendar.getInstance()
+                        // hoyFinDia.set(Calendar.HOUR_OF_DAY, 23)
+                        // hoyFinDia.set(Calendar.MINUTE, 59)
+                        // hoyFinDia.set(Calendar.SECOND, 59)
+                        // val finHoyTimestamp = Timestamp(hoyFinDia.time)
+                        // val rutinasFiltradas = rutinasDeEstaSemana.filter { it.fecha <= finHoyTimestamp }
+                        // Por ahora, asumimos que "progresoRutinas" no tendrá fechas futuras.
+
+                        val tiempoTotalSemanasSegundos = rutinasDeEstaSemana.sumOf { it.tiempoTotalSesionSegundos }
+
+                        val diasActivos = rutinasDeEstaSemana
+                            .map { progreso ->
                                 val cal = Calendar.getInstance()
-                                cal.time = progreso.fecha.toDate() // fecha es Timestamp
-                                // Crear una clave única para cada día
+                                cal.time = progreso.fecha.toDate()
                                 cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
                             }
                             .distinct()
                             .count()
 
                         ResumenSemanal(
-                            rutinasCompletadasEstaSemana = rutinasSemanales.size,
+                            rutinasCompletadasEstaSemana = rutinasDeEstaSemana.size,
                             tiempoTotalEntrenadoSegundosEstaSemana = tiempoTotalSemanasSegundos,
                             frecuenciaSemanalObjetivo = currentUserProfile.frecuenciaSemanal,
                             diasActivosEstaSemana = diasActivos,
-                            // Mantener los otros campos como estaban o decidir cómo poblarlos
-                            objetivosCompletados = _homeScreenSummary.value?.objetivosCompletados ?: emptyList(), // Mantener si ya existía
+                            objetivosCompletados = _homeScreenSummary.value?.objetivosCompletados ?: emptyList(),
                             insigniasObtenidas = _homeScreenSummary.value?.insigniasObtenidas ?: emptyList(),
-                            progresoActual = currentUserProfile.progresoActual // Tomar del perfil
+                            progresoActual = currentUserProfile.progresoActual
                         )
                     }
-
                     // 2. Cargar Última Rutina (tarea asíncrona)
                     val ultimaRutinaAsync = async {
                         val ultimaRutinaQuery = firestore.collection("users").document(uid)

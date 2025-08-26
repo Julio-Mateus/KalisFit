@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.annotation.SuppressLint
 import android.app.Application

@@ -14,9 +14,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-// Asume que tienes estos modelos de datos (pueden ser los mismos que usas en otros sitios)
-// data class Rutina(val id: String = "", val nombre: String = "", /* ...otros campos... */)
-// data class ProgresoRutinaFirestore(/* ...tus campos... */) // La que guardas en Firestore
 
 data class UserProgressUiState(
     val isLoadingRutinas: Boolean = false,

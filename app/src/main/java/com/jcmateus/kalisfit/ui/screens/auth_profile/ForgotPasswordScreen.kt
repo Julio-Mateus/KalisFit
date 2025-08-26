@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.auth_profile
 
 import android.widget.Toast
 import androidx.compose.foundation.background

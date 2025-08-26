@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.historial
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.copy
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -23,6 +24,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,7 +73,6 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.outlined.Checklist
@@ -130,6 +131,12 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.captureComposableAsImage
 import com.jcmateus.kalisfit.model.UserActivity
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.ui.theme.BackgroundLight
+import com.jcmateus.kalisfit.ui.theme.MustardDark
+import com.jcmateus.kalisfit.ui.theme.MustardDeep
+import com.jcmateus.kalisfit.ui.theme.MustardPale
+import com.jcmateus.kalisfit.ui.theme.TextPrimaryLight
+import com.jcmateus.kalisfit.ui.theme.TextSecondaryLight
 import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
 import com.jcmateus.kalisfit.viewmodel.ResumenSemanalConFechas
 import kotlinx.coroutines.delay
@@ -149,7 +156,6 @@ fun formatSecondsToMinutesSeconds(totalSeconds: Int): String {
         String.format("%02d:%02d", minutes, seconds)
     }
 }
-
 fun formatSecondsToHMS(totalSeconds: Long): String {
     if (totalSeconds < 0) return "00:00:00"
     val hours = totalSeconds / 3600
@@ -157,7 +163,6 @@ fun formatSecondsToHMS(totalSeconds: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d:%02d", hours, minutes, seconds)
 }
-
 // --- Funciones para compartir Actividad Libre ---
 fun buildActivityShareText(activity: UserActivity): String {
     val dateString =
@@ -177,7 +182,6 @@ fun buildActivityShareText(activity: UserActivity): String {
         #KalisFit #ActividadFisica #$activityType #Fitness
     """.trimIndent()
 }
-
 @Composable
 fun UserActivityVisualCard(
     activity: UserActivity,
@@ -408,7 +412,6 @@ fun UserActivityVisualCard(
         }
     }
 }
-
 // Actualiza InfoRowVisual para aceptar un color y así asegurar la consistencia del tema
 @Composable
 fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido textColor
@@ -430,7 +433,6 @@ fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido 
     }
     Spacer(modifier = Modifier.height(6.dp)) // Un poco más de espacio
 }
-
 // Formateador de fecha para UserActivity
 @SuppressLint("SimpleDateFormat")
 private val activityDateFormatter = SimpleDateFormat(
@@ -438,7 +440,6 @@ private val activityDateFormatter = SimpleDateFormat(
     Locale.getDefault()
 )
 private val resumenSemanalFechaFormatter = SimpleDateFormat("dd MMM", Locale.getDefault())
-
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -551,7 +552,6 @@ fun HistorialScreen(navController: NavHostController) {
         }
     }
 }
-
 // Composable para el contenido de la pestaña "Rutinas"
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -627,7 +627,6 @@ fun HistorialRutinasContent(
         }
     }
 }
-
 // Composable para la Card de Resumen Semanal (Extraído para claridad)
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -828,9 +827,9 @@ fun ResumenSemanalCard(
                     val mensaje =
                         buildSemanalShareText(resumen) // buildSemanalShareText sigue usando ResumenSemanal
                     val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
+                        action = Intent.ACTION_SEND // CORREGIDO
                         putExtra(Intent.EXTRA_TEXT, mensaje)
-                        type = "text/plain"
+                        type = "text/plain" // CORREGIDO
                     }
                     val shareIntent =
                         Intent.createChooser(sendIntent, "Compartir resumen semanal con...")
@@ -841,46 +840,63 @@ fun ResumenSemanalCard(
                     Text("Texto")
                 }
                 Button(onClick = {
-                    // Pasar el ResumenSemanal interno a ResumenSemanalVisualCard
                     captureComposableAsImage(
-                        context,
-                        {
+                        context = context,
+                        composable = {
                             ResumenSemanalVisualCardModern(
                                 resumen = resumen,
                                 resumenConFechas = resumenConFechas
+                                // Asegúrate que ResumenSemanalVisualCardModern
+                                // define sus colores y fondo de forma absoluta
                             )
-                        }) { file -> // <- Añadido resumenConFechas
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.provider",
-                            file
-                        )
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/png"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        },
+                        onImageReady = { file ->
+                            Log.d("ResumenSemanalCard", "Imagen lista para compartir: ${file.absolutePath}")
+                            try {
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.provider", // Revisa que esta autoridad sea correcta
+                                    file
+                                )
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/png"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    // Opcional: Añadir un pequeño texto junto con la imagen
+                                    // putExtra(Intent.EXTRA_TEXT, "¡Mira mi resumen semanal de KalisFit!")
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(intent, "Compartir imagen del resumen con...")
+                                )
+                            } catch (e: IllegalArgumentException) {
+                                Log.e("ResumenSemanalCard", "Error al obtener URI para el archivo: ${e.message}")
+                                Toast.makeText(context, "Error al compartir: No se pudo acceder al archivo de imagen.", Toast.LENGTH_LONG).show()
+                            } catch (e: Exception) {
+                                Log.e("ResumenSemanalCard", "Error general al intentar compartir la imagen: ${e.message}")
+                                Toast.makeText(context, "Error al compartir la imagen.", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        onError = { exception ->
+                            Log.e("ResumenSemanalCard", "Error al capturar la imagen del resumen: ${exception.message}", exception)
+                            Toast.makeText(context, "Error al generar la imagen: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
+                            // Aquí podrías, por ejemplo, deshabilitar temporalmente el botón o mostrar un feedback más específico.
                         }
-                        context.startActivity(
-                            Intent.createChooser(
-                                intent,
-                                "Compartir imagen del resumen"
-                            )
-                        )
-                    }
+                    )
                 }) {
                     Icon(
                         Icons.Filled.Image,
                         contentDescription = "Compartir como Imagen",
-                        tint = Color.Black
+                        // Si quieres que el icono y texto del botón usen colores del tema, está bien.
+                        // Si quieres forzarlos también, aplica .copy(color = Color.Black) o similar.
+                        tint = Color.Black // Forzando negro para el icono del botón
                     )
                     Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Imagen", color = Color.Black)
+                    Text("Imagen", color = Color.Black) // Forzando negro para el texto del botón
                 }
             }
         }
     }
 }
-
 // Nuevo Composable para las métricas principales
 @Composable
 fun MetricItem(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
@@ -908,68 +924,69 @@ fun MetricItem(icon: ImageVector, label: String, value: String, modifier: Modifi
     }
 }
 @Composable
-fun ResumenSemanalVisualCardModern( // Nuevo nombre para diferenciar
+fun ResumenSemanalVisualCardModern(
     resumen: ResumenSemanal,
     resumenConFechas: ResumenSemanalConFechas? = null
 ) {
-    // --- COLORES MODERNOS ---
-    val backgroundColorStart = Color(0xFFFDFCFB) // Blanco casi puro
-    val backgroundColorEnd = Color(0xFFF5F5F5)   // Gris muy claro
-    val primaryTextColor = Color(0xFF2C2C2E)     // Texto principal oscuro
-    val secondaryTextColor = Color(0xFF6B6B6B)   // Texto secundario más claro
-    val accentColor = Color(0xFFC2850B)           // Tu color de acento principal (dorado/naranja)
-    val iconColor = accentColor // Usar el color de acento para iconos
-
+    // --- PALETA DE COLORES LOCALMENTE DEFINIDA ---
+    val cardBackgroundColorStart = MustardPale
+    val cardBackgroundColorEnd = BackgroundLight
+    val brandAccentColor = MustardDark      // Tu color de marca para valores y acentos
+    val subtleAccentColor = MustardDeep     // Para hashtags
+    // --- COLOR NEGRO ABSOLUTO PARA TEXTOS PROBLEMÁTICOS ---
+    val colorNegroAbsoluto = Color.Black
     val visualCardDateFormat = remember { SimpleDateFormat("dd MMM", Locale.getDefault()) }
 
-    Box( // Usamos un Box para poder poner un gradiente de fondo
+    Box(
         modifier = Modifier
-            .width(400.dp) // Un poco más ancha para más espacio
+            .width(390.dp)
             .wrapContentHeight()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(backgroundColorStart, backgroundColorEnd)
+                    colors = listOf(cardBackgroundColorStart, cardBackgroundColorEnd)
                 )
             )
             .border(
-                1.dp, Color.LightGray.copy(alpha = 0.5f),
+                1.dp,
+                brandAccentColor.copy(alpha = 0.25f),
                 RoundedCornerShape(16.dp)
-            ) // Borde sutil
-            .padding(24.dp) // Más padding
+            )
+            .padding(vertical = 24.dp, horizontal = 20.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.Start // Alineación general a la izquierda para un look más "editorial"
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // --- ENCABEZADO ---
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_logo2), // Asegúrate que el logo tenga fondo transparente o se adapte
+                    painter = painterResource(id = R.drawable.ic_logo2),
                     contentDescription = "Logo KalisFit",
-                    modifier = Modifier
-                        .size(50.dp) // Un poco más pequeño y elegante
-                        .clip(CircleShape) // Si el logo se ve bien circular
+                    modifier = Modifier.size(52.dp).clip(CircleShape)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                     Text(
-                        "RESUMEN SEMANAL", // MAYÚSCULAS para un toque de diseño
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            color = secondaryTextColor,
-                            letterSpacing = 0.1.em
-                        ), // Tracking
-                        fontWeight = FontWeight.Medium
+                        "RESUMEN SEMANAL",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.15.em,
+                            color = brandAccentColor // Título de sección con color de marca
+                        )
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     resumenConFechas?.let {
                         val inicioStr = visualCardDateFormat.format(it.fechaInicioSemana.toDate())
                         val finStr = visualCardDateFormat.format(it.fechaFinSemana.toDate())
                         Text(
                             "Semana ${it.semanaDelAnio}: $inicioStr - $finStr, ${it.anio}",
-                            style = MaterialTheme.typography.titleMedium.copy(color = primaryTextColor),
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = brandAccentColor // << --- FORZADO A NEGRO --- >>
                         )
                     }
                 }
@@ -979,125 +996,144 @@ fun ResumenSemanalVisualCardModern( // Nuevo nombre para diferenciar
             // --- MÉTRICAS PRINCIPALES ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Top
             ) {
                 ModernMetricItem(
-                    icon = Icons.Outlined.FitnessCenter, // Iconos Outlined para un look más ligero
+                    icon = Icons.Outlined.FitnessCenter,
                     value = resumen.rutinas.toString(),
-                    label = "Rutinas Completadas",
-                    iconColor = iconColor,
-                    textColor = primaryTextColor,
-                    accentColor = accentColor
+                    label = "Rutinas",
+                    iconColor = brandAccentColor,
+                    valueColor = brandAccentColor,      // Valor con color de marca
+                    labelColor = brandAccentColor     // << --- ETIQUETA FORZADA A NEGRO --- >>
                 )
                 ModernMetricItem(
-                    icon = Icons.Outlined.Timer, // Iconos Outlined
+                    icon = Icons.Outlined.Timer,
                     value = formatSecondsToHMS(resumen.tiempoTotal.toLong()),
-                    label = "Tiempo Total Activo",
-                    iconColor = iconColor,
-                    textColor = primaryTextColor,
-                    accentColor = accentColor
+                    label = "Tiempo Activo",
+                    iconColor = brandAccentColor,
+                    valueColor = brandAccentColor,      // Valor con color de marca
+                    labelColor = brandAccentColor     // << --- ETIQUETA FORZADA A NEGRO --- >>
                 )
+                if (resumen.totalEjercicios > 0) {
+                    ModernMetricItem(
+                        icon = Icons.Outlined.Checklist,
+                        value = resumen.totalEjercicios.toString(),
+                        label = "Ejercicios",
+                        iconColor = brandAccentColor,
+                        valueColor = brandAccentColor,  // Valor con color de marca
+                        labelColor = brandAccentColor // << --- ETIQUETA FORZADA A NEGRO --- >>
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (resumen.totalEjercicios > 0) {
-                ModernMetricItem( // Usando el mismo estilo para consistencia
-                    icon = Icons.Outlined.Checklist,
-                    value = resumen.totalEjercicios.toString(),
-                    label = "Ejercicios Registrados",
-                    iconColor = iconColor,
-                    textColor = primaryTextColor,
-                    accentColor = accentColor,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp) // Centrado si es único
-                )
-                Spacer(modifier = Modifier.height(28.dp))
-            }
-            // --- ENFOQUE ---
+            Spacer(modifier = Modifier.height(28.dp))
+            // --- ENFOQUE (si existe) ---
             if (resumen.objetivosRecurrentes.isNotEmpty()) {
-                Text(
-                    "🎯 PRINCIPAL ENFOQUE:",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = secondaryTextColor,
-                        letterSpacing = 0.08.em
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(start = 4.dp) // Pequeña indentación
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    resumen.objetivosRecurrentes.take(2)
-                        .joinToString("  •  ") { it.uppercase() }, // Mayúsculas y más espacio
-                    style = MaterialTheme.typography.titleSmall.copy(color = accentColor),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "🎯 FOCO DE LA SEMANA",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            letterSpacing = 0.1.em,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        // Usamos un gris oscuro definido localmente si TextSecondaryLight no funciona
+                        color = Color(0xFF424242) // Gris oscuro para el título de esta sección
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        resumen.objetivosRecurrentes.take(2).joinToString("  •  ") { it.uppercase() },
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = brandAccentColor, // Objetivos con color de marca
+                        textAlign = TextAlign.Center
+                    )
+                }
                 Spacer(modifier = Modifier.height(28.dp))
             }
-
-            // --- MENSAJE FINAL Y PIE DE PÁGINA ---
-            Divider(color = Color.LightGray.copy(alpha = 0.5f), thickness = 1.dp)
+            // --- PIE DE PÁGINA ---
+            Divider(
+                color = brandAccentColor.copy(alpha = 0.2f),
+                thickness = 1.dp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
             Spacer(modifier = Modifier.height(16.dp))
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom // Alinear al fondo
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Generado por KalisFit",
-                    style = MaterialTheme.typography.bodySmall.copy(color = secondaryTextColor),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = Color(0xFF555555) // Gris un poco más oscuro para este texto
                 )
                 Text(
-                    "#KalisFitProgreso", // Hashtag más corto y conciso
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = accentColor,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    "#KalisFit #${resumenConFechas?.anio ?: ""}Progreso",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = subtleAccentColor,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
     }
 }
-
 @Composable
-fun ModernMetricItem( // Composable auxiliar para las nuevas métricas
+fun ModernMetricItem(
     icon: ImageVector,
     value: String,
     label: String,
     iconColor: Color,
-    textColor: Color,
-    accentColor: Color, // Para destacar el valor
+    valueColor: Color, // Se espera brandAccentColor (MustardDark)
+    labelColor: Color, // Se espera Color.Black (NEGRO PURO)
     modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.padding(vertical = 8.dp)
+        modifier = modifier
+            .padding(horizontal = 6.dp)
+            .width(IntrinsicSize.Min)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = iconColor,
-            modifier = Modifier.size(36.dp) // Iconos un poco más pequeños pero claros
-        )
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .background(iconColor.copy(alpha = 0.1f), CircleShape)
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconColor,
+                modifier = Modifier.size(24.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall.copy(color = accentColor), // Valor destacado
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label.uppercase(), // Etiqueta en mayúsculas para un look más pro
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = textColor.copy(alpha = 0.7f),
-                letterSpacing = 0.05.em
+            text = value, // El NÚMERO
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp
             ),
+            color = valueColor, // Color de marca (MustardDark)
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label.uppercase(), // La ETIQUETA
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 0.08.em,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            color = labelColor, // << --- DEBERÍA SER NEGRO PURO --- >>
             textAlign = TextAlign.Center
         )
     }
 }
-
 @Composable
 fun VisualMetricItem( // Composable auxiliar para las métricas visuales
     icon: ImageVector,
@@ -1129,7 +1165,6 @@ fun VisualMetricItem( // Composable auxiliar para las métricas visuales
         )
     }
 }
-
 // Nuevo Composable para las filas de información en el resumen (similar a tu InfoRow pero con estilo de resumen)
 @Composable
 fun InfoRowResumen(label: String, value: String) {
@@ -1291,9 +1326,9 @@ fun ProgresoRutinaCard(
                     onClick = {
                         val mensaje = buildProgresoRutinaShareText(progreso) // Crea esta función
                         val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
+                            action = Intent.ACTION_SEND // CORREGIDO
                             putExtra(Intent.EXTRA_TEXT, mensaje)
-                            type = "text/plain"
+                            type = "text/plain" // CORREGIDO
                         }
                         context.startActivity(
                             Intent.createChooser(
@@ -1313,26 +1348,43 @@ fun ProgresoRutinaCard(
                 }
                 Button(
                     onClick = {
+                        Log.d("ProgresoRutinaCard", "Iniciando captura de imagen para rutina: ${progreso.nombreRutina}")
                         captureComposableAsImage(
-                            context,
-                            { ProgresoRutinaVisualCard(progreso = progreso) }) { file ->
-                            val uri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.provider",
-                                file
-                            )
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "image/png"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            context = context,
+                            composable = {
+                                // Asegúrate de que ProgresoRutinaVisualCard también define
+                                // sus colores y fondo de forma absoluta e independiente del tema.
+                                ProgresoRutinaVisualCard(progreso = progreso)
+                            },
+                            onImageReady = { file ->
+                                Log.d("ProgresoRutinaCard", "Imagen de rutina lista: ${file.absolutePath}")
+                                try {
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.provider", // Revisa tu autoridad
+                                        file
+                                    )
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(intent, "Compartir imagen de rutina con...")
+                                    )
+                                } catch (e: IllegalArgumentException) {
+                                    Log.e("ProgresoRutinaCard", "Error al obtener URI para archivo de rutina: ${e.message}")
+                                    Toast.makeText(context, "Error al compartir: No se pudo acceder al archivo de imagen.", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Log.e("ProgresoRutinaCard", "Error general al compartir imagen de rutina: ${e.message}")
+                                    Toast.makeText(context, "Error al compartir la imagen de rutina.", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            onError = { exception ->
+                                Log.e("ProgresoRutinaCard", "Error al capturar imagen de rutina: ${exception.message}", exception)
+                                Toast.makeText(context, "Error al generar la imagen de rutina: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
-                            context.startActivity(
-                                Intent.createChooser(
-                                    intent,
-                                    "Compartir imagen de rutina"
-                                )
-                            )
-                        }
+                        )
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -1350,7 +1402,6 @@ fun ProgresoRutinaCard(
         }
     }
 }
-
 // Composable auxiliar para las filas de información dentro de ProgresoRutinaCard
 @Composable
 fun InfoRowProgreso(icon: ImageVector, label: String, value: String) {
@@ -1382,32 +1433,30 @@ fun InfoRowProgreso(icon: ImageVector, label: String, value: String) {
         )
     }
 }
-
 @Composable
 fun ProgresoRutinaVisualCard(
     progreso: ProgresoRutina,
-    // Podrías pasar el nombre del usuario si lo tienes
 ) {
     // --- COLORES DEFINIDOS (consistentes con las otras VisualCards) ---
-    val cardBackgroundColor = Color(0xFFFFF0C9)
-    val onCardColor = Color(0xFF1C1C1E)
-    val primaryAppColor = Color(0xFFC2850B)
-    val secondaryColorDetails = Color(0xFF1976D2) // Azul para detalles o iconos secundarios
-    val tertiaryColorHashtag = Color(0xFF388E3C)
+    val cardBackgroundColor = Color(0xFFFFF0C9) // Ejemplo: Amarillo pálido/Mostaza claro
+    val onCardColor = Color(0xFF1C1C1E)      // Ejemplo: Texto principal casi negro
+    val primaryAppColor = Color(0xFFC2850B)    // Ejemplo: Tu mostaza oscuro (para títulos y acentos)
+    val secondaryColorDetails = Color(0xFF6D2816) // Ejemplo: Un gris oscuro para detalles, en lugar de azul si quieres mantener la paleta
+    val tertiaryColorHashtag = Color(0xFF555555) // Ejemplo: Un gris medio para hashtags
+    val brandAccentColor = MustardDark
 
     val visualCardDateFormat = remember { SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()) }
 
     Card(
         modifier = Modifier
             .width(380.dp)
-            .wrapContentHeight()
-            .background(cardBackgroundColor),
+            .wrapContentHeight(), // No necesita .background() aquí si el containerColor de Card lo maneja
         colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(20.dp) // Aumentado el padding general
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -1417,7 +1466,7 @@ fun ProgresoRutinaVisualCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_logo2), // TU LOGO
+                    painter = painterResource(id = R.drawable.ic_logo2),
                     contentDescription = "Logo KalisFit",
                     modifier = Modifier
                         .size(48.dp)
@@ -1425,50 +1474,48 @@ fun ProgresoRutinaVisualCard(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        progreso.nombreRutina, // Nombre de la rutina como título principal
-                        style = MaterialTheme.typography.titleLarge.copy(color = primaryAppColor),
+                        progreso.nombreRutina,
+                        style = MaterialTheme.typography.titleLarge, // El estilo base está bien
+                        color = primaryAppColor, // COLOR ABSOLUTO
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         visualCardDateFormat.format(progreso.fecha.toDate()),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = onCardColor.copy(
-                                alpha = 0.7f
-                            )
-                        )
+                        style = MaterialTheme.typography.bodyMedium, // Estilo base
+                        color = brandAccentColor.copy(alpha = 0.7f) // COLOR ABSOLUTO (con alfa)
                     )
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))
-
             // --- 2. Métricas Clave de la Sesión ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
+                // Usa tu VisualMetricItem que ya debería estar usando colores absolutos internamente
                 VisualMetricItem(
                     icon = Icons.Filled.Timer,
                     value = formatSecondsToMinutesSeconds(progreso.tiempoTotalSesionSegundos),
                     label = "Duración",
-                    iconColor = secondaryColorDetails,
-                    textColor = onCardColor
+                    iconColor = secondaryColorDetails, // COLOR ABSOLUTO para icono
+                    textColor = brandAccentColor          // COLOR ABSOLUTO para texto
                 )
                 VisualMetricItem(
-                    icon = Icons.Filled.FormatListNumbered, // Icono para contar ejercicios
+                    icon = Icons.Filled.FormatListNumbered,
                     value = progreso.ejerciciosCompletados.size.toString(),
                     label = "Ejercicios",
-                    iconColor = secondaryColorDetails,
-                    textColor = onCardColor
+                    iconColor = secondaryColorDetails, // COLOR ABSOLUTO
+                    textColor = brandAccentColor          // COLOR ABSOLUTO
                 )
                 if (progreso.rondasRealizadas > 0) {
                     VisualMetricItem(
                         icon = Icons.Filled.Autorenew,
                         value = progreso.rondasRealizadas.toString(),
                         label = "Rondas",
-                        iconColor = secondaryColorDetails,
-                        textColor = onCardColor
+                        iconColor = secondaryColorDetails, // COLOR ABSOLUTO
+                        textColor = brandAccentColor          // COLOR ABSOLUTO
                     )
                 }
             }
@@ -1478,7 +1525,8 @@ fun ProgresoRutinaVisualCard(
             if (progreso.ejerciciosCompletados.isNotEmpty()) {
                 Text(
                     "💪 Enfoque Principal:",
-                    style = MaterialTheme.typography.titleMedium.copy(color = onCardColor),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = brandAccentColor, // COLOR ABSOLUTO
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -1487,14 +1535,14 @@ fun ProgresoRutinaVisualCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp), // Un poco de padding
-                    horizontalAlignment = Alignment.CenterHorizontally // Centrar los nombres de ejercicios
+                        .padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Mostrar los nombres de los primeros 3-4 ejercicios
                     progreso.ejerciciosCompletados.take(3).forEach { ejercicio ->
                         Text(
                             text = "• ${ejercicio.nombre}",
-                            style = MaterialTheme.typography.bodyLarge.copy(color = primaryAppColor),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = primaryAppColor, // COLOR ABSOLUTO (para destacar nombres de ejercicios)
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1503,11 +1551,8 @@ fun ProgresoRutinaVisualCard(
                     if (progreso.ejerciciosCompletados.size > 3) {
                         Text(
                             "...¡y más enfoque!",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = onCardColor.copy(
-                                    alpha = 0.8f
-                                )
-                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = brandAccentColor.copy(alpha = 0.8f), // COLOR ABSOLUTO
                             fontStyle = FontStyle.Italic,
                             textAlign = TextAlign.Center
                         )
@@ -1515,22 +1560,26 @@ fun ProgresoRutinaVisualCard(
                 }
                 Spacer(modifier = Modifier.height(20.dp))
             }
+
             // --- 4. Frase de Logro/Cierre ---
             Text(
                 "¡Rutina Completada! 🔥",
-                style = MaterialTheme.typography.titleMedium.copy(color = primaryAppColor),
+                style = MaterialTheme.typography.titleMedium,
+                color = primaryAppColor, // COLOR ABSOLUTO
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            // Opcional: Podrías añadir algo sobre los objetivos si quieres
             if (progreso.objetivosUsuarioAlCompletar.isNotEmpty()) {
                 Text(
                     "Objetivos alcanzados: ${progreso.objetivosUsuarioAlCompletar.joinToString()}",
-                    style = MaterialTheme.typography.bodySmall.copy(color = onCardColor.copy(alpha = 0.7f)),
-                    textAlign = TextAlign.Center
+                    style = MaterialTheme.typography.bodySmall,
+                    color = brandAccentColor.copy(alpha = 0.7f), // COLOR ABSOLUTO
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             Spacer(modifier = Modifier.height(24.dp))
+
             // --- 5. Pie de Página ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1539,26 +1588,20 @@ fun ProgresoRutinaVisualCard(
             ) {
                 Text(
                     "Compartido desde KalisFit",
-                    style = MaterialTheme.typography.labelMedium.copy(color = onCardColor.copy(alpha = 0.7f)),
+                    style = MaterialTheme.typography.labelMedium, // Usar labelMedium es buena idea
+                    color = brandAccentColor.copy(alpha = 0.6f) // COLOR ABSOLUTO (más tenue)
                 )
                 Text(
-                    "#KalisFit #${
-                        progreso.nombreRutina.replace(
-                            " ",
-                            ""
-                        )
-                    } #Entrenamiento", // Hashtags
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = tertiaryColorHashtag,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    "#KalisFit #${progreso.nombreRutina.replace(" ", "")} #Entrenamiento",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tertiaryColorHashtag, // COLOR ABSOLUTO
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.End
                 )
             }
         }
     }
 }
-
 // NUEVO: Composable para el contenido de la pestaña "Actividades Libres" (Carreras/Caminatas)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -1708,7 +1751,6 @@ fun HistorialActividadesLibresContent(
         }
     }
 }
-
 // NUEVO: Composable para mostrar cada UserActivity (carrera/caminata)
 @Composable
 fun UserActivityCard(activity: UserActivity, context: Context) {
@@ -1767,9 +1809,9 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
                     val shareText =
                         buildActivityShareText(activity) // Asume que buildActivityShareText existe
                     val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
+                        action = Intent.ACTION_SEND // CORREGIDO
                         putExtra(Intent.EXTRA_TEXT, shareText)
-                        type = "text/plain"
+                        type = "text/plain" // CORREGIDO
                     }
                     val shareIntent = Intent.createChooser(sendIntent, "Compartir actividad con...")
                     context.startActivity(shareIntent)
@@ -1785,50 +1827,51 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
                         activity.routePoints.map { locationPoint ->
                             LatLng(locationPoint.latitude, locationPoint.longitude)
                         }
-
-                    Log.d(
-                        "UserActivityCard",
-                        "Iniciando captura de imagen. Puntos: ${pointsForVisualCard.size}"
-                    )
+                    Log.d("UserActivityCard", "Iniciando captura de imagen. Puntos: ${pointsForVisualCard.size}")
 
                     coroutineScope.launch {
-                        // Espera un poco para que el mapa en UserActivityVisualCard se renderice.
-                        // Ajusta este valor según sea necesario. Empieza con 1.5-2.5 segundos.
-                        delay(2000) // 2 segundos de retraso. AUMENTA SI EL MAPA SIGUE EN BLANCO.
-
+                        delay(2000) // Mantén o ajusta este retraso según sea necesario para el mapa
                         Log.d("UserActivityCard", "Retraso completado, procediendo a capturar.")
 
-                        captureComposableAsImage( // Asume que captureComposableAsImage existe
+                        captureComposableAsImage(
                             context = context,
                             composable = {
-                                UserActivityVisualCard( // Asume que UserActivityVisualCard existe y está bien definido
+                                UserActivityVisualCard(
                                     activity = activity,
                                     routePointsToDraw = pointsForVisualCard
+                                    // Asegúrate que UserActivityVisualCard
+                                    // define sus colores y fondo de forma absoluta
                                 )
+                            },
+                            onImageReady = { imageFile ->
+                                Log.d("UserActivityCard", "Imagen de actividad capturada: ${imageFile.absolutePath}")
+                                try {
+                                    val imageUri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.provider",
+                                        imageFile
+                                    )
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(Intent.EXTRA_STREAM, imageUri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(shareIntent, "Compartir imagen de actividad con...")
+                                    )
+                                } catch (e: IllegalArgumentException) {
+                                    Log.e("UserActivityCard", "Error al obtener URI para el archivo: ${e.message}")
+                                    Toast.makeText(context, "Error al compartir: No se pudo acceder al archivo de imagen.", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Log.e("UserActivityCard", "Error general al intentar compartir la imagen de actividad: ${e.message}")
+                                    Toast.makeText(context, "Error al compartir la imagen de actividad.", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            onError = { exception ->
+                                Log.e("UserActivityCard", "Error al capturar la imagen de actividad: ${exception.message}", exception)
+                                Toast.makeText(context, "Error al generar la imagen de actividad: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
-                        ) { imageFile: File -> // Especificar el tipo del parámetro lambda ayuda
-                            Log.d("UserActivityCard", "Imagen capturada: ${imageFile.absolutePath}")
-                            val imageUri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.provider", // Asegúrate que la autoridad coincide con tu Manifest
-                                imageFile
-                            )
-                            val shareIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_STREAM, imageUri)
-                                type = "image/png"
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            // Intenta ser explícito con el contexto si hay ambigüedad, aunque no debería ser necesario.
-                            // val currentContext = context
-                            // currentContext.startActivity(Intent.createChooser(shareIntent, "Compartir imagen de actividad con..."))
-                            context.startActivity(
-                                Intent.createChooser(
-                                    shareIntent,
-                                    "Compartir imagen de actividad con..."
-                                )
-                            )
-                        }
+                        )
                     }
                 }) {
                     Icon(Icons.Filled.Image, contentDescription = "Compartir como Imagen")
@@ -1839,7 +1882,6 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
         }
     }
 }
-
 @Composable
 fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -1857,7 +1899,6 @@ fun InfoRow(label: String, value: String) {
     }
     Spacer(modifier = Modifier.height(4.dp))
 }
-
 // Composable genérico para estados vacíos (como lo tenías, pero más reutilizable)
 @Composable
 fun EmptyStateHistorial(
@@ -1906,7 +1947,6 @@ fun EmptyStateHistorial(
         }
     }
 }
-
 // Función para generar el texto del resumen semanal (necesitas crearla)
 fun buildSemanalShareText(resumen: ResumenSemanal): String {
     // Similar a buildActivityShareText, pero para el resumen
@@ -1927,7 +1967,6 @@ fun buildSemanalShareText(resumen: ResumenSemanal): String {
         ¡Una semana más fuerte! #KalisFit #Fitness #Progreso
     """.trimIndent()
 }
-
 fun buildProgresoRutinaShareText(progreso: ProgresoRutina): String {
     // Formateador para la fecha, puedes ajustarlo a tu preferencia
     val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale.getDefault())

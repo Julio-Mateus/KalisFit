@@ -801,7 +801,6 @@ fun DetailRow(icon: ImageVector, text: String, maxLines: Int = 1) {
         )
     }
 }
-
 @Composable
 fun WeeklySummaryCard(summary: ResumenSemanal) {
     Card(

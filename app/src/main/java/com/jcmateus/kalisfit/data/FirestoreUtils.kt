@@ -5,6 +5,7 @@ package com.jcmateus.kalisfit.data
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.ui.text.intl.Locale
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -296,46 +297,34 @@ suspend fun getCalisthenicsExerciseLevel(progressionId: String, levelId: String)
         null
     }
 }
-@RequiresApi(Build.VERSION_CODES.O) // Para Instant
-fun calcularResumenSemanal(historialProgreso: List<ProgresoRutinaFirestore>): ResumenSemanal {
-    val ahora = Instant.now()
-    val hace7Dias = ahora.minus(7, ChronoUnit.DAYS)
-
-    val recientes = historialProgreso.filter { progreso ->
-        // Convertir Timestamp de Firestore a Instant para comparar
-        val fechaProgresoInstant = progreso.fecha.toDate().toInstant()
-        fechaProgresoInstant.isAfter(hace7Dias)
+fun calcularResumenParaSemanaEspecifica(progresosDeLaSemana: List<ProgresoRutinaFirestore>): ResumenSemanal {
+    if (progresosDeLaSemana.isEmpty()) {
+        return ResumenSemanal()
     }
-
-    if (recientes.isEmpty()) {
-        return ResumenSemanal() // Devuelve resumen vacío con valores por defecto
-    }
-
-    val totalRutinas = recientes.size
-    // El tiempo total ahora viene de ProgresoRutinaFirestore.tiempoTotalSesionSegundos
-    val tiempoTotalSegundos = recientes.sumOf { it.tiempoTotalSesionSegundos }
-
-    val objetivos = recientes.flatMap { it.objetivosUsuarioAlCompletar } // Usar los objetivos guardados en el progreso
+    val totalRutinas = progresosDeLaSemana.size
+    val tiempoTotalSegundos = progresosDeLaSemana.sumOf { it.tiempoTotalSesionSegundos }
+    val objetivos = progresosDeLaSemana.flatMap { it.objetivosUsuarioAlCompletar }
     val objetivosRepetidos = objetivos
-        .groupingBy { it }
+        .filter { it.isNotBlank() }
+        .groupingBy { it.trim().lowercase() }
         .eachCount()
         .entries
         .sortedByDescending { it.value }
-        .map { it.key }
-        .take(3) // Quizás tomar los 3 más frecuentes
+        .map { it.key.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(java.util.Locale.getDefault()) else char.toString() } }
+        .take(3)
 
-    var totalEjerciciosCompletados = 0 // Suma de todos los ejercicios en todas las series y rondas
-    var ejerciciosContadosPorTiempo = 0
-    var ejerciciosContadosPorRepeticiones = 0
+    // Opción B: Suma de la cantidad de ejercicios listados en cada rutina completada
+    var totalEjerciciosCompletados = 0
+    progresosDeLaSemana.forEach { rutinaProgreso ->
+        totalEjerciciosCompletados += rutinaProgreso.ejerciciosCompletados.size // <--- SOLO ESTA LÍNEA PARA EL CONTEO
+    }
 
-    recientes.forEach { rutinaProgreso ->
+    var ejerciciosContadosPorTiempo = 0 // Esto puede seguir contando SERIES
+    var ejerciciosContadosPorRepeticiones = 0 // Esto puede seguir contando SERIES
+
+    progresosDeLaSemana.forEach { rutinaProgreso ->
         rutinaProgreso.ejerciciosCompletados.forEach { ejercicioProgreso ->
-            // Cada 'ejercicioProgreso' representa un tipo de ejercicio que se hizo.
-            // Y 'seriesRealizadas' nos dice cuántas veces se hizo ese bloque.
-            totalEjerciciosCompletados += ejercicioProgreso.seriesRealizadas // Un ejercicio se cuenta por cada serie realizada
-
-            // Para clasificar si el ejercicio fue por tiempo o por repeticiones,
-            // miramos sus valores objetivo (duracionPorSerieSegundos vs repeticionesPorSerie)
+            // La lógica para ejerciciosPorTiempo y ejerciciosPorRepeticiones
             if (ejercicioProgreso.repeticionesPorSerie > 0) {
                 ejerciciosContadosPorRepeticiones += ejercicioProgreso.seriesRealizadas
             } else if (ejercicioProgreso.duracionPorSerieSegundos > 0) {
@@ -348,12 +337,60 @@ fun calcularResumenSemanal(historialProgreso: List<ProgresoRutinaFirestore>): Re
         rutinas = totalRutinas,
         tiempoTotal = tiempoTotalSegundos,
         objetivosRecurrentes = objetivosRepetidos,
+        totalEjercicios = totalEjerciciosCompletados, // Ahora es la suma de los "ejercicios listados" por rutina
+        ejerciciosPorTiempo = ejerciciosContadosPorTiempo,
+        ejerciciosPorRepeticiones = ejerciciosContadosPorRepeticiones
+    )
+}
+@RequiresApi(Build.VERSION_CODES.O) // Para Instant
+fun calcularResumenSemanal(historialProgreso: List<ProgresoRutinaFirestore>): ResumenSemanal {
+    val ahora = Instant.now()
+    val hace7Dias = ahora.minus(7, ChronoUnit.DAYS)
+    val recientes = historialProgreso.filter { progreso ->
+        // Convertir Timestamp de Firestore a Instant para comparar
+        val fechaProgresoInstant = progreso.fecha.toDate().toInstant()
+        fechaProgresoInstant.isAfter(hace7Dias)
+    }
+    if (recientes.isEmpty()) {
+        return ResumenSemanal() // Devuelve resumen vacío con valores por defecto
+    }
+    val totalRutinas = recientes.size
+    // El tiempo total ahora viene de ProgresoRutinaFirestore.tiempoTotalSesionSegundos
+    val tiempoTotalSegundos = recientes.sumOf { it.tiempoTotalSesionSegundos }
+    val objetivos = recientes.flatMap { it.objetivosUsuarioAlCompletar } // Usar los objetivos guardados en el progreso
+    val objetivosRepetidos = objetivos
+        .groupingBy { it }
+        .eachCount()
+        .entries
+        .sortedByDescending { it.value }
+        .map { it.key }
+        .take(3) // Quizás tomar los 3 más frecuentes
+    var totalEjerciciosCompletados = 0 // Suma de todos los ejercicios en todas las series y rondas
+    var ejerciciosContadosPorTiempo = 0
+    var ejerciciosContadosPorRepeticiones = 0
+    recientes.forEach { rutinaProgreso ->
+        rutinaProgreso.ejerciciosCompletados.forEach { ejercicioProgreso ->
+            // Cada 'ejercicioProgreso' representa un tipo de ejercicio que se hizo.
+            // Y 'seriesRealizadas' nos dice cuántas veces se hizo ese bloque.
+            totalEjerciciosCompletados += ejercicioProgreso.seriesRealizadas // Un ejercicio se cuenta por cada serie realizada
+            // Para clasificar si el ejercicio fue por tiempo o por repeticiones,
+            // miramos sus valores objetivo (duracionPorSerieSegundos vs repeticionesPorSerie)
+            if (ejercicioProgreso.repeticionesPorSerie > 0) {
+                ejerciciosContadosPorRepeticiones += ejercicioProgreso.seriesRealizadas
+            } else if (ejercicioProgreso.duracionPorSerieSegundos > 0) {
+                ejerciciosContadosPorTiempo += ejercicioProgreso.seriesRealizadas
+            }
+        }
+    }
+    return ResumenSemanal(
+        rutinas = totalRutinas,
+        tiempoTotal = tiempoTotalSegundos,
+        objetivosRecurrentes = objetivosRepetidos,
         totalEjercicios = totalEjerciciosCompletados, // Este es el total de *series de ejercicios* completadas
         ejerciciosPorTiempo = ejerciciosContadosPorTiempo,
         ejerciciosPorRepeticiones = ejerciciosContadosPorRepeticiones
     )
 }
-// En FirestoreUtils.kt - Asumiendo que el usuario puede seleccionar VARIOS lugares
 fun obtenerRutinas(
     nivel: String? = null,
     objetivos: List<String>? = null,

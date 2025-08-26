@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.historial
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -14,7 +14,6 @@ import me.bytebeats.views.charts.bar.BarChart
 import me.bytebeats.views.charts.bar.render.label.SimpleLabelDrawer
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 @Composable
 fun RutinasBarChart(historial: List<ProgresoRutina>, modifier: Modifier = Modifier) {

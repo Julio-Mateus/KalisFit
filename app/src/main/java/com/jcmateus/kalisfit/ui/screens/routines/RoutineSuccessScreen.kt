@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.routines
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

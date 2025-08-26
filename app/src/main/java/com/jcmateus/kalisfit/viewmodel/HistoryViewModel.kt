@@ -13,6 +13,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.jcmateus.kalisfit.data.ProgresoRutinaFirestore
 import com.jcmateus.kalisfit.data.ResumenSemanal
+import com.jcmateus.kalisfit.data.calcularResumenParaSemanaEspecifica
+import com.jcmateus.kalisfit.data.calcularResumenSemanal
+import com.jcmateus.kalisfit.data.obtenerHistorialProgreso
 import com.jcmateus.kalisfit.model.ProgresoRutina
 import com.jcmateus.kalisfit.model.UserActivity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +36,6 @@ data class ResumenSemanalConFechas(
     // para no tener que filtrar de nuevo en la UI para los gráficos.
     val progresosDeLaSemana: List<ProgresoRutina>
 )
-
 // Define un data class para representar el estado de la UI de HistorialScreen
 data class HistoryUiState(
     // Historial de Rutinas
@@ -42,15 +44,12 @@ data class HistoryUiState(
     val listaResumenesSemanales: List<ResumenSemanalConFechas> = emptyList(), // <- Nuevo
     val isLoadingRutinas: Boolean = true,
     val isLoadingResumenesSemanales: Boolean = true, // <- Nuevo estado de carga para resúmenes
-
     // Historial de Actividades Libres (carreras/caminatas)
     val historialActividadesLibres: List<UserActivity> = emptyList(),
     val isLoadingActividadesLibres: Boolean = true,
-
     // Mensaje de error general
     val errorMessage: String? = null
 )
-
 @RequiresApi(Build.VERSION_CODES.O)
 class HistoryViewModel : ViewModel() {
 
@@ -76,7 +75,6 @@ class HistoryViewModel : ViewModel() {
             )
         }
     }
-
     // --- Funciones para el Historial de Rutinas ---
     // Función INTERNA para cargar el historial de rutinas
     @RequiresApi(Build.VERSION_CODES.O)
@@ -89,20 +87,17 @@ class HistoryViewModel : ViewModel() {
                 errorMessage = null
             )
         }
-
         viewModelScope.launch {
             // Llama a tu función existente para obtener el historial
-            com.jcmateus.kalisfit.data.obtenerHistorialProgreso(
+            obtenerHistorialProgreso(
                 userId = userId,
                 onResult = { historialProgresoModel -> // Esto es List<com.jcmateus.kalisfit.model.ProgresoRutina>
                     // Ordenar el historial por fecha descendente, es útil para la agrupación
                     val historialOrdenado =
                         historialProgresoModel.sortedByDescending { it.fecha.seconds }
-
                     // Generar la lista de resúmenes semanales
                     val resumenesSemanales =
                         generarListaResumenesSemanales(historialOrdenado, userId)
-
                     // Mapear el historial del modelo a ProgresoRutinaFirestore si todavía
                     // lo necesitas para alguna otra función (como `calcularResumenSemanal` original).
                     // Si `generarListaResumenesSemanales` ya hace el mapeo internamente,
@@ -138,8 +133,6 @@ class HistoryViewModel : ViewModel() {
                     } else {
                         null
                     }
-
-
                     _historyState.update { currentState ->
                         currentState.copy(
                             historialRutinas = historialOrdenado, // Guardamos el historial del modelo original ordenado
@@ -168,7 +161,6 @@ class HistoryViewModel : ViewModel() {
             )
         }
     }
-
     // --- NUEVA FUNCIÓN PRIVADA PARA GENERAR LOS RESÚMENES SEMANALES ---
     @RequiresApi(Build.VERSION_CODES.O)
     private fun generarListaResumenesSemanales(
@@ -176,11 +168,9 @@ class HistoryViewModel : ViewModel() {
         userId: String // Necesario para crear ProgresoRutinaFirestore si `calcularResumenSemanal` lo requiere
     ): List<ResumenSemanalConFechas> {
         if (historialCompleto.isEmpty()) return emptyList()
-
         val calendar = Calendar.getInstance(Locale.getDefault()) // Usar Locale para consistencia
         // Ajustar el primer día de la semana si es necesario (ej. Lunes)
         // calendar.firstDayOfWeek = Calendar.MONDAY // Descomentar si tu semana empieza en Lunes
-
         // Agrupar progresos por clave "año-semanaDelAñoISO"
         val progresosAgrupadosPorSemana = historialCompleto.groupBy { progreso ->
             calendar.time = progreso.fecha.toDate()
@@ -199,7 +189,6 @@ class HistoryViewModel : ViewModel() {
             // Si es la semana 1 y el mes es diciembre, es del año siguiente.
             val semanaDelAnio = calendar.get(Calendar.WEEK_OF_YEAR)
             val mes = calendar.get(Calendar.MONTH)
-
             val anioRealDeLaSemana = when {
                 semanaDelAnio >= 52 && mes == Calendar.JANUARY -> anio - 1
                 semanaDelAnio == 1 && mes == Calendar.DECEMBER -> anio + 1
@@ -207,9 +196,7 @@ class HistoryViewModel : ViewModel() {
             }
             "${anioRealDeLaSemana}-${semanaDelAnio}"
         }
-
         val listaResumenes = mutableListOf<ResumenSemanalConFechas>()
-
         for ((_, progresosDeLaSemanaModel) in progresosAgrupadosPorSemana) { // progresosDeLaSemanaModel es List<model.ProgresoRutina>
             if (progresosDeLaSemanaModel.isNotEmpty()) {
                 // Mapear los progresos de esta semana a ProgresoRutinaFirestore
@@ -217,6 +204,7 @@ class HistoryViewModel : ViewModel() {
                 val progresosDeLaSemanaFirestore = progresosDeLaSemanaModel.map { progresoModel ->
                     val ejerciciosFirestore =
                         progresoModel.ejerciciosCompletados.map { ejercicioModel ->
+                            // Asumo que EjercicioProgresoFirestore está disponible o importado correctamente
                             com.jcmateus.kalisfit.data.EjercicioProgresoFirestore(
                                 ejercicioIdOriginal = ejercicioModel.ejercicioIdOriginal,
                                 nombre = ejercicioModel.nombre,
@@ -225,6 +213,7 @@ class HistoryViewModel : ViewModel() {
                                 seriesRealizadas = ejercicioModel.seriesRealizadas
                             )
                         }
+                    // Asumo que ProgresoRutinaFirestore está disponible o importado correctamente
                     ProgresoRutinaFirestore(
                         userId = userId,
                         rutinaIdOriginal = progresoModel.rutinaIdOriginal,
@@ -237,38 +226,66 @@ class HistoryViewModel : ViewModel() {
                         tiempoTotalSesionSegundos = progresoModel.tiempoTotalSesionSegundos
                     )
                 }
-
                 // Calcular el resumen para esta semana específica
+                // Asegúrate de que `calcularResumenSemanal` esté disponible en este contexto
+                // y que devuelva un objeto `ResumenSemanal` apropiado para el historial.
+                Log.d("HistoryVM_Debug", "Procesando semana: ${progresosDeLaSemanaModel.firstOrNull()?.fecha?.toDate()}")
+                Log.d("HistoryVM_Debug", "Número de progresos para esta semana: ${progresosDeLaSemanaModel.size}")
+                progresosDeLaSemanaModel.forEachIndexed { index, progreso ->
+                    Log.d("HistoryVM_Debug", "  Progreso $index: ${progreso.nombreRutina}, Ejercicios: ${progreso.ejerciciosCompletados.size}, Series totales en este progreso: ${progreso.ejerciciosCompletados.sumOf { it.seriesRealizadas }}")
+                }
                 val resumenDeLaSemana =
-                    com.jcmateus.kalisfit.data.calcularResumenSemanal(progresosDeLaSemanaFirestore)
-
-                // Determinar fecha de inicio y fin de la semana para este grupo
-                // Esto es una simplificación; para ser preciso, deberías calcular
-                // el primer y último día de la semana ISO basada en una fecha del grupo.
-                val primeraFechaSemana = progresosDeLaSemanaModel.minOf { it.fecha }
-                val ultimaFechaSemana = progresosDeLaSemanaModel.maxOf { it.fecha }
-
-                // Obtener año y semana para el ResumenSemanalConFechas
-                calendar.time =
-                    primeraFechaSemana.toDate() // Usar la primera fecha para la info de semana/año
-                calendar.minimalDaysInFirstWeek = 4
-                calendar.firstDayOfWeek = Calendar.MONDAY
-                val anioSemana = calendar.get(Calendar.YEAR)
-                val semanaDelAnio = calendar.get(Calendar.WEEK_OF_YEAR)
-                val mesSemana = calendar.get(Calendar.MONTH)
-
+                    calcularResumenParaSemanaEspecifica(progresosDeLaSemanaFirestore)
+                Log.d("HistoryVM_Debug", "Resumen calculado para la semana - TotalEjercicios: ${resumenDeLaSemana.totalEjercicios}, Rutinas: ${resumenDeLaSemana.rutinas}")
+                // --- INICIO: CÁLCULO PRECISO DE INICIO Y FIN DE SEMANA ISO ---
+                // Tomar una fecha de referencia de esta semana (la primera es suficiente)
+                val fechaReferenciaEnSemana = progresosDeLaSemanaModel.first().fecha.toDate()
+                // Calcular Lunes de esa semana a las 00:00:00
+                val calInicioSemana = Calendar.getInstance(Locale.getDefault())
+                calInicioSemana.time = fechaReferenciaEnSemana
+                calInicioSemana.firstDayOfWeek = Calendar.MONDAY // Importante para la norma ISO
+                calInicioSemana.minimalDaysInFirstWeek = 4     // Importante para la norma ISO
+                // Retroceder al Lunes de la semana ISO
+                calInicioSemana.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                // Normalizar la hora
+                calInicioSemana.set(Calendar.HOUR_OF_DAY, 0)
+                calInicioSemana.set(Calendar.MINUTE, 0)
+                calInicioSemana.set(Calendar.SECOND, 0)
+                calInicioSemana.set(Calendar.MILLISECOND, 0)
+                val inicioSemanaRealTimestamp = Timestamp(calInicioSemana.time)
+                // Calcular Domingo de esa semana a las 23:59:59
+                val calFinSemana = Calendar.getInstance(Locale.getDefault())
+                calFinSemana.time = inicioSemanaRealTimestamp.toDate() // Empezar desde el Lunes calculado
+                calFinSemana.add(Calendar.DAY_OF_YEAR, 6) // Lunes + 6 días = Domingo
+                // Normalizar la hora al final del día
+                calFinSemana.set(Calendar.HOUR_OF_DAY, 23)
+                calFinSemana.set(Calendar.MINUTE, 59)
+                calFinSemana.set(Calendar.SECOND, 59)
+                calFinSemana.set(Calendar.MILLISECOND, 999)
+                val finSemanaRealTimestamp = Timestamp(calFinSemana.time)
+                // --- FIN: CÁLCULO PRECISO DE INICIO Y FIN DE SEMANA ISO ---
+                // Obtener año y semana para el ResumenSemanalConFechas (usando el Lunes calculado para consistencia)
+                // El Calendar 'calendar' global ya está configurado con Locale, firstDayOfWeek y minimalDaysInFirstWeek
+                // pero lo reconfiguramos aquí para asegurar que usamos el inicioSemanaRealTimestamp como base.
+                val calendarParaInfoSemana = Calendar.getInstance(Locale.getDefault())
+                calendarParaInfoSemana.time = inicioSemanaRealTimestamp.toDate()
+                calendarParaInfoSemana.firstDayOfWeek = Calendar.MONDAY // ISO 8601
+                calendarParaInfoSemana.minimalDaysInFirstWeek = 4     // ISO 8601
+                val anioSemana = calendarParaInfoSemana.get(Calendar.YEAR)
+                val semanaDelAnio = calendarParaInfoSemana.get(Calendar.WEEK_OF_YEAR)
+                val mesSemana = calendarParaInfoSemana.get(Calendar.MONTH) // Para el workaround del año
+                // WORKAROUND para el año de la semana: si es la semana 52 o 53 y el mes es enero, es del año anterior.
+                // Si es la semana 1 y el mes es diciembre, es del año siguiente.
                 val anioRealSemana = when {
                     semanaDelAnio >= 52 && mesSemana == Calendar.JANUARY -> anioSemana - 1
                     semanaDelAnio == 1 && mesSemana == Calendar.DECEMBER -> anioSemana + 1
                     else -> anioSemana
                 }
-
-
                 listaResumenes.add(
                     ResumenSemanalConFechas(
                         resumen = resumenDeLaSemana,
-                        fechaInicioSemana = primeraFechaSemana, // Debería ser el Lunes real
-                        fechaFinSemana = ultimaFechaSemana,   // Debería ser el Domingo real
+                        fechaInicioSemana = inicioSemanaRealTimestamp, // Lunes real de la semana ISO
+                        fechaFinSemana = finSemanaRealTimestamp,   // Domingo real de la semana ISO
                         semanaDelAnio = semanaDelAnio,
                         anio = anioRealSemana,
                         progresosDeLaSemana = progresosDeLaSemanaModel // Guardamos los progresos originales del modelo

@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.net.Uri
 import android.util.Log
@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -84,6 +83,7 @@ import com.jcmateus.kalisfit.model.TipoDeEjercicio
 import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.model.esTipoComplejo
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.ui.screens.NavigationKeys
 import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

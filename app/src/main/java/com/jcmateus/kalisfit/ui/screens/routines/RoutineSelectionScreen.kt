@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.icu.text.SimpleDateFormat
 import android.widget.Toast
@@ -54,6 +54,7 @@ import coil.compose.AsyncImage
 import com.jcmateus.kalisfit.model.TipoDiaEntrenamiento
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
+import java.util.Date
 import kotlin.text.take
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -63,7 +64,7 @@ fun RoutineSelectionScreen(
     dateInMillis: Long
 ) {
     val context = LocalContext.current
-    val selectedDate = remember { java.util.Date(dateInMillis) } // La fecha para la que se elige rutina
+    val selectedDate = remember { Date(dateInMillis) } // La fecha para la que se elige rutina
     val dateFormatter = remember {
         SimpleDateFormat(
             "EEEE dd 'de' MMMM",

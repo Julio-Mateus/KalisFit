@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.store
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,12 +48,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.text.color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -69,6 +67,7 @@ import com.jcmateus.kalisfit.viewmodel.CartViewModel
 import com.jcmateus.kalisfit.viewmodel.CartViewModelFactory
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.util.Currency
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,7 +206,7 @@ fun CartListItem(
             // sino usa el Locale por defecto con el formateador.
             // Para "COP", un Locale como ("es", "CO") sería más robusto.
             try {
-                currency = java.util.Currency.getInstance(cartItem.currencyCode)
+                currency = Currency.getInstance(cartItem.currencyCode)
             } catch (e: Exception) {
                 // Fallback a un Locale común si el código no es reconocido directamente
                 // o si quieres un formato específico.

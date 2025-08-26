@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.navigation
 
 import android.app.Activity
 import android.os.Build
@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -118,19 +117,21 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.repositories.AuthRepositoryImpl
 import com.jcmateus.kalisfit.data.repositories.CartRepositoryImpl
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
-import com.jcmateus.kalisfit.model.WaveSide
 import com.jcmateus.kalisfit.model.WavyBottomHeaderShape
-import com.jcmateus.kalisfit.navigation.BottomNavItem
-import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.ui.theme.KalisFitTheme
 import com.jcmateus.kalisfit.viewmodel.CartViewModel
 import com.jcmateus.kalisfit.viewmodel.CartViewModelFactory
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import com.jcmateus.kalisfit.model.WavyDrawerShape
-import com.jcmateus.kalisfit.model.WavyNavigationBarShape
 import com.jcmateus.kalisfit.model.WavyTopAppBarShape
+import com.jcmateus.kalisfit.ui.screens.calistenia.CalisthenicsProgressionScreen
+import com.jcmateus.kalisfit.ui.screens.HomeScreen
+import com.jcmateus.kalisfit.ui.screens.ListDivider
+import com.jcmateus.kalisfit.ui.screens.auth_profile.NivelExperiencia
+import com.jcmateus.kalisfit.ui.screens.running.RunningTabScreen
+import com.jcmateus.kalisfit.ui.screens.stoicism.StoicismContentScreen
+import com.jcmateus.kalisfit.ui.screens.store.StoreScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.O)

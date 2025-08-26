@@ -1,4 +1,4 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.auth_profile
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween

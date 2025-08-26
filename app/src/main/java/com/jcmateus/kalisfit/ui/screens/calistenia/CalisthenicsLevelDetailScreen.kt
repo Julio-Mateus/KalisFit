@@ -1,10 +1,9 @@
-package com.jcmateus.kalisfit.ui.screens
+package com.jcmateus.kalisfit.ui.screens.calistenia
 
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.copy
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -53,7 +52,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +68,7 @@ import coil.request.ImageRequest
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.ExerciseLevel
 import com.jcmateus.kalisfit.navigation.Routes
+import com.jcmateus.kalisfit.ui.screens.stoicism.SectionTitle
 import com.jcmateus.kalisfit.viewmodel.CalisthenicsViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
