@@ -101,6 +101,10 @@ class UserProfileViewModel(
     // --- Estados para los Campos Editables del Perfil ---
     private val _editableNombre = MutableStateFlow("")
     val editableNombre: StateFlow<String> = _editableNombre.asStateFlow()
+    private val _editableNivel = MutableStateFlow("")
+    val editableNivel: StateFlow<String> = _editableNivel.asStateFlow()
+    private val _editableObjetivos = MutableStateFlow<List<String>>(emptyList())
+    val editableObjetivos: StateFlow<List<String>> = _editableObjetivos.asStateFlow()
     private val _editablePeso = MutableStateFlow("")
     val editablePeso: StateFlow<String> = _editablePeso.asStateFlow()
     private val _editableAltura = MutableStateFlow("")
@@ -111,8 +115,8 @@ class UserProfileViewModel(
     val editableSexo: StateFlow<String> = _editableSexo.asStateFlow()
     private val _editableFrecuenciaSemanal = MutableStateFlow("")
     val editableFrecuenciaSemanal: StateFlow<String> = _editableFrecuenciaSemanal.asStateFlow()
-    private val _editableLugarEntrenamiento = MutableStateFlow("") // Asume edición de un solo lugar
-    val editableLugarEntrenamiento: StateFlow<String> = _editableLugarEntrenamiento.asStateFlow()
+    private val _editableLugarEntrenamiento = MutableStateFlow<List<String>>(emptyList())
+    val editableLugarEntrenamiento: StateFlow<List<String>> = _editableLugarEntrenamiento.asStateFlow()
     // --- Estado para la Operación de Actualización/Guardado del Perfil ---
     sealed class UpdateProfileState {
         object Idle : UpdateProfileState()
@@ -169,13 +173,34 @@ class UserProfileViewModel(
     }
     // --- Funciones para Actualizar Campos Editables desde la UI ---
     fun onNombreChange(newName: String) { _editableNombre.value = newName }
+    fun onNivelChange(nuevoNivel: String) { _editableNivel.value = nuevoNivel }
+    fun onObjetivoSelected(objetivo: String, isSelected: Boolean) {
+        val currentObjetivos = _editableObjetivos.value.toMutableList()
+        if (isSelected) {
+            if (!currentObjetivos.contains(objetivo)) {
+                currentObjetivos.add(objetivo)
+            }
+        } else {
+            currentObjetivos.remove(objetivo)
+        }
+        _editableObjetivos.value = currentObjetivos.toList() // Guardar como lista inmutable
+    }
     fun onPesoChange(newPeso: String) { _editablePeso.value = newPeso }
     fun onAlturaChange(newAltura: String) { _editableAltura.value = newAltura }
     fun onEdadChange(newEdad: String) { _editableEdad.value = newEdad }
     fun onSexoChange(newSexo: String) { _editableSexo.value = newSexo }
     fun onFrecuenciaChange(newFrecuencia: String) { _editableFrecuenciaSemanal.value = newFrecuencia }
-    fun onLugarEntrenamientoChange(newLugar: String) { _editableLugarEntrenamiento.value = newLugar }
-    // --- Carga y Gestión del Perfil del Usuario ---
+    fun onLugarEntrenamientoSelected(lugar: String, isSelected: Boolean) {
+        val currentLugares = _editableLugarEntrenamiento.value.toMutableList()
+        if (isSelected) {
+            if (!currentLugares.contains(lugar)) {
+                currentLugares.add(lugar)
+            }
+        } else {
+            currentLugares.remove(lugar)
+        }
+        _editableLugarEntrenamiento.value = currentLugares.toList() // Guardar como lista inmutable
+    }    // --- Carga y Gestión del Perfil del Usuario ---
     fun loadUserProfile() {
         val uid = firebaseAuth.currentUser?.uid
         if (uid == null) {
@@ -593,22 +618,26 @@ class UserProfileViewModel(
     private fun populateEditableFields(userProfile: UserProfile?) {
         userProfile?.let {
             _editableNombre.value = it.nombre
+            _editableNivel.value = it.nivel
+            _editableObjetivos.value = it.objetivos
             _editablePeso.value = it.peso.takeIf { p -> p > 0f }?.toString() ?: ""
             _editableAltura.value = it.altura.takeIf { a -> a > 0f }?.toString() ?: ""
             _editableEdad.value = it.edad.takeIf { e -> e > 0 }?.toString() ?: ""
             _editableSexo.value = it.sexo
             _editableFrecuenciaSemanal.value = it.frecuenciaSemanal.takeIf { f -> f >= 0 }?.toString() ?: "3" // 0 puede ser válido
-            _editableLugarEntrenamiento.value = it.lugarEntrenamiento.firstOrNull() ?: ""
+            _editableLugarEntrenamiento.value = it.lugarEntrenamiento
         }
     }
     private fun clearEditableFields() {
         _editableNombre.value = ""
+        _editableNivel.value = ""
+        _editableObjetivos.value = emptyList()
         _editablePeso.value = ""
         _editableAltura.value = ""
         _editableEdad.value = ""
         _editableSexo.value = ""
         _editableFrecuenciaSemanal.value = ""
-        _editableLugarEntrenamiento.value = ""
+        _editableLugarEntrenamiento.value = emptyList()
     }
     fun saveUserProfile(newImageUri: Uri?) {
         val currentUserId = firebaseAuth.currentUser?.uid
@@ -628,26 +657,33 @@ class UserProfileViewModel(
                     storageRef.putFile(newImageUri).await()
                     finalImageUrl = storageRef.downloadUrl.await().toString()
                 }
+                val updatedUserProfileData = UserProfile(
+                    uid = currentUserId, // Importante incluir el uid si es un objeto nuevo
+                    nombre = _editableNombre.value,
+                    email = _user.value?.email ?: "", // El email no se edita aquí, tomar el existente
+                    fechaRegistro = _user.value?.fechaRegistro, // La fecha de registro no cambia
 
-                val profileDataToUpdate = mutableMapOf<String, Any>()
-                profileDataToUpdate["nombre"] = _editableNombre.value
-                profileDataToUpdate["peso"] = _editablePeso.value.toFloatOrNull() ?: _user.value?.peso ?: 0f
-                profileDataToUpdate["altura"] = _editableAltura.value.toFloatOrNull() ?: _user.value?.altura ?: 0f
-                profileDataToUpdate["edad"] = _editableEdad.value.toIntOrNull() ?: _user.value?.edad ?: 0
-                profileDataToUpdate["sexo"] = _editableSexo.value
-                profileDataToUpdate["frecuenciaSemanal"] = _editableFrecuenciaSemanal.value.toIntOrNull() ?: _user.value?.frecuenciaSemanal ?: 3
-                profileDataToUpdate["lugarEntrenamiento"] = if (_editableLugarEntrenamiento.value.isNotBlank()) {
-                    listOf(_editableLugarEntrenamiento.value)
-                } else {
-                    _user.value?.lugarEntrenamiento ?: emptyList() // Mantener original si no se edita y está vacío
-                }
-                if (finalImageUrl.isNotEmpty() || newImageUri != null) { // Actualizar solo si hay nueva imagen o ya existía y no se borró
-                    profileDataToUpdate["fotoUrl"] = finalImageUrl
-                }
+                    // --- NUEVO: Guardar Nivel ---
+                    nivel = _editableNivel.value,
+                    // --- NUEVO: Guardar Objetivos ---
+                    objetivos = _editableObjetivos.value,
 
+                    peso = _editablePeso.value.toFloatOrNull() ?: _user.value?.peso ?: 0f,
+                    altura = _editableAltura.value.toFloatOrNull() ?: _user.value?.altura ?: 0f,
+                    edad = _editableEdad.value.toIntOrNull() ?: _user.value?.edad ?: 0,
+                    sexo = _editableSexo.value,
+                    frecuenciaSemanal = _editableFrecuenciaSemanal.value.toIntOrNull() ?: _user.value?.frecuenciaSemanal ?: 3,
 
+                    // --- MODIFICADO: Guardar Lugar de Entrenamiento ---
+                    lugarEntrenamiento = _editableLugarEntrenamiento.value, // Ya es una lista
+
+                    insignias = _user.value?.insignias ?: emptyList(), // No se editan aquí
+                    rutinasCompletadas = _user.value?.rutinasCompletadas ?: 0, // No se editan aquí
+                    progresoActual = _user.value?.progresoActual ?: "", // No se edita aquí
+                    fotoUrl = finalImageUrl
+                )
                 firestore.collection("users").document(currentUserId)
-                    .update(profileDataToUpdate)
+                    .set(updatedUserProfileData)
                     .await()
 
                 loadUserProfile() // Recargar para reflejar cambios

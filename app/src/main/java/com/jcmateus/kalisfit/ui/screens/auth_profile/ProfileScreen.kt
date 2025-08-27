@@ -227,7 +227,6 @@ fun ProfileScreen(
         }
     }
 }
-
 @Composable
 fun ProfileSectionCard(
     title: String,
@@ -256,7 +255,6 @@ fun ProfileSectionCard(
         }
     }
 }
-
 @Composable
 fun ProfileInfoRowWithIcon(
     icon: ImageVector,

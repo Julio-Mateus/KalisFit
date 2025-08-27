@@ -31,7 +31,7 @@ class NotificationReceiver : BroadcastReceiver() {
 
         // --- ICONO PEQUEÑO DE FALLBACK (ASEGÚRATE QUE ESTE DRAWABLE EXISTA Y SEA CORRECTO) ---
         // Este debe ser un icono BLANCO y TRANSPARENTE para la barra de estado.
-        val DEFAULT_SMALL_ICON_FALLBACK = R.drawable.ic_stat_kalisfit_notification
+        val DEFAULT_SMALL_ICON_FALLBACK = R.drawable.ic_launcher_playstore_2_
     }
 
     override fun onReceive(context: Context, intent: Intent) {

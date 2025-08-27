@@ -33,12 +33,17 @@ import kotlin.text.lowercase
 class RoutineExplorerViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "RoutineExplorerViewModel"
     private val _rutinasCompletas = MutableStateFlow<List<Rutina>>(emptyList())
+    val todasLasRutinasCargadas: StateFlow<List<Rutina>> = _rutinasCompletas.asStateFlow() // Opcional si la UI necesita saber el total sin filtrar
     private val _selectedNivel = MutableStateFlow<String?>(null)
     val selectedNivel: StateFlow<String?> = _selectedNivel.asStateFlow()
     private val _selectedLugar = MutableStateFlow<LugarEntrenamiento?>(null)
     val selectedLugar: StateFlow<LugarEntrenamiento?> = _selectedLugar.asStateFlow()
     private val _selectedGrupoMuscular = MutableStateFlow<String?>(null)
     val selectedGrupoMuscular: StateFlow<String?> = _selectedGrupoMuscular.asStateFlow()
+    private val _searchTerm = MutableStateFlow("")
+    val searchTerm: StateFlow<String> = _searchTerm.asStateFlow()
+    private val _isSearchAndFilterUiVisible = MutableStateFlow(false)
+    val isSearchAndFilterUiVisible: StateFlow<Boolean> = _isSearchAndFilterUiVisible.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     private val _errorMessage = MutableStateFlow<String?>(null)
@@ -49,58 +54,72 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
         AndroidAlarmScheduler(getApplication<Application>().applicationContext, alarmRepository)
     val rutinasFiltradas: StateFlow<List<Rutina>> = combine(
         _rutinasCompletas,
+        _searchTerm,
         _selectedNivel,
         _selectedLugar,
         _selectedGrupoMuscular
-    ) { rutinas, nivelFiltro, lugarEnumFiltro, grupoMuscularFiltroString ->
+    ) { rutinas, term, nivelFiltro, lugarEnumFiltro, grupoMuscularFiltroString ->
 
         if (rutinas.isEmpty()) {
-            emptyList()
+            emptyList<Rutina>()
         } else {
-            rutinas.filter { rutina ->
-                // --- Para nivelMatch (asumiendo que rutina.nivelRecomendado es List<String>) ---
-                val nivelMatch = if (nivelFiltro == null) {
-                    true
-                } else {
-                    val filtroNivelMinusculas = nivelFiltro.lowercase()
-                    rutina.nivelRecomendado.any { nivelRutina -> // nivelRutina es String
-                        nivelRutina.lowercase().equals(filtroNivelMinusculas)
+            var rutinasResultantes = rutinas
+            // 1. Filtrar por término de búsqueda (si existe)
+            if (term.isNotBlank()) {
+                val terminoMinusculas = term.lowercase()
+                rutinasResultantes = rutinasResultantes.filter { rutina ->
+                    rutina.nombre.lowercase().contains(terminoMinusculas) ||
+                            rutina.descripcion.lowercase().contains(terminoMinusculas) ||
+                            rutina.ejercicios.any { ejercicio ->
+                                ejercicio.nombre.lowercase().contains(terminoMinusculas)
+                                // Podrías añadir más campos de ejercicio a la búsqueda aquí
+                            }
+                }
+            }
+            // 2. Filtrar por Nivel
+            if (nivelFiltro != null) {
+                val filtroNivelMinusculas = nivelFiltro.lowercase()
+                rutinasResultantes = rutinasResultantes.filter { rutina ->
+                    rutina.nivelRecomendado.any { nivelRutina ->
+                        nivelRutina.lowercase() == filtroNivelMinusculas
                     }
                 }
-
-                // --- Para lugarMatch (asumiendo que rutina.lugarEntrenamiento es List<String>) ---
-                val lugarMatch = if (lugarEnumFiltro == null) {
-                    true
-                } else {
-                    val nombreLugarFiltroMinusculas = lugarEnumFiltro.name.lowercase()
-                    // Asumiendo que rutina.lugarEntrenamiento es List<LugarEntrenamiento>
-                    rutina.lugarEntrenamiento.any { lugarRutinaEnum -> // lugarRutinaEnum es de tipo LugarEntrenamiento
+            }
+            // 3. Filtrar por Lugar
+            if (lugarEnumFiltro != null) {
+                val nombreLugarFiltroMinusculas = lugarEnumFiltro.name.lowercase()
+                rutinasResultantes = rutinasResultantes.filter { rutina ->
+                    // Asumiendo que rutina.lugarEntrenamiento es List<LugarEntrenamiento> o List<String> con los nombres del Enum
+                    // Si es List<LugarEntrenamiento>:
+                    rutina.lugarEntrenamiento.any { lugarRutinaEnum ->
                         lugarRutinaEnum.name.lowercase() == nombreLugarFiltroMinusculas
                     }
+                    // Si es List<String> con los nombres del enum:
+                    // rutina.lugarEntrenamiento.any { lugarRutinaStr ->
+                    //     lugarRutinaStr.lowercase() == nombreLugarFiltroMinusculas
+                    // }
                 }
-
-                // --- Para grupoMuscularMatch ---
-                val grupoMuscularMatch = if (grupoMuscularFiltroString == null) {
-                    true
-                } else {
-                    // rutina.ejercicios.flatMap { it.grupoMuscular } producirá List<GrupoMuscular>
+            }
+            // 4. Filtrar por Grupo Muscular
+            if (grupoMuscularFiltroString != null) {
+                val filtroGrupoMinusculas = grupoMuscularFiltroString.lowercase()
+                rutinasResultantes = rutinasResultantes.filter { rutina ->
                     val gruposDeLaRutinaEnEnum: List<GrupoMuscular> = rutina.ejercicios
                         .flatMap { it.grupoMuscular }
                         .distinct()
-
-                    val filtroGrupoMinusculas = grupoMuscularFiltroString.lowercase()
-
-                    // grupoDeRutinaEnum es de tipo GrupoMuscular
                     gruposDeLaRutinaEnEnum.any { grupoDeRutinaEnum ->
-                        grupoDeRutinaEnum.name.lowercase().equals(filtroGrupoMinusculas) // <--- CORRECCIÓN AQUÍ
+                        grupoDeRutinaEnum.name.lowercase() == filtroGrupoMinusculas
                     }
                 }
-                // ------------------------------------
-
-                nivelMatch && lugarMatch && grupoMuscularMatch
             }
+            // 5. Añadir más lógica de filtro aquí si es necesario
+            rutinasResultantes
         }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000), // O Lazily, según preferencia
+        initialValue = emptyList()
+    )
     // IDs de ejemplo. En una app real, estos serían dinámicos o basados en la rutina.
     companion object {
         // Un prefijo para asegurar que los IDs de alarma de rutina no colisionen con otros tipos de alarmas
@@ -120,13 +139,11 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
             _errorMessage.value = "Error: ID de rutina no válido para programar recordatorio."
             return
         }
-
         // Generar un ID único para esta alarma de rutina específica.
         // Usamos el hashcode del ID de la rutina más un prefijo.
         // Considera una estrategia de ID más robusta si los IDs de rutina no son suficientemente únicos
         // o si pueden cambiar y necesitas persistencia del recordatorio.
         val alarmIdForRoutine = ROUTINE_ALARM_ID_PREFIX + rutina.id.hashCode()
-
         val routineReminderAlarm = AlarmItem(
             id = alarmIdForRoutine,
             timeMillis = timeInMillis,
@@ -139,7 +156,6 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
             largeIconResId = R.drawable.ic_stat_notification, // Asegúrate que este drawable exista
             dataPayload = rutina.id
         )
-
         alarmScheduler.schedule(routineReminderAlarm)
         Log.d(TAG, "Recordatorio programado para rutina '${rutina.nombre}' (ID: ${rutina.id}) con AlarmID: $alarmIdForRoutine a las ${
             java.util.Date(
@@ -214,8 +230,20 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
     fun setGrupoMuscularFilter(grupo: String?) {
         _selectedGrupoMuscular.value = grupo
     }
+    fun setSearchTerm(term: String) {
+        _searchTerm.value = term
+    }
 
+    // --- NUEVA: Función para alternar la visibilidad de la UI de búsqueda/filtros ---
+    fun toggleSearchAndFilterUiVisibility() {
+        _isSearchAndFilterUiVisible.value = !_isSearchAndFilterUiVisible.value
+        // Opcional: si quieres limpiar la búsqueda cuando se cierra la UI
+        // if (!_isSearchAndFilterUiVisible.value) {
+        //     setSearchTerm("")
+        // }
+    }
     fun clearFilters() {
+        _searchTerm.value = ""
         _selectedNivel.value = null
         _selectedLugar.value = null
         _selectedGrupoMuscular.value = null

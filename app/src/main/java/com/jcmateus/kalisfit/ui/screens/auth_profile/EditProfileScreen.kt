@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -83,7 +85,7 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 
-@OptIn(ExperimentalMaterial3Api::class) // Necesario para TopAppBar
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) // Necesario para TopAppBar
 @Composable
 fun EditProfileScreen(
     navController: NavHostController,
@@ -100,53 +102,58 @@ fun EditProfileScreen(
     // Strings para ProfileSection y ModernEditableField (asegúrate de tenerlos)
     val personalInfoLabel = stringResource(R.string.personal_information_label)
     val physicalDetailsLabel = stringResource(R.string.physical_training_details_label)
+    val trainingPreferencesLabel =
+        stringResource(R.string.training_preferences_label) // NUEVO: para la sección
     val nameFieldLabel = stringResource(R.string.name_label)
     val ageFieldLabel = stringResource(R.string.age_label)
     val sexFieldLabel = stringResource(R.string.sex_label)
     val weightFieldLabel = stringResource(R.string.weight_kg_label) // Asumiendo que es "Peso (kg)"
-    val heightFieldLabel = stringResource(R.string.height_cm_label) // Asumiendo que es "Altura (cm)"
-    val frequencyFieldLabel = stringResource(R.string.weekly_frequency_days_label) // Asumiendo que es "Frecuencia (días)"
+    val heightFieldLabel =
+        stringResource(R.string.height_cm_label) // Asumiendo que es "Altura (cm)"
+    val levelFieldLabel = stringResource(R.string.level_label) // Ejemplo: "Nivel"
+    val goalsFieldLabel = stringResource(R.string.goals_label) // Ejemplo: "Objeti
+    val frequencyFieldLabel =
+        stringResource(R.string.weekly_frequency_days_label) // Asumiendo que es "Frecuencia (días)"
     val trainingPlaceFieldLabel = stringResource(R.string.training_place_label)
     val notSetPlaceholderText = stringResource(R.string.not_set_placeholder) // Ej: "No establecido"
     val cancelButtonText = stringResource(R.string.cancel_button)
     val saveButtonText = stringResource(R.string.save_button)
     val selectedDescText = stringResource(R.string.selected_desc) // Para FilterChip
-
     // Strings para los títulos de los diálogos (asegúrate que estén en strings.xml)
     val selectAgeTitle = stringResource(R.string.select_age_title)
     val selectSexTitle = stringResource(R.string.select_sex_title)
     val selectWeightTitle = stringResource(R.string.select_weight_title)
     val selectHeightTitle = stringResource(R.string.select_height_title)
     val selectFrequencyTitle = stringResource(R.string.select_frequency_title)
-
+    val selectLevelTitle = stringResource(R.string.select_level_title)
     // --- Estados del ViewModel ---
     val nombre by viewModel.editableNombre.collectAsState()
+    val nivel by viewModel.editableNivel.collectAsState()
+    val objetivos by viewModel.editableObjetivos.collectAsState()
     val peso by viewModel.editablePeso.collectAsState()
     val altura by viewModel.editableAltura.collectAsState()
     val edad by viewModel.editableEdad.collectAsState()
     val sexo by viewModel.editableSexo.collectAsState()
     val frecuencia by viewModel.editableFrecuenciaSemanal.collectAsState()
-    val lugar by viewModel.editableLugarEntrenamiento.collectAsState()
+    val lugaresEntrenamientoSeleccionados by viewModel.editableLugarEntrenamiento.collectAsState()
     val userProfile by viewModel.user.collectAsState()
     val fotoUrlActualDelPerfil = userProfile?.fotoUrl
-
     // --- Estado local para la nueva imagen ---
     var newImageUri by remember { mutableStateOf<Uri?>(null) }
-    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        newImageUri = uri
-    }
-
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            newImageUri = uri
+        }
     // --- Estado para el proceso de guardado ---
     val updateState by viewModel.updateState.collectAsState()
     var isLoading by remember { mutableStateOf(false) }
-
     // --- Estados para controlar la visibilidad de los diálogos ---
     var showEdadPickerDialog by remember { mutableStateOf(false) }
     var showSexoPickerDialog by remember { mutableStateOf(false) }
     var showPesoPickerDialog by remember { mutableStateOf(false) }
     var showAlturaPickerDialog by remember { mutableStateOf(false) }
     var showFrecuenciaPickerDialog by remember { mutableStateOf(false) }
-
+    var showNivelPickerDialog by remember { mutableStateOf(false) }
     // --- Efecto para manejar el resultado del guardado ---
     LaunchedEffect(updateState) {
         isLoading = updateState is UserProfileViewModel.UpdateProfileState.Loading
@@ -156,14 +163,17 @@ fun EditProfileScreen(
                 navController.popBackStack()
                 viewModel.resetUpdateState()
             }
+
             is UserProfileViewModel.UpdateProfileState.Error -> {
-                Toast.makeText(context, "$errorPrefixMessage: ${state.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "$errorPrefixMessage: ${state.message}", Toast.LENGTH_LONG)
+                    .show()
                 viewModel.resetUpdateState()
             }
-            else -> { /* Idle or Loading */ }
+
+            else -> { /* Idle or Loading */
+            }
         }
     }
-
     // --- Comprobación de si el usuario está logueado ---
     if (!viewModel.isUserLoggedIn()) {
         LaunchedEffect(Unit) {
@@ -201,18 +211,16 @@ fun EditProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(28.dp) // Espacio entre secciones
+            verticalArrangement = Arrangement.spacedBy(24.dp) // Reducido un poco el espacio entre secciones
         ) {
 
-            // --- Sección de Imagen de Perfil ---
             ProfileImageSection(
                 currentImageUrl = fotoUrlActualDelPerfil,
                 newImageUri = newImageUri,
-                onImageClick = { if(!isLoading) imagePickerLauncher.launch("image/*") }
+                onImageClick = { if (!isLoading) imagePickerLauncher.launch("image/*") }
             )
-            // --- Sección de Información Personal ---
+
             ProfileSection(title = personalInfoLabel) {
-                // Nombre (TextField estándar dentro de la sección)
                 OutlinedTextField(
                     value = nombre,
                     onValueChange = { viewModel.onNombreChange(it) },
@@ -227,83 +235,87 @@ fun EditProfileScreen(
                     ),
                     keyboardActions = KeyboardActions(onNext = { focusManager.clearFocus() })
                 )
-
-                Spacer(Modifier.height(8.dp)) // Espacio antes del primer ModernEditableField
-                // o usa el `verticalArrangement.spacedBy` del Column en ProfileSection
-
-                // Edad
+                Spacer(Modifier.height(8.dp))
                 ModernEditableField(
                     label = ageFieldLabel,
                     value = if (edad.isNotEmpty()) edad else notSetPlaceholderText,
-                    onClick = { if(!isLoading) showEdadPickerDialog = true }
+                    onClick = { if (!isLoading) showEdadPickerDialog = true }
                 )
-
-                Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp) // Divisor más sutil
-
-                // Sexo
+                Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
                 ModernEditableField(
                     label = sexFieldLabel,
                     value = if (sexo.isNotEmpty()) sexo else notSetPlaceholderText,
-                    onClick = { if(!isLoading) showSexoPickerDialog = true }
+                    onClick = { if (!isLoading) showSexoPickerDialog = true }
                 )
             }
 
-
-            // --- Sección de Detalles Físicos y de Entrenamiento ---
             ProfileSection(title = physicalDetailsLabel) {
-                // Peso
                 ModernEditableField(
                     label = weightFieldLabel,
                     value = if (peso.isNotEmpty()) "$peso kg" else notSetPlaceholderText,
-                    onClick = { if(!isLoading) showPesoPickerDialog = true }
+                    onClick = { if (!isLoading) showPesoPickerDialog = true }
                 )
                 Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
-
-                // Altura
                 ModernEditableField(
                     label = heightFieldLabel,
                     value = if (altura.isNotEmpty()) "$altura cm" else notSetPlaceholderText,
-                    onClick = { if(!isLoading) showAlturaPickerDialog = true }
+                    onClick = { if (!isLoading) showAlturaPickerDialog = true }
                 )
-                Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
+            }
 
-                // Frecuencia Semanal
+            // --- NUEVA SECCIÓN para Nivel, Objetivos, Frecuencia y Lugar ---
+            ProfileSection(title = trainingPreferencesLabel) {
+                // Nivel
                 ModernEditableField(
-                    label = frequencyFieldLabel,
-                    value = if (frecuencia.isNotEmpty()) "$frecuencia días" else notSetPlaceholderText,
-                    onClick = { if(!isLoading) showFrecuenciaPickerDialog = true }
+                    label = levelFieldLabel,
+                    value = if (nivel.isNotEmpty()) nivel else notSetPlaceholderText,
+                    onClick = { if (!isLoading) showNivelPickerDialog = true }
                 )
                 Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
 
-                // Lugar de entrenamiento (con FilterChips)
+                // Objetivos (con FilterChips para selección múltiple)
                 Text(
-                    trainingPlaceFieldLabel,
-                    style = MaterialTheme.typography.labelMedium, // Consistente con ModernEditableField
+                    text = goalsFieldLabel,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp, start = 4.dp) // Ajuste de padding
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp, start = 4.dp)
                 )
-                val lugaresPosibles = listOf("Casa", "Gimnasio", "Exterior", "Calistenia")
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()), // Permite scroll si los chips no caben
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                val objetivosPosibles = remember { // Opciones de objetivos
+                    listOf(
+                        "Perder Peso",
+                        "Ganar Músculo",
+                        "Mejorar Resistencia",
+                        "Salud General",
+                        "Flexibilidad",
+                        "Rendimiento Deportivo"
+                    )
+                }
+                FlowRow( // Usar FlowRow para que los chips se ajusten a múltiples líneas
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    lugaresPosibles.forEach { lugarOpcion ->
-                        val isSelected = lugar == lugarOpcion
-                        val currentChipIsEnabled = !isLoading // Renombrado para evitar conflicto con el 'enabled' del FilterChip
-
+                    objetivosPosibles.forEach { objetivoOpcion ->
+                        val isSelected = objetivos.contains(objetivoOpcion)
                         FilterChip(
                             selected = isSelected,
-                            onClick = { if (currentChipIsEnabled) viewModel.onLugarEntrenamientoChange(lugarOpcion) },
-                            label = { Text(lugarOpcion, style = MaterialTheme.typography.labelLarge) },
-                            enabled = currentChipIsEnabled, // Usar la variable local
+                            onClick = {
+                                if (!isLoading) {
+                                    viewModel.onObjetivoSelected(objetivoOpcion, !isSelected)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    objetivoOpcion,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            enabled = !isLoading,
                             leadingIcon = if (isSelected) {
                                 {
                                     Icon(
-                                        imageVector = Icons.Filled.CheckCircle,
-                                        contentDescription = selectedDescText, // Asegúrate de tener este string
+                                        Icons.Filled.CheckCircle,
+                                        selectedDescText,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -312,33 +324,107 @@ fun EditProfileScreen(
                             },
                             shape = RoundedCornerShape(16.dp),
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                    alpha = 0.3f
+                                ),
                                 selectedLabelColor = MaterialTheme.colorScheme.primary,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
-                                // Opcional: definir colores para estado deshabilitado
-                                disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) // Alfa estándar para contenido deshabilitado// Alfa estándar para contenido deshabilitado                                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = ContentAlpha.disabled)
+                                // ... otros colores si es necesario
                             ),
                             border = FilterChipDefaults.filterChipBorder(
-                                selected = isSelected, // Pasar el estado de selección
-                                enabled = currentChipIsEnabled, // Pasar el estado de habilitación
+                                selected = isSelected,
+                                enabled = !isLoading,
                                 borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                                 selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                                 borderWidth = 1.dp,
-                                selectedBorderWidth = 1.5.dp,
-                                // Opcional: definir bordes para estado deshabilitado
-                                disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                disabledSelectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) // Un poco más tenue
+                                selectedBorderWidth = 1.5.dp
+                            )
+                        )
+                    }
+                }
+                Divider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    thickness = 0.5.dp
+                ) // Más espacio después de los chips
+
+                // Frecuencia Semanal
+                ModernEditableField(
+                    label = frequencyFieldLabel,
+                    value = if (frecuencia.isNotEmpty()) "$frecuencia días" else notSetPlaceholderText,
+                    onClick = { if (!isLoading) showFrecuenciaPickerDialog = true }
+                )
+                Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
+
+                // Lugar de entrenamiento (con FilterChips para selección múltiple)
+                Text(
+                    trainingPlaceFieldLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp, start = 4.dp)
+                )
+                val lugaresPosibles = remember { // Opciones de lugares
+                    listOf("Casa", "Gimnasio", "Exterior", "Parque de Calistenia")
+                }
+                FlowRow( // Usar FlowRow aquí también
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    lugaresPosibles.forEach { lugarOpcion ->
+                        val isSelected =
+                            lugaresEntrenamientoSeleccionados.contains(lugarOpcion) // Usa el estado correcto
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                if (!isLoading) {
+                                    viewModel.onLugarEntrenamientoSelected(
+                                        lugarOpcion,
+                                        !isSelected
+                                    ) // Llama a la función correcta
+                                }
+                            },
+                            label = {
+                                Text(
+                                    lugarOpcion,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            enabled = !isLoading,
+                            leadingIcon = if (isSelected) {
+                                {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        selectedDescText,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                    alpha = 0.3f
+                                ),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                // ... otros colores
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                selected = isSelected,
+                                enabled = !isLoading,
+                                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.5.dp
                             )
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp)) // Espacio antes de los botones
 
-            // --- Botones de Acción ---
+            Spacer(Modifier.height(16.dp))
+
+            // --- Botones de Acción --- (Sin cambios, pero asegúrate que viewModel.saveUserProfile esté actualizado)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -350,7 +436,10 @@ fun EditProfileScreen(
                         .height(50.dp),
                     enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, if (isLoading) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline)
+                    border = BorderStroke(
+                        1.dp,
+                        if (isLoading) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline
+                    )
                 ) {
                     Text(cancelButtonText, fontWeight = FontWeight.SemiBold)
                 }
@@ -367,13 +456,17 @@ fun EditProfileScreen(
                     )
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.5.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.5.dp
+                        )
                     } else {
                         Text(saveButtonText, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp)) // Espacio al final del scroll
+            Spacer(Modifier.height(8.dp))
         }
     }
     // --- Diálogos (sin cambios en su definición, solo asegúrate que estén) ---
@@ -444,8 +537,19 @@ fun EditProfileScreen(
             }
         )
     }
+    if (showNivelPickerDialog) {
+        OptionsPickerDialog(
+            title = selectLevelTitle,
+            options = listOf("Principiante", "Intermedio", "Avanzado", "Experto"), // Define tus niveles
+            selectedOption = nivel.ifEmpty { "Principiante" }, // Opción por defecto
+            onDismissRequest = { showNivelPickerDialog = false },
+            onConfirm = { selectedNivel ->
+                viewModel.onNivelChange(selectedNivel)
+                showNivelPickerDialog = false
+            }
+        )
+    }
 }
-
 /**
  * Un Composable para la sección de la imagen de perfil con un estilo más moderno.
  */
@@ -468,10 +572,15 @@ fun ProfileImageSection(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)) // Fondo sutil
                 .clickable(onClick = onImageClick)
-                .border(2.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), CircleShape), // Borde de acento
+                .border(
+                    2.dp,
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                    CircleShape
+                ), // Borde de acento
             contentAlignment = Alignment.Center
         ) {
-            val imageToDisplay = newImageUri ?: if (currentImageUrl?.isNotBlank() == true) currentImageUrl else R.drawable.ic_default_avatar
+            val imageToDisplay = newImageUri
+                ?: if (currentImageUrl?.isNotBlank() == true) currentImageUrl else R.drawable.ic_default_avatar
             Image(
                 painter = rememberAsyncImagePainter(
                     model = imageToDisplay,
@@ -516,14 +625,21 @@ fun ProfileSection(
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = title.uppercase(), // Título en mayúsculas para un look moderno
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp),
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp
+            ),
             color = MaterialTheme.colorScheme.primary, // Color de acento para el título
             modifier = Modifier.padding(bottom = 16.dp) // Espacio debajo del título
         )
         // Card sutil para agrupar el contenido de la sección
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
+                    2.dp
+                )
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), // Sin elevación propia si la superficie ya tiene
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         ) {
@@ -584,6 +700,7 @@ fun ModernEditableField(
         )
     }
 }
+
 @Composable
 fun NumberPickerDialog(
     title: String,
@@ -668,8 +785,13 @@ fun OptionsPickerDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { currentSelection = option } // Actualiza la selección al hacer clic
-                            .padding(vertical = 12.dp, horizontal = 8.dp), // Padding para cada opción
+                            .clickable {
+                                currentSelection = option
+                            } // Actualiza la selección al hacer clic
+                            .padding(
+                                vertical = 12.dp,
+                                horizontal = 8.dp
+                            ), // Padding para cada opción
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(

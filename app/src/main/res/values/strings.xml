@@ -386,7 +386,28 @@
     <string name="drawer_default_username">Usuario</string>
     <string name="drawer_default_level">Nivel de Usuario</string>
     <string name="desc_profile_picture">Foto de perfil del usuario</string>
-
+    <!-- Para la nueva sección en EditProfileScreen -->
+    <string name="training_preferences_label">Preferencias de Entrenamiento</string>
+    <!-- Para el campo Nivel -->
+    <string name="level_label">Nivel</string>
+    <string name="select_level_title">Selecciona tu Nivel</string>
+    <!-- Para el campo Objetivos -->
+    <string name="goals_label">Objetivos</string>
+    <string name="open_search_filters_desc">Abrir búsqueda y filtros</string>
+    <string name="close_search_desc">Cerrar búsqueda</string>
+    <string name="clear_all_filters_desc">Limpiar todos los filtros</string>
+    <string name="search_routines_hint">Buscar rutinas...</string>
+    <string name="search_icon_desc">Buscar</string>
+    <string name="clear_search_desc">Limpiar búsqueda</string>
+    <string name="filter_by_label">Filtrar por:</string>
+    <string name="level_label_filter">Nivel:</string> <!-- Para la etiqueta del filtro -->
+    <string name="training_place_label_filter">Lugar:</string> <!-- Para la etiqueta del filtro -->
+    <string name="muscle_group_label_filter">Grupo Muscular:</string> <!-- Para la etiqueta del filtro -->
+    <string name="filter_all_option">Todos</string> <!-- Opción para limpiar un filtro específico -->
+    <string name="clear_all_button">Limpiar Todo</string>
+    <string name="no_routines_match_search_filters">No hay rutinas que coincidan con tu búsqueda y filtros.</string>
+    <string name="no_routines_match_initial_filters">No hay rutinas que coincidan con los filtros aplicados.</string>
+    <string name="no_routines_yet">Aún no hay rutinas aquí. ¡Vuelve pronto!</string>
 </resources>
 
 

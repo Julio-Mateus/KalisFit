@@ -46,7 +46,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     companion object {
         // ID único y estable para la alarma de recordatorio diario general
         const val DAILY_REMINDER_ALARM_ID = 99001
-        const val DAILY_REMINDER_HOUR = 16 // Ejemplo: 10 AM
+        const val DAILY_REMINDER_HOUR = 18 // Ejemplo: 10 AM
         const val DAILY_REMINDER_MINUTE = 0  // Ejemplo: 00 minutos
         val DAILY_REMINDER_INITIALLY_SCHEDULED =
             booleanPreferencesKey("daily_reminder_initially_scheduled")
@@ -152,8 +152,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             channelId = KalisFitApplication.GENERAL_REMINDERS_CHANNEL_ID,
             isRepeating = true,
             intervalMillis = AlarmManager.INTERVAL_DAY,
-            largeIconResId = R.drawable.ic_logo2, // **ASEGÚRATE QUE R.drawable.ic_logo2 EXISTE**
-            smallIconResId = R.drawable.ic_stat_kalisfit_notification
+            largeIconResId = R.drawable.ic_logo2,
+            smallIconResId = R.drawable.ic_launcher_playstore_2_
         )
         alarmScheduler.schedule(dailyReminderAlarm)
         // Log.d("SettingsViewModel", "Recordatorio diario programado para las ${DAILY_REMINDER_HOUR}:${DAILY_REMINDER_MINUTE}")

@@ -222,7 +222,6 @@ fun WeeklyPlanScreen(
                 com.jcmateus.kalisfit.ui.screens.NoDataCard(message = "No hay plan semanal disponible.")
             }
         }
-
         if (showReminderDialog && routineInfoForDialog != null) {
             val (rutinaId, rutinaNombre, fechaDelDia) = routineInfoForDialog!! // Non-null assert es seguro por la condición
             ScheduleWeeklyReminderDialog( // Asumiendo que ScheduleWeeklyReminderDialog está en el mismo paquete o importado
@@ -397,13 +396,10 @@ fun ScheduleWeeklyReminderDialog(
     val context = LocalContext.current
     // Usaremos el Calendar de ICU si tu minSdk es 24+, sino java.util.Calendar
     val initialCalendar = Calendar.getInstance().apply { time = dayDate }
-
     var selectedHour by remember { mutableStateOf(initialCalendar.get(Calendar.HOUR_OF_DAY)) }
     var selectedMinute by remember { mutableStateOf(initialCalendar.get(Calendar.MINUTE)) }
-
     val isRepeating = false // Como discutimos, para el plan semanal, suele ser no repetitivo
     val intervalMillis: Long? = null
-
     // El TimePickerDialog nativo generalmente respeta el tema del sistema/app.
     // No necesitas aplicar temas manualmente al TimePickerDialog en sí.
     val timePickerDialog = TimePickerDialog(
@@ -416,7 +412,6 @@ fun ScheduleWeeklyReminderDialog(
         selectedMinute,
         true // Formato 24 horas
     )
-
     AlertDialog(
         onDismissRequest = onDismiss,
         // --- COLORES Y ESTILO DEL DIÁLOGO ---

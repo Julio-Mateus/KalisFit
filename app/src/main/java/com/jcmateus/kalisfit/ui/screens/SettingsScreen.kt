@@ -143,7 +143,6 @@ fun SettingsScreen(
                 currentValue = currentAppTheme.name.replaceFirstChar { it.titlecase() },
                 onClick = { showThemeDialog = true }
             )
-
             // Sección Unidades
             SettingsSectionTitle(title = stringResource(R.string.settings_section_units))
             ClickableSettingItem(
@@ -152,7 +151,6 @@ fun SettingsScreen(
                 currentValue = currentWeightUnit.uppercase(),
                 onClick = { showUnitDialog = true }
             )
-
             // Sección Soporte y Feedback
             SettingsSectionTitle(title = stringResource(R.string.settings_section_support))
             InfoSettingItem(
@@ -221,7 +219,6 @@ fun SettingsScreen(
                     showOpenSourceLicensesDialog = true
                 }
             )
-
             // Sección Acerca de
             SettingsSectionTitle(title = stringResource(R.string.settings_section_about))
             AboutAppItem(
@@ -245,12 +242,9 @@ fun SettingsScreen(
                     }
                 }
             )
-
-
             Spacer(Modifier.height(32.dp)) // Más espacio al final
         }
     }
-
     if (showThemeDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.settings_select_theme_dialog_title),
@@ -263,7 +257,6 @@ fun SettingsScreen(
             }
         )
     }
-
     if (showUnitDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.settings_select_unit_dialog_title),

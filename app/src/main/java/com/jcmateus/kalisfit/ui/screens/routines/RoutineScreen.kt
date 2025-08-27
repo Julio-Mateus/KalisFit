@@ -14,6 +14,11 @@ import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.repeatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -80,11 +85,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+//import androidx.compose.ui.geometry.Offset.Companion.Infinite
+import androidx.compose.animation.core.AnimationConstants
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -140,41 +150,39 @@ fun RoutineScreen(
     }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    // MODIFICADO: LaunchedEffect para iniciar la rutina
+
+    //<editor-fold desc="LaunchedEffects for initialization, sounds, messages">
     LaunchedEffect(rutinaId, customRutinaId, userProfileState, uiState.estado) {
         val currentUserProfile = userProfileState
         if (currentUserProfile == null) {
             Log.w("RoutineScreen", "UserProfile es nulo, no se puede iniciar la rutina todavía.")
-            // El ViewModel debería manejar la espera o mostrar un mensaje si es necesario.
-            // viewModel.setLoadingMessage("Esperando perfil de usuario...") // Si tienes esta función
             return@LaunchedEffect
         }
-        val idParaIniciar = customRutinaId ?: rutinaId // Prioriza customRutinaId
-        // Solo intentar iniciar si:
-        // 1. Aún no hay una rutina cargada (uiState.rutina == null)
-        // 2. El estado actual es IDLE (no se está cargando, ni en error, etc.)
-        // 3. Tenemos un ID para iniciar (idParaIniciar != null)
+        val idParaIniciar = customRutinaId ?: rutinaId
         if (uiState.rutina == null && uiState.estado == RoutineExecutionState.IDLE && idParaIniciar != null) {
-            Log.d("RoutineScreen", "Intentando iniciar rutina con ID: $idParaIniciar y perfil de usuario.")
-            // Asumimos que startRoutine ahora puede manejar tanto IDs de plantillas como IDs de rutinas personalizadas.
-            // Tu ViewModel.startRoutine debería intentar primero buscar una UserCustomRoutine con ese ID
-            // y si no la encuentra, buscar una plantilla global.
+            Log.d(
+                "RoutineScreen",
+                "Intentando iniciar rutina con ID: $idParaIniciar y perfil de usuario."
+            )
             viewModel.startRoutine(idParaIniciar, currentUserProfile)
-
         } else if (idParaIniciar == null && uiState.estado == RoutineExecutionState.IDLE) {
-            // Este caso ocurre si no se proporciona ni rutinaId ni customRutinaId desde el inicio.
-            Log.w("RoutineScreen", "Ni rutinaId ni customRutinaId fueron provistos. No se puede iniciar rutina.")
+            Log.w(
+                "RoutineScreen",
+                "Ni rutinaId ni customRutinaId fueron provistos. No se puede iniciar rutina."
+            )
             viewModel.setError(context.getString(R.string.error_no_routine_specified))
-
         } else if (uiState.rutina != null && uiState.estado == RoutineExecutionState.IDLE) {
-            Log.d("RoutineScreen", "Rutina ya cargada (${uiState.rutina?.id}) y estado es IDLE. Podría ser un re-render, navegación post-error o rutina ya finalizada y lista para otra acción. No se reinicia automáticamente desde aquí.")
-            // Considera si necesitas alguna lógica específica aquí, por ejemplo, si el usuario navega hacia atrás y luego hacia adelante a una rutina ya completada.
+            Log.d("RoutineScreen", "Rutina ya cargada (${uiState.rutina?.id}) y estado es IDLE.")
         } else if (uiState.estado == RoutineExecutionState.LOADING && idParaIniciar != null) {
             Log.d("RoutineScreen", "Rutina (ID: $idParaIniciar) en proceso de carga. Esperando...")
         } else {
-            Log.d("RoutineScreen", "LaunchedEffect revisado. Estado actual: ${uiState.estado}, Rutina cargada: ${uiState.rutina != null}, ID para iniciar: $idParaIniciar. No se requiere acción de inicio.")
+            Log.d(
+                "RoutineScreen",
+                "LaunchedEffect revisado. Estado: ${uiState.estado}, Rutina cargada: ${uiState.rutina != null}, ID: $idParaIniciar."
+            )
         }
     }
+
     LaunchedEffect(viewModel.soundEvents) {
         viewModel.soundEvents.collect { event ->
             when (event) {
@@ -187,47 +195,81 @@ fun RoutineScreen(
             }
         }
     }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
             viewModel.clearErrorMessage()
         }
     }
+
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let { message ->
             snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
             viewModel.clearSuccessMessage()
         }
     }
+    //</editor-fold>
+
     BackHandler(enabled = uiState.estado != RoutineExecutionState.IDLE && uiState.estado != RoutineExecutionState.FINISHED) {
         viewModel.setShowExitConfirmation(true)
     }
+
     if (uiState.estado !in listOf(
             RoutineExecutionState.IDLE,
             RoutineExecutionState.LOADING,
             RoutineExecutionState.FINISHED,
             RoutineExecutionState.ERROR,
-            RoutineExecutionState.PAUSED // No mantener pantalla encendida si está en pausa explícita
-        )) {
-        KeepScreenOn() // Asumiendo que KeepScreenOn es un Composable que maneja esto
+            RoutineExecutionState.PAUSED
+        )
+    ) {
+        KeepScreenOn()
     }
+
+    // --- Inicio: Animación del FAB ---
+    var fabShouldPulse by remember { mutableStateOf(false) }
+    val fabScale by animateFloatAsState(
+        targetValue = if (fabShouldPulse) 1.15f else 1.0f,
+        animationSpec = infiniteRepeatable( // <-- CAMBIADO DE repeatable A infiniteRepeatable
+            animation = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "fabPulseScaleAnimation"
+    )
+    val isFabVisibleAndEnabled = uiState.estado == RoutineExecutionState.EXERCISE_ACTIVE &&
+            uiState.rutina != null && uiState.ejercicioActual != null
+    // (Opcional: podrías añadir isButtonEnabledCondition aquí también para la lógica de pulsación)
+
+    LaunchedEffect(isFabVisibleAndEnabled) {
+        fabShouldPulse = isFabVisibleAndEnabled
+    }
+    // --- Fin: Animación del FAB ---
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(uiState.rutina?.nombre ?: stringResource(R.string.routine_loading)) },
+                title = {
+                    Text(
+                        uiState.rutina?.nombre ?: stringResource(R.string.routine_loading)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (uiState.estado == RoutineExecutionState.IDLE ||
                             uiState.estado == RoutineExecutionState.LOADING ||
                             uiState.estado == RoutineExecutionState.FINISHED ||
-                            uiState.estado == RoutineExecutionState.ERROR) { // Añadido ERROR
+                            uiState.estado == RoutineExecutionState.ERROR
+                        ) {
                             navController.popBackStack()
                         } else {
                             viewModel.setShowExitConfirmation(true)
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_button_desc))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back_button_desc)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -242,14 +284,15 @@ fun RoutineScreen(
                             RoutineExecutionState.LOADING,
                             RoutineExecutionState.FINISHED,
                             RoutineExecutionState.ERROR,
-                            RoutineExecutionState.INITIAL_COUNTDOWN // No permitir pausar en la cuenta regresiva inicial
+                            RoutineExecutionState.INITIAL_COUNTDOWN
                         )
                     ) {
-                        if (uiState.estado == RoutineExecutionState.PAUSED) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.resume_routine))
-                        } else {
-                            Icon(Icons.Filled.Pause, contentDescription = stringResource(R.string.pause_routine))
-                        }
+                        Icon(
+                            imageVector = if (uiState.estado == RoutineExecutionState.PAUSED) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (uiState.estado == RoutineExecutionState.PAUSED) stringResource(
+                                R.string.resume_routine
+                            ) else stringResource(R.string.pause_routine)
+                        )
                     }
                     IconButton(
                         onClick = {
@@ -262,33 +305,445 @@ fun RoutineScreen(
                             RoutineExecutionState.LOADING,
                             RoutineExecutionState.FINISHED,
                             RoutineExecutionState.ERROR,
-                            RoutineExecutionState.PAUSED, // No permitir saltar si está en pausa
-                            RoutineExecutionState.INITIAL_COUNTDOWN // No permitir saltar en cuenta regresiva inicial
+                            RoutineExecutionState.PAUSED,
+                            RoutineExecutionState.INITIAL_COUNTDOWN
                         )
                     ) {
-                        Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.skip_step))
+                        Icon(
+                            Icons.Filled.SkipNext,
+                            contentDescription = stringResource(R.string.skip_step)
+                        )
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            // Solo mostrar el FAB si estamos en el estado de EJERCICIO_ACTIVO
-            // y hay una rutina cargada con un ejercicio actual.
-            if (uiState.estado == RoutineExecutionState.EXERCISE_ACTIVE &&
-                uiState.rutina != null && uiState.ejercicioActual != null) {
-                val currentEjercicio = uiState.ejercicioActual!! // Sabemos que no es nulo por la condición
-                val repeticionesNumericas = currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
-                val esEjercicioSimplePrincipalmentePorTiempo =
-                    currentEjercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
-                            currentEjercicio.duracionSegundosOriginal > 0 &&
-                            repeticionesNumericas <= 0
+        }
+        // No se usa el slot floatingActionButton del Scaffold
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) { // Aplicar el padding del Scaffold al Box contenedor
 
-                val isButtonEnabledCondition = if (esEjercicioSimplePrincipalmentePorTiempo) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                // color = MaterialTheme.colorScheme.background // Descomentar si es necesario
+            ) {
+                when (uiState.estado) {
+                    RoutineExecutionState.IDLE, RoutineExecutionState.LOADING -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Text(
+                                    stringResource(R.string.loading_routine),
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                if (userProfileState == null && (rutinaId != null || customRutinaId != null) && uiState.rutina == null) {
+                                    Text(
+                                        stringResource(R.string.waiting_for_user_profile),
+                                        modifier = Modifier.padding(top = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    RoutineExecutionState.ERROR -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = uiState.errorMessage
+                                    ?: stringResource(R.string.error_loading_routine),
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = { navController.popBackStack() }) {
+                                Text(stringResource(R.string.go_back))
+                            }
+                        }
+                    }
+
+                    RoutineExecutionState.INITIAL_COUNTDOWN -> {
+                        InitialCountdown(
+                            countdownInicial = uiState.tiempoRestante,
+                            routineName = uiState.rutina?.nombre ?: ""
+                        )
+                    }
+
+                    RoutineExecutionState.EXERCISE_ACTIVE -> {
+                        uiState.rutina?.let { rutina ->
+                            uiState.ejercicioActual?.let { currentEjercicio ->
+                                val repeticionesNumericas =
+                                    currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
+                                val esEjercicioSimplePrincipalmentePorTiempo =
+                                    currentEjercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
+                                            currentEjercicio.duracionSegundosOriginal > 0 &&
+                                            repeticionesNumericas <= 0
+
+                                val isButtonEnabledCondition =
+                                    if (esEjercicioSimplePrincipalmentePorTiempo) {
+                                        uiState.tiempoRestante <= 0
+                                    } else {
+                                        true // El FAB ahora solo salta, la condición podría ser más simple
+                                    }
+                                ExerciseContent(
+                                    currentEjercicio = currentEjercicio,
+                                    componenteActivo = uiState.componenteEjercicioActual,
+                                    rondaActual = uiState.rondaActual,
+                                    totalRondas = rutina.numeroDeRondas,
+                                    ejercicioActualNum = uiState.indiceEjercicioActual + 1,
+                                    totalEjercicios = rutina.ejercicios.size,
+                                    serieActual = uiState.serieActualEjercicio,
+                                    totalSeries = currentEjercicio.numeroDeSeries,
+                                    segundosRestantes = uiState.tiempoRestante,
+                                    imageLoader = imageLoader,
+                                    onWatchVideoClick = { videoUrl ->
+                                        try {
+                                            val intent =
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))
+                                            if (intent.resolveActivity(context.packageManager) != null) {
+                                                context.startActivity(intent)
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.no_app_for_video),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        } catch (e: Exception) {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.error_opening_video) + ": ${e.message}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    },
+                                    onNextClick = {
+                                        scope.launch {
+                                            viewModel.saltarSiguientePaso()
+                                        }
+                                    },
+                                    isButtonEnabled = isButtonEnabledCondition, // Aunque el botón ya no está en ExerciseContent
+                                    buttonText = getNextButtonText(
+                                        uiState,
+                                        context
+                                    ) // Puede usarse para el contentDescription del FAB
+                                )
+                            } ?: Text(
+                                stringResource(R.string.error_exercise_not_found_active),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } ?: Text(
+                            stringResource(R.string.error_routine_not_found_active),
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+
+                    RoutineExecutionState.REST_BETWEEN_SETS,
+                    RoutineExecutionState.REST_BETWEEN_EXERCISES,
+                    RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
+                        val title = when (uiState.estado) {
+                            RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(R.string.rest_between_sets_title)
+                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(R.string.rest_between_exercises_title)
+                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(R.string.rest_between_rounds_title)
+                            else -> ""
+                        }
+                        val currentEjercicioIndex =
+                            uiState.indiceEjercicioActual.takeIf { it >= 0 } ?: 0
+                        val currentEjercicio =
+                            uiState.rutina?.ejercicios?.getOrNull(currentEjercicioIndex)
+                        val totalRestSeconds = when (uiState.estado) {
+                            RoutineExecutionState.REST_BETWEEN_SETS -> currentEjercicio?.descansoEntreSeriesSegundos
+                                ?: 0
+
+                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> currentEjercicio?.descansoDespuesEjercicioSegundos
+                                ?: 0
+
+                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> uiState.rutina?.descansoEntreRondasSegundos
+                                ?: 0
+
+                            else -> 0
+                        }
+                        val nextUpMessage = getNextUpMessage(uiState, context)
+                        IntegratedRestDialog(
+                            visible = true,
+                            onDismissRequest = { /* No dismissible por el usuario */ },
+                            title = title,
+                            secondsRemaining = uiState.tiempoRestante,
+                            totalRestSeconds = totalRestSeconds,
+                            nextUpMessage = nextUpMessage,
+                            onSkip = {
+                                scope.launch {
+                                    viewModel.saltarSiguientePaso()
+                                }
+                            }
+                        )
+                    }
+
+                    RoutineExecutionState.PAUSED -> {
+                        // ... (código de PAUSED sin cambios significativos respecto al FAB)...
+                        val currentEjercicio = uiState.ejercicioActual
+                        val previousState = uiState.previousState
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (uiState.rutina != null) {
+                                val rutinaForPause = uiState.rutina!!
+                                when (previousState) {
+                                    RoutineExecutionState.EXERCISE_ACTIVE -> {
+                                        if (currentEjercicio != null) {
+                                            ExerciseContent(
+                                                currentEjercicio = currentEjercicio,
+                                                componenteActivo = uiState.componenteEjercicioActual,
+                                                rondaActual = uiState.rondaActual,
+                                                totalRondas = rutinaForPause.numeroDeRondas,
+                                                ejercicioActualNum = uiState.indiceEjercicioActual + 1,
+                                                totalEjercicios = rutinaForPause.ejercicios.size,
+                                                serieActual = uiState.serieActualEjercicio,
+                                                totalSeries = currentEjercicio.numeroDeSeries,
+                                                segundosRestantes = uiState.tiempoRestante,
+                                                imageLoader = imageLoader,
+                                                onWatchVideoClick = { /* No-op */ },
+                                                onNextClick = { /* No-op */ },
+                                                isButtonEnabled = false,
+                                                buttonText = getNextButtonText(uiState, context),
+                                                modifier = Modifier.graphicsLayer(alpha = 0.3f)
+                                            )
+                                        }
+                                    }
+
+                                    RoutineExecutionState.REST_BETWEEN_SETS,
+                                    RoutineExecutionState.REST_BETWEEN_EXERCISES,
+                                    RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
+                                        val title = when (previousState) {
+                                            RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(
+                                                R.string.rest_between_sets_title
+                                            )
+
+                                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(
+                                                R.string.rest_between_exercises_title
+                                            )
+
+                                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(
+                                                R.string.rest_between_rounds_title
+                                            )
+
+                                            else -> ""
+                                        }
+                                        val currentEjercicioIndex =
+                                            uiState.indiceEjercicioActual.takeIf { it >= 0 } ?: 0
+                                        val ejercicioContextual =
+                                            rutinaForPause.ejercicios.getOrNull(
+                                                currentEjercicioIndex
+                                            )
+                                        val totalRestSeconds = when (previousState) {
+                                            RoutineExecutionState.REST_BETWEEN_SETS -> ejercicioContextual?.descansoEntreSeriesSegundos
+                                                ?: 0
+
+                                            RoutineExecutionState.REST_BETWEEN_EXERCISES -> ejercicioContextual?.descansoDespuesEjercicioSegundos
+                                                ?: 0
+
+                                            RoutineExecutionState.REST_BETWEEN_ROUNDS -> rutinaForPause.descansoEntreRondasSegundos
+                                            else -> 0
+                                        }
+                                        val nextUpMessage = getNextUpMessage(uiState, context)
+                                        IntegratedRestDialog(
+                                            visible = true,
+                                            onDismissRequest = { /* No-op */ },
+                                            title = title,
+                                            secondsRemaining = uiState.tiempoRestante,
+                                            totalRestSeconds = totalRestSeconds,
+                                            nextUpMessage = nextUpMessage,
+                                            onSkip = { /* No-op */ },
+                                            modifier = Modifier.graphicsLayer(alpha = 0.3f)
+                                        )
+                                    }
+
+                                    RoutineExecutionState.INITIAL_COUNTDOWN -> {
+                                        InitialCountdown(
+                                            countdownInicial = uiState.tiempoRestante,
+                                            routineName = uiState.rutina?.nombre ?: "",
+                                            modifier = Modifier.graphicsLayer(alpha = 0.3f)
+                                        )
+                                    }
+
+                                    else -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    MaterialTheme.colorScheme.surface.copy(
+                                                        alpha = 0.1f
+                                                    )
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.8f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.routine_paused),
+                                        style = MaterialTheme.typography.displaySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Button(
+                                        onClick = { viewModel.togglePausa() },
+                                        modifier = Modifier.defaultMinSize(minWidth = 180.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(ButtonDefaults.IconSize)
+                                        )
+                                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                        Text(stringResource(R.string.resume_routine))
+                                    }
+                                    OutlinedButton(
+                                        onClick = { viewModel.setShowExitConfirmation(true) },
+                                        modifier = Modifier.defaultMinSize(minWidth = 180.dp)
+                                    ) {
+                                        Text(stringResource(R.string.exit_routine))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    RoutineExecutionState.FINISHED -> {
+                        // ... (código de FINISHED sin cambios significativos respecto al FAB)...
+                        LaunchedEffect(Unit) {
+                            val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+                            val userProfileForSaving = uiState.userProfile
+                            val currentRutina = uiState.rutina
+
+                            if (currentUserId != null && userProfileForSaving != null && currentRutina != null) {
+                                Log.d(
+                                    "RoutineScreen FINISHED",
+                                    "Guardando progreso para rutina ID: ${currentRutina.id} , CustomNavId: $customRutinaId, BaseNavId: $rutinaId"
+                                )
+                                viewModel.saveRoutineProgress(
+                                    userId = currentUserId,
+                                    userProfile = userProfileForSaving,
+                                    rutinaId = currentRutina.id,
+                                    onSuccess = {
+                                        scope.launch {
+                                            val popUpToRoute = if (customRutinaId != null) {
+                                                Routes.MAIN_CONTENT
+                                            } else if (rutinaId != null) {
+                                                Routes.routineDetail(rutinaId)
+                                            } else {
+                                                Routes.MAIN_CONTENT
+                                            }
+                                            navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
+                                                popUpTo(popUpToRoute) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    },
+                                    onError = { errorMsg ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                errorMsg,
+                                                duration = SnackbarDuration.Long
+                                            )
+                                            val popUpToRoute =
+                                                if (customRutinaId != null) Routes.MAIN_CONTENT else if (rutinaId != null) Routes.routineDetail(
+                                                    rutinaId
+                                                ) else Routes.MAIN_CONTENT
+                                            navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
+                                                popUpTo(popUpToRoute) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    }
+                                )
+                            } else {
+                                scope.launch {
+                                    var reason =
+                                        context.getString(R.string.error_cannot_save_progress_user_data)
+                                    if (currentUserId == null) reason += " (UID no disp.)"
+                                    if (userProfileForSaving == null) reason += " (Perfil no disp.)"
+                                    if (currentRutina == null) reason += " (Rutina no disp.)"
+                                    Log.e(
+                                        "RoutineScreen FINISHED",
+                                        "No se puede guardar progreso: $reason"
+                                    )
+                                    snackbarHostState.showSnackbar(
+                                        reason,
+                                        duration = SnackbarDuration.Long
+                                    )
+
+                                    val popUpToRoute =
+                                        if (customRutinaId != null) Routes.MAIN_CONTENT else if (rutinaId != null) Routes.routineDetail(
+                                            rutinaId
+                                        ) else Routes.MAIN_CONTENT
+                                    navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
+                                        popUpTo(popUpToRoute) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                            }
+                        }
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = stringResource(R.string.routine_finishing_and_saving),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- FAB Posicionado Manualmente con Animación ---
+            if (isFabVisibleAndEnabled) {
+                // Lógica para habilitar el botón (podrías simplificarla si el FAB solo salta)
+                val currentEjercicioFab = uiState.ejercicioActual!!
+                val repeticionesNumericasFab =
+                    currentEjercicioFab.repeticionesOriginal.toIntOrNull() ?: 0
+                val esEjercicioSimplePrincipalmentePorTiempoFab =
+                    currentEjercicioFab.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
+                            currentEjercicioFab.duracionSegundosOriginal > 0 &&
+                            repeticionesNumericasFab <= 0
+
+                val isButtonActuallyEnabled = if (esEjercicioSimplePrincipalmentePorTiempoFab) {
                     uiState.tiempoRestante <= 0
                 } else {
                     true
                 }
-                val buttonText = getNextButtonText(uiState, context)
+
+                val contentDescriptionText = getNextButtonText(uiState, context)
 
                 FloatingActionButton(
                     onClick = {
@@ -296,354 +751,29 @@ fun RoutineScreen(
                             viewModel.saltarSiguientePaso()
                         }
                     },
-                    // Habilitar/deshabilitar el FAB según la misma lógica que tu botón anterior
-                    // También, asegúrate de que esté habilitado solo cuando sea relevante.
-                    // enabled = isButtonEnabledCondition, // Usa tu lógica de habilitación
-                    modifier = Modifier.padding(16.dp) // Añade padding si es necesario
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd) // Alineación base
+                        .padding(
+                            bottom = 200.dp,
+                            end = 16.dp
+                        ) // Ajusta 'bottom' para subirlo más. 72.dp lo sube bastante.
+                        .graphicsLayer {
+                            scaleX = fabScale
+                            scaleY = fabScale
+                        },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer, // Color del FAB
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer  // Color del icono dentro del FAB
+                    // enabled = isButtonActuallyEnabled, // Descomenta si necesitas habilitación condicional
                 ) {
-                    // Puedes usar un Icono o Texto, o ambos.
-                    // Para un FAB, a menudo se usa un icono, pero el texto también es válido.
-                    // Si el buttonText es corto, puede funcionar.
-                    // Si es largo, considera un icono + texto o solo un icono con buen contentDescription.
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Ejemplo con icono y texto animado:
-                        AnimatedContent(
-                            targetState = buttonText,
-                            transitionSpec = {
-                                ContentTransform(
-                                    targetContentEnter = slideInHorizontally { width -> width } + fadeIn(),
-                                    initialContentExit = slideOutHorizontally { width -> -width } + fadeOut()
-                                )
-                            },
-                            label = "fabButtonTextAnimation"
-                        ) { text ->
-                            Text(text, fontWeight = FontWeight.SemiBold)
-                        }
-                        // Opcional: añade un icono si lo deseas
-                        Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.skip_step))
-                    }
-                }
-            }
-        },
-        //floatingActionButtonPosition = FabPosition.Center
-    ) { paddingValues ->
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            //color = MaterialTheme.colorScheme.background
-        ) {
-            when (uiState.estado) {
-                RoutineExecutionState.IDLE, RoutineExecutionState.LOADING -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Text(
-                                stringResource(R.string.loading_routine),
-                                modifier = Modifier.padding(top = 16.dp),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            // Mostrar un mensaje si es por UserProfile nulo
-                            if (userProfileState == null && (rutinaId != null || customRutinaId != null) && uiState.rutina == null) {
-                                Text(
-                                    stringResource(R.string.waiting_for_user_profile),
-                                    modifier = Modifier.padding(top = 8.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
-                }
-                RoutineExecutionState.ERROR -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.errorMessage ?: stringResource(R.string.error_loading_routine),
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { navController.popBackStack() }) {
-                            Text(stringResource(R.string.go_back))
-                        }
-                    }
-                }
-                RoutineExecutionState.INITIAL_COUNTDOWN -> {
-                    InitialCountdown(
-                        countdownInicial = uiState.tiempoRestante,
-                        routineName = uiState.rutina?.nombre ?: ""
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = contentDescriptionText
                     )
-                }
-                RoutineExecutionState.EXERCISE_ACTIVE -> {
-                    uiState.rutina?.let { rutina ->
-                        uiState.ejercicioActual?.let { currentEjercicio ->
-                            val repeticionesNumericas = currentEjercicio.repeticionesOriginal.toIntOrNull() ?: 0
-                            val esEjercicioSimplePrincipalmentePorTiempo =
-                                currentEjercicio.tipoEjercicio == TipoDeEjercicio.SIMPLE &&
-                                        currentEjercicio.duracionSegundosOriginal > 0 &&
-                                        repeticionesNumericas <= 0
-
-                            val isButtonEnabledCondition = if (esEjercicioSimplePrincipalmentePorTiempo) {
-                                uiState.tiempoRestante <= 0
-                            } else {
-                                true
-                            }
-                            ExerciseContent(
-                                currentEjercicio = currentEjercicio,
-                                componenteActivo = uiState.componenteEjercicioActual,
-                                rondaActual = uiState.rondaActual,
-                                totalRondas = rutina.numeroDeRondas,
-                                ejercicioActualNum = uiState.indiceEjercicioActual + 1,
-                                totalEjercicios = rutina.ejercicios.size,
-                                serieActual = uiState.serieActualEjercicio,
-                                totalSeries = currentEjercicio.numeroDeSeries,
-                                segundosRestantes = uiState.tiempoRestante,
-                                imageLoader = imageLoader,
-                                onWatchVideoClick = { videoUrl ->
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))
-                                        if (intent.resolveActivity(context.packageManager) != null) {
-                                            context.startActivity(intent)
-                                        } else {
-                                            Toast.makeText(context, context.getString(R.string.no_app_for_video), Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, context.getString(R.string.error_opening_video) + ": ${e.message}", Toast.LENGTH_LONG).show()
-                                    }
-                                },
-                                onNextClick = {
-                                    scope.launch {
-                                        viewModel.saltarSiguientePaso()
-                                    }
-                                },
-                                isButtonEnabled = isButtonEnabledCondition,
-                                buttonText = getNextButtonText(uiState, context)
-                            )
-                        } ?: Text(stringResource(R.string.error_exercise_not_found_active), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
-                    } ?: Text(stringResource(R.string.error_routine_not_found_active), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
-                }
-                RoutineExecutionState.REST_BETWEEN_SETS,
-                RoutineExecutionState.REST_BETWEEN_EXERCISES,
-                RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                    val title = when (uiState.estado) {
-                        RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(R.string.rest_between_sets_title)
-                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(R.string.rest_between_exercises_title)
-                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(R.string.rest_between_rounds_title)
-                        else -> "" // No debería ocurrir
-                    }
-                    val currentEjercicioIndex = uiState.indiceEjercicioActual.takeIf { it >= 0 } ?: 0
-                    val currentEjercicio = uiState.rutina?.ejercicios?.getOrNull(currentEjercicioIndex)
-
-                    val totalRestSeconds = when (uiState.estado) {
-                        RoutineExecutionState.REST_BETWEEN_SETS -> currentEjercicio?.descansoEntreSeriesSegundos ?: 0
-                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> currentEjercicio?.descansoDespuesEjercicioSegundos ?: 0
-                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> uiState.rutina?.descansoEntreRondasSegundos ?: 0
-                        else -> 0
-                    }
-                    val nextUpMessage = getNextUpMessage(uiState, context)
-                    IntegratedRestDialog(
-                        visible = true, // Asumimos que si estamos en este estado, el diálogo es visible
-                        onDismissRequest = { /* Normalmente el usuario no cierra este diálogo, espera o salta */ },
-                        title = title,
-                        secondsRemaining = uiState.tiempoRestante,
-                        totalRestSeconds = totalRestSeconds,
-                        nextUpMessage = nextUpMessage,
-                        onSkip = {
-                            scope.launch {
-                                viewModel.saltarSiguientePaso()
-                            }
-                        }
-                    )
-                }
-                RoutineExecutionState.PAUSED -> {
-                    val currentEjercicio = uiState.ejercicioActual
-                    val previousState = uiState.previousState // Este debe estar en tu UiState y ser actualizado por el ViewModel
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Mostrar el contenido de fondo (ejercicio o descanso) semitransparente
-                        if (uiState.rutina != null) {
-                            val rutinaForPause = uiState.rutina!!
-                            when (previousState) {
-                                RoutineExecutionState.EXERCISE_ACTIVE -> {
-                                    if (currentEjercicio != null) {
-                                        ExerciseContent(
-                                            currentEjercicio = currentEjercicio,
-                                            componenteActivo = uiState.componenteEjercicioActual,
-                                            rondaActual = uiState.rondaActual,
-                                            totalRondas = rutinaForPause.numeroDeRondas,
-                                            ejercicioActualNum = uiState.indiceEjercicioActual + 1,
-                                            totalEjercicios = rutinaForPause.ejercicios.size,
-                                            serieActual = uiState.serieActualEjercicio,
-                                            totalSeries = currentEjercicio.numeroDeSeries,
-                                            segundosRestantes = uiState.tiempoRestante,
-                                            imageLoader = imageLoader,
-                                            onWatchVideoClick = { /* No-op */ },
-                                            onNextClick = { /* No-op */ },
-                                            isButtonEnabled = false,
-                                            buttonText = getNextButtonText(uiState, context),
-                                            modifier = Modifier.graphicsLayer(alpha = 0.3f) // Hacerlo semitransparente
-                                        )
-                                    }
-                                }
-                                RoutineExecutionState.REST_BETWEEN_SETS,
-                                RoutineExecutionState.REST_BETWEEN_EXERCISES,
-                                RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                                    val title = when (previousState) {
-                                        RoutineExecutionState.REST_BETWEEN_SETS -> stringResource(R.string.rest_between_sets_title)
-                                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> stringResource(R.string.rest_between_exercises_title)
-                                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> stringResource(R.string.rest_between_rounds_title)
-                                        else -> ""
-                                    }
-                                    val currentEjercicioIndex = uiState.indiceEjercicioActual.takeIf { it >= 0 } ?: 0
-                                    val ejercicioContextual = rutinaForPause.ejercicios.getOrNull(currentEjercicioIndex)
-                                    val totalRestSeconds = when (previousState) {
-                                        RoutineExecutionState.REST_BETWEEN_SETS -> ejercicioContextual?.descansoEntreSeriesSegundos ?: 0
-                                        RoutineExecutionState.REST_BETWEEN_EXERCISES -> ejercicioContextual?.descansoDespuesEjercicioSegundos ?: 0
-                                        RoutineExecutionState.REST_BETWEEN_ROUNDS -> rutinaForPause.descansoEntreRondasSegundos
-                                        else -> 0
-                                    }
-                                    val nextUpMessage = getNextUpMessage(uiState, context)
-                                    IntegratedRestDialog(
-                                        visible = true,
-                                        onDismissRequest = { /* No-op */ },
-                                        title = title,
-                                        secondsRemaining = uiState.tiempoRestante,
-                                        totalRestSeconds = totalRestSeconds,
-                                        nextUpMessage = nextUpMessage,
-                                        onSkip = { /* No-op */ },
-                                        modifier = Modifier.graphicsLayer(alpha = 0.3f) // Hacerlo semitransparente
-                                    )
-                                }
-                                RoutineExecutionState.INITIAL_COUNTDOWN -> {
-                                    InitialCountdown(
-                                        countdownInicial = uiState.tiempoRestante,
-                                        routineName = uiState.rutina?.nombre ?: "",
-                                        modifier = Modifier.graphicsLayer(alpha = 0.3f)
-                                    )
-                                }
-                                else -> {
-                                    Box(modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.1f)))
-                                }
-                            }
-                        }
-                        // Overlay de Pausa
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.8f)), // Fondo del overlay de pausa
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Text(
-                                    text = stringResource(R.string.routine_paused),
-                                    style = MaterialTheme.typography.displaySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Button(
-                                    onClick = { viewModel.togglePausa() },
-                                    modifier = Modifier.defaultMinSize(minWidth = 180.dp)
-                                ) {
-                                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                    Text(stringResource(R.string.resume_routine))
-                                }
-                                OutlinedButton(
-                                    onClick = { viewModel.setShowExitConfirmation(true) },
-                                    modifier = Modifier.defaultMinSize(minWidth = 180.dp)
-                                ) {
-                                    Text(stringResource(R.string.exit_routine))
-                                }
-                            }
-                        }
-                    }
-                }
-                RoutineExecutionState.FINISHED -> {
-                    LaunchedEffect(Unit) {
-                        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-                        val userProfileForSaving = uiState.userProfile
-                        val currentRutina = uiState.rutina
-
-                        if (currentUserId != null && userProfileForSaving != null && currentRutina != null) {
-                            Log.d("RoutineScreen FINISHED", "Guardando progreso para rutina ID: ${currentRutina.id} , CustomNavId: $customRutinaId, BaseNavId: $rutinaId")
-                            viewModel.saveRoutineProgress(
-                                userId = currentUserId,
-                                userProfile = userProfileForSaving,
-                                rutinaId = currentRutina.id, // El ViewModel debería saber si esto es un ID de plantilla o custom
-                                onSuccess = {
-                                    scope.launch {
-                                        // Decidir a dónde volver
-                                        val popUpToRoute = if (customRutinaId != null) {
-                                            // Si era una rutina personalizada, quizá volver a "Mis Rutinas" o simplemente MAIN_CONTENT
-                                            Routes.MAIN_CONTENT // O una ruta específica como Routes.MY_CUSTOM_ROUTINES_SCREEN
-                                        } else if (rutinaId != null) {
-                                            Routes.routineDetail(rutinaId) // Volver al detalle de la rutina base
-                                        } else {
-                                            Routes.MAIN_CONTENT // Fallback
-                                        }
-                                        navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
-                                            popUpTo(popUpToRoute) { inclusive = true }
-                                            // Evitar múltiples instancias de ROUTINE_SUCCESS_SCREEN
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                },
-                                onError = { errorMsg ->
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(errorMsg, duration = SnackbarDuration.Long)
-                                        // Aún así navegar a éxito para no dejar al usuario en una pantalla de carga infinita
-                                        val popUpToRoute = if (customRutinaId != null) Routes.MAIN_CONTENT else if (rutinaId != null) Routes.routineDetail(rutinaId) else Routes.MAIN_CONTENT
-                                        navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
-                                            popUpTo(popUpToRoute) { inclusive = true }
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                }
-                            )
-                        } else {
-                            scope.launch {
-                                var reason = context.getString(R.string.error_cannot_save_progress_user_data)
-                                if (currentUserId == null) reason += " (UID no disp.)"
-                                if (userProfileForSaving == null) reason += " (Perfil no disp.)"
-                                if (currentRutina == null) reason += " (Rutina no disp.)"
-                                Log.e("RoutineScreen FINISHED", "No se puede guardar progreso: $reason")
-                                snackbarHostState.showSnackbar(reason, duration = SnackbarDuration.Long)
-
-                                val popUpToRoute = if (customRutinaId != null) Routes.MAIN_CONTENT else if (rutinaId != null) Routes.routineDetail(rutinaId) else Routes.MAIN_CONTENT
-                                navController.navigate(Routes.ROUTINE_SUCCESS_SCREEN) {
-                                    popUpTo(popUpToRoute) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                        }
-                    }
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = stringResource(R.string.routine_finishing_and_saving),
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
     }
+
     if (uiState.showExitConfirmation) {
         AlertDialog(
             onDismissRequest = { viewModel.setShowExitConfirmation(false) },
@@ -667,6 +797,7 @@ fun RoutineScreen(
         )
     }
 }
+
 @OptIn(ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ExerciseContent(
@@ -720,7 +851,8 @@ fun ExerciseContent(
         }
         // Nombre del ejercicio y descripción
         Text(
-            text = componenteActivo?.nombreEspecifico ?: currentEjercicio.nombre, // Muestra nombre componente si activo
+            text = componenteActivo?.nombreEspecifico
+                ?: currentEjercicio.nombre, // Muestra nombre componente si activo
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -751,8 +883,10 @@ fun ExerciseContent(
         }
         if (displayImageUrls.isEmpty()) { // Si el componente activo no tiene imagen o no hay componente activo
             currentEjercicio.imagenUrl?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
-            currentEjercicio.imagenUrl1?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
-            currentEjercicio.imagenUrl2?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
+            currentEjercicio.imagenUrl1?.takeIf { it.isNotBlank() }
+                ?.let { displayImageUrls.add(it) }
+            currentEjercicio.imagenUrl2?.takeIf { it.isNotBlank() }
+                ?.let { displayImageUrls.add(it) }
             // Añade más campos de imagen si los tienes (ej: imagenUrl3, imagenUrl4)
             // currentEjercicio.imagenUrl3?.takeIf { it.isNotBlank() }?.let { displayImageUrls.add(it) }
         }
@@ -795,7 +929,10 @@ fun ExerciseContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     repeat(pagerState.pageCount) { iteration ->
-                        val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        val color =
+                            if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                                alpha = 0.4f
+                            )
                         Box(
                             modifier = Modifier
                                 .padding(horizontal = 4.dp)
@@ -836,6 +973,7 @@ fun ExerciseContent(
                 }
                 currentEjercicio.notaTempo?.takeIf { it.isNotBlank() }?.let { DisplayTempo(it) }
             }
+
             TipoDeEjercicio.CON_TEMPO -> {
                 // Similar a SIMPLE, pero siempre muestra Tempo
                 if (currentEjercicio.duracionSegundosOriginal > 0) {
@@ -850,8 +988,10 @@ fun ExerciseContent(
                         isUnilateral = currentEjercicio.esUnilateral
                     )
                 }
-                DisplayTempo(currentEjercicio.notaTempo?.takeIf { it.isNotBlank() } ?: stringResource(R.string.tempo_not_specified))
+                DisplayTempo(currentEjercicio.notaTempo?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.tempo_not_specified))
             }
+
             TipoDeEjercicio.SUPERSET_SEQUENCIAL,
             TipoDeEjercicio.COMBINADO_TEMPORIZADO,
             TipoDeEjercicio.CIRCUITO_TEMPORIZADO,
@@ -898,16 +1038,17 @@ fun ExerciseContent(
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    currentEjercicio.componentes.sortedBy { it.orden }.forEach { componenteIterado ->
-                        val esComponenteActivo = componenteActivo?.let { activo ->
-                            activo.orden == componenteIterado.orden && activo.nombreEspecifico == componenteIterado.nombreEspecifico
-                        } ?: false
-                        DisplayComponent( // DisplayComponent solo muestra texto y resalta el activo
-                            componente = componenteIterado,
-                            isCurrentlyActive = esComponenteActivo,
-                            imageLoader = imageLoader
-                        )
-                    }
+                    currentEjercicio.componentes.sortedBy { it.orden }
+                        .forEach { componenteIterado ->
+                            val esComponenteActivo = componenteActivo?.let { activo ->
+                                activo.orden == componenteIterado.orden && activo.nombreEspecifico == componenteIterado.nombreEspecifico
+                            } ?: false
+                            DisplayComponent( // DisplayComponent solo muestra texto y resalta el activo
+                                componente = componenteIterado,
+                                isCurrentlyActive = esComponenteActivo,
+                                imageLoader = imageLoader
+                            )
+                        }
                     if (currentEjercicio.duracionSegundosOriginal > 0 && currentEjercicio.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) {
                         DisplayTime(
                             currentTime = segundosRestantes,
@@ -931,8 +1072,13 @@ fun ExerciseContent(
                     // Text(stringResource(R.string.exercise_detail_not_available), textAlign = TextAlign.Center)
                 }
 
-                if (currentEjercicio.esUnilateral && currentEjercicio.componentes.isEmpty()){
-                    Text(stringResource(R.string.perform_for_each_side), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (currentEjercicio.esUnilateral && currentEjercicio.componentes.isEmpty()) {
+                    Text(
+                        stringResource(R.string.perform_for_each_side),
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -992,6 +1138,7 @@ fun ExerciseContent(
          */
     }
 }
+
 @Composable
 fun InitialCountdown(countdownInicial: Int, routineName: String, modifier: Modifier = Modifier) {
     Column(
@@ -1030,6 +1177,7 @@ fun InitialCountdown(countdownInicial: Int, routineName: String, modifier: Modif
         }
     }
 }
+
 @Composable
 fun KeepScreenOn() {
     val context = LocalContext.current
@@ -1041,6 +1189,7 @@ fun KeepScreenOn() {
         }
     }
 }
+
 @Composable
 fun InfoBox(label: String, value: String, modifier: Modifier = Modifier) {
     Card(
@@ -1072,6 +1221,7 @@ fun InfoBox(label: String, value: String, modifier: Modifier = Modifier) {
         }
     }
 }
+
 @Composable
 fun IntegratedRestDialog(
     visible: Boolean,
@@ -1125,7 +1275,12 @@ fun IntegratedRestDialog(
                     }
                     if (totalRestSeconds > 0) { // Mostrar barra solo si hay tiempo total
                         LinearProgressIndicator(
-                            progress = { 1f - (secondsRemaining.toFloat() / totalRestSeconds.toFloat()).coerceIn(0f, 1f) }, // Asegurar que el progreso esté entre 0 y 1
+                            progress = {
+                                1f - (secondsRemaining.toFloat() / totalRestSeconds.toFloat()).coerceIn(
+                                    0f,
+                                    1f
+                                )
+                            }, // Asegurar que el progreso esté entre 0 y 1
                             modifier = Modifier
                                 .fillMaxWidth(0.8f) // No tan ancho
                                 .height(8.dp)
@@ -1159,6 +1314,7 @@ fun IntegratedRestDialog(
         )
     }
 }
+
 // Función auxiliar para formatear el tiempo a MM:SS o SS
 fun formatTime(totalSeconds: Int): String {
     val minutes = totalSeconds / 60
@@ -1169,15 +1325,18 @@ fun formatTime(totalSeconds: Int): String {
         String.format("%02d", seconds)
     }
 }
+
 // Función auxiliar para obtener el texto del botón "Siguiente"
 @Composable
 fun getNextButtonText(uiState: RoutineUiState, context: Context): String {
     val rutina = uiState.rutina ?: return stringResource(R.string.button_loading)
-    val currentEjercicio = uiState.ejercicioActual ?: return stringResource(R.string.button_loading) // Valor por defecto si no hay ejercicio
+    val currentEjercicio = uiState.ejercicioActual
+        ?: return stringResource(R.string.button_loading) // Valor por defecto si no hay ejercicio
     if (currentEjercicio.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL &&
         currentEjercicio.componentes.isNotEmpty() &&
         uiState.componenteEjercicioActual != null &&
-        uiState.indiceComponenteActual < currentEjercicio.componentes.size - 1) {
+        uiState.indiceComponenteActual < currentEjercicio.componentes.size - 1
+    ) {
         return stringResource(R.string.button_next_component) // Necesitarás este string
     }
     return when {
@@ -1199,6 +1358,7 @@ fun getNextButtonText(uiState: RoutineUiState, context: Context): String {
         }
     }
 }
+
 @Composable
 fun getNextUpMessage(uiState: RoutineUiState, context: Context): String {
     val rutina = uiState.rutina ?: return ""
@@ -1207,12 +1367,19 @@ fun getNextUpMessage(uiState: RoutineUiState, context: Context): String {
             val ejercicio = rutina.ejercicios.getOrNull(uiState.indiceEjercicioActual)
             // Para "próxima serie", sumamos 1 a la serie actual solo si no es ya la última.
             // Si es la última serie, el descanso es para el siguiente ejercicio o ronda.
-            val proxSerieMostrada = uiState.serieActualEjercicio + 1 // Se asume que este descanso es ANTES de la siguiente serie.
+            val proxSerieMostrada =
+                uiState.serieActualEjercicio + 1 // Se asume que este descanso es ANTES de la siguiente serie.
             val totalSeries = ejercicio?.numeroDeSeries ?: uiState.serieActualEjercicio
             ejercicio?.let {
-                context.getString(R.string.rest_next_set_info, proxSerieMostrada, totalSeries, it.nombre)
+                context.getString(
+                    R.string.rest_next_set_info,
+                    proxSerieMostrada,
+                    totalSeries,
+                    it.nombre
+                )
             } ?: context.getString(R.string.getting_ready_for_next_set)
         }
+
         RoutineExecutionState.REST_BETWEEN_EXERCISES -> {
             val proximoEjercicio = rutina.ejercicios.getOrNull(uiState.indiceEjercicioActual + 1)
             proximoEjercicio?.nombre?.let {
@@ -1226,6 +1393,7 @@ fun getNextUpMessage(uiState: RoutineUiState, context: Context): String {
                 }
             }
         }
+
         RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
             val proxRondaMostrada = uiState.rondaActual + 1
             val totalRondas = rutina.numeroDeRondas
@@ -1235,9 +1403,11 @@ fun getNextUpMessage(uiState: RoutineUiState, context: Context): String {
                 context.getString(R.string.rest_well_done_routine_ending) // Ya se completaron todas las rondas
             }
         }
+
         else -> context.getString(R.string.getting_ready) // Mensaje genérico
     }
 }
+
 fun playSound(context: Context, type: String) {
     val soundId = when (type) {
         "start" -> R.raw.start_sound
@@ -1266,9 +1436,13 @@ fun playSound(context: Context, type: String) {
         Log.e("playSound", "Error playing sound $soundId: ${e.message}")
     }
 }
+
 @Composable
 private fun DisplayTime(currentTime: Int, label: String = "") {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
         if (label.isNotBlank()) {
             Text(
                 text = label,
@@ -1285,9 +1459,13 @@ private fun DisplayTime(currentTime: Int, label: String = "") {
         )
     }
 }
+
 @Composable
 private fun DisplayRepetitions(repetitions: String, isUnilateral: Boolean) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
         Text(
             text = stringResource(R.string.routine_repetitions_label), // "REPETICIONES"
             style = MaterialTheme.typography.titleLarge, // Anteriormente titleMedium
@@ -1314,9 +1492,13 @@ private fun DisplayRepetitions(repetitions: String, isUnilateral: Boolean) {
         }
     }
 }
+
 @Composable
 private fun DisplayTempo(tempoNote: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
         Text(
             text = stringResource(R.string.routine_tempo_label), // "TEMPO"
             style = MaterialTheme.typography.titleMedium,
@@ -1330,6 +1512,7 @@ private fun DisplayTempo(tempoNote: String) {
         )
     }
 }
+
 @Composable
 private fun DisplayComponent(
     componente: ComponenteEjercicio,
@@ -1348,7 +1531,10 @@ private fun DisplayComponent(
             .padding(vertical = 4.dp),
         elevation = CardDefaults.cardElevation(if (isCurrentlyActive) 3.dp else 2.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        border = if (isCurrentlyActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+        border = if (isCurrentlyActive) BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary
+        ) else null
     ) {
         Row(
             modifier = Modifier
@@ -1362,7 +1548,8 @@ private fun DisplayComponent(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = componente.nombreEspecifico ?: stringResource(R.string.unnamed_component),
+                    text = componente.nombreEspecifico
+                        ?: stringResource(R.string.unnamed_component),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (isCurrentlyActive) FontWeight.Bold else FontWeight.Medium,
                     color = if (isCurrentlyActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
