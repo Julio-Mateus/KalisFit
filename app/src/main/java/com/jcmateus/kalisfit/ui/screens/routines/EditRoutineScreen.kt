@@ -12,6 +12,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -46,6 +49,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSavedStateRegistryOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,19 +85,32 @@ import coil.compose.AsyncImage
 import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.model.ComponenteEjercicio
 import com.jcmateus.kalisfit.model.Ejercicio
+import com.jcmateus.kalisfit.model.LugarEntrenamiento
 import com.jcmateus.kalisfit.model.TipoDeEjercicio
 import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.model.esTipoComplejo
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.ui.screens.NavigationKeys
 import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModel
+import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditRoutineScreen(
-    navController: NavHostController,
-    viewModel: EditRoutineViewModel = viewModel() // Obtén el ViewModel
+    navController: NavHostController
 ) {
+    val owner = LocalSavedStateRegistryOwner.current // Obtener el owner para SavedStateHandle
+
+    // --- Usar la Factory para crear el ViewModel ---
+    val viewModel: EditRoutineViewModel = viewModel(
+        factory = EditRoutineViewModelFactory(
+            owner = owner,
+            // defaultArgs = Bundle() podrías pasar argumentos aquí si los necesitas en el SavedStateHandle
+            // storage y firestore usarán sus valores por defecto en la Factory o puedes pasarlos si los tienes:
+            // storage = tuInstanciaDeStorage,
+            // firestore = tuInstanciaDeFirestore
+        )
+    )
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -191,6 +210,12 @@ fun EditRoutineScreen(
                         onDescriptionChange = viewModel::onDescriptionChanged,
                         onRoundsChange = viewModel::onRoundsChanged,
                         onRestBetweenRoundsChange = viewModel::onRestBetweenRoundsChanged,
+                        editableNivelRutina = uiState.editableNivelRutina,
+                        onNivelRutinaChanged = viewModel::onNivelRutinaChanged,
+                        editableObjetivosRutina = uiState.editableObjetivosRutina,
+                        onObjetivoRutinaChanged = viewModel::onObjetivoRutinaChanged,
+                        editableLugarEntrenamientoRutina = uiState.editableLugarEntrenamientoRutina,
+                        onLugarEntrenamientoRutinaChanged = viewModel::onLugarEntrenamientoRutinaChanged,
                         // Callbacks para Ejercicios
                         onExerciseSeriesChange = viewModel::onExerciseSeriesChanged,
                         onExerciseRepsChange = viewModel::onExerciseSimpleRepsChanged,
@@ -226,8 +251,7 @@ fun EditRoutineScreen(
         }
     )
 }
-
-@OptIn(ExperimentalMaterial3Api::class) // Para algunos componentes de Material 3
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) // Para algunos componentes de Material 3
 @Composable
 fun EditRoutineContent(
     navController: NavHostController,
@@ -242,7 +266,12 @@ fun EditRoutineContent(
     onDescriptionChange: (String) -> Unit,
     onRoundsChange: (String) -> Unit,
     onRestBetweenRoundsChange: (String) -> Unit,
-
+    editableNivelRutina: List<String>,
+    onNivelRutinaChanged: (String, Boolean) -> Unit,
+    editableObjetivosRutina: List<String>,
+    onObjetivoRutinaChanged: (String, Boolean) -> Unit,
+    editableLugarEntrenamientoRutina: List<String>,
+    onLugarEntrenamientoRutinaChanged: (String, Boolean) -> Unit,
     // Callbacks para PROPIEDADES del ejercicio
     onExerciseSeriesChange: (exerciseIndex: Int, newSeries: String) -> Unit,
     onExerciseRepsChange: (exerciseIndex: Int, newReps: String) -> Unit,
@@ -250,24 +279,20 @@ fun EditRoutineContent(
     onExerciseRestChange: (exerciseIndex: Int, newRest: String) -> Unit, // Descanso ENTRE series
     onExerciseTempoChange: (exerciseIndex: Int, newTempo: String) -> Unit,
     onExerciseIsUnilateralChange: (exerciseIndex: Int, isUnilateral: Boolean) -> Unit,
-
     // Callbacks para ACCIONES sobre el ejercicio en la lista
     onRemoveExercise: (exerciseIndex: Int) -> Unit,
     onMoveExerciseUp: (exerciseIndex: Int) -> Unit,
     onMoveExerciseDown: (exerciseIndex: Int) -> Unit,
     onDuplicateExercise: (exerciseIndex: Int) -> Unit,
-
     // Callbacks para COMPONENTES del ejercicio
     onExerciseComponentRepsChange: (exerciseIndex: Int, componentIndex: Int, newReps: String) -> Unit,
     onExerciseComponentDurationChange: (exerciseIndex: Int, componentIndex: Int, newDuration: String) -> Unit,
     onExerciseComponentNameChange: (exerciseIndex: Int, componentIndex: Int, newName: String) -> Unit,
     onAddComponentToExercise: (exerciseIndex: Int) -> Unit,
     onRemoveComponentFromExercise: (exerciseIndex: Int, componentIndex: Int) -> Unit,
-
     // Callback para AÑADIR/SELECCIONAR ejercicio
     onAddNewBlankExercise: () -> Unit,
     onNavigateToSelectExercise: (exerciseIndexToReplace: Int?) -> Unit,
-
     // <<< CORRECCIÓN/VERIFICACIÓN: Estos son los parámetros que EditRoutineContent DEBE recibir
     onExerciseNameChange: (exerciseIndex: Int, newName: String) -> Unit, // Para el nombre del EJERCICIO editable
     onExercisePostRestChange: (exerciseIndex: Int, newRest: String) -> Unit // Para el descanso DESPUÉS del ejercicio
@@ -279,255 +304,332 @@ fun EditRoutineContent(
             onCoverImageSelected(uri)
         }
     )
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // --- SECCIÓN DE IMAGEN DE PORTADA ---
-        item {
-            Text("Imagen de Portada", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(8.dp))
+    // --- Definir listas de opciones para los FilterChip ---
+    val nivelesPosibles = remember { listOf("Principiante", "Intermedio", "Avanzado", "Experto") }
+    val objetivosPosibles = remember {
+        listOf("Perder Peso", "Ganar Músculo", "Mejorar Resistencia", "Fuerza", "Salud General", "Flexibilidad")
+    }
+    // Obtener los nombres de los enums para LugarEntrenamiento
+    val lugaresPosibles = remember { LugarEntrenamiento.entries.map { it.name } }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp), // Espacio entre secciones
+            contentPadding = PaddingValues(top = 16.dp, bottom = 88.dp)
+        ) {
+            // --- SECCIÓN DE IMAGEN DE PORTADA ---
+            item {
+                Text("Imagen de Portada", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f) // Proporción común para portadas
-                    .clip(MaterialTheme.shapes.medium)
-                    //.background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(enabled = !isLoadingDuringSave && !isUploadingCoverImage) {
-                        getContentLauncher.launch("image/*")
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                var imageToShow: Any? = null
-                if (selectedCoverImageUri != null) {
-                    imageToShow = selectedCoverImageUri
-                } else if (!currentCoverImageUrl.isNullOrBlank()) {
-                    imageToShow = currentCoverImageUrl
-                }
-
-                if (imageToShow != null) {
-                    AsyncImage(
-                        model = imageToShow,
-                        contentDescription = "Imagen de portada de la rutina",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        error = painterResource(id = R.drawable.ic_error_placeholder) // Reemplaza con tu placeholder
-                    )
-                    // Botón para quitar la imagen seleccionada (si hay una nueva selección)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f) // Proporción común para portadas
+                        .clip(MaterialTheme.shapes.medium)
+                        //.background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(enabled = !isLoadingDuringSave && !isUploadingCoverImage) {
+                            getContentLauncher.launch("image/*")
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    var imageToShow: Any? = null
                     if (selectedCoverImageUri != null) {
-                        IconButton(
-                            onClick = onClearSelectedCoverImage,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
-                                    CircleShape
-                                ),
-                            enabled = !isLoadingDuringSave && !isUploadingCoverImage
-                        ) {
+                        imageToShow = selectedCoverImageUri
+                    } else if (!currentCoverImageUrl.isNullOrBlank()) {
+                        imageToShow = currentCoverImageUrl
+                    }
+
+                    if (imageToShow != null) {
+                        AsyncImage(
+                            model = imageToShow,
+                            contentDescription = "Imagen de portada de la rutina",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = painterResource(id = R.drawable.ic_error_placeholder) // Reemplaza con tu placeholder
+                        )
+                        // Botón para quitar la imagen seleccionada (si hay una nueva selección)
+                        if (selectedCoverImageUri != null) {
+                            IconButton(
+                                onClick = onClearSelectedCoverImage,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
+                                        CircleShape
+                                    ),
+                                enabled = !isLoadingDuringSave && !isUploadingCoverImage
+                            ) {
+                                Icon(
+                                    Icons.Filled.Clear,
+                                    contentDescription = "Quitar imagen seleccionada",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    } else {
+                        // Placeholder si no hay imagen
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                Icons.Filled.Clear,
-                                contentDescription = "Quitar imagen seleccionada",
-                                tint = Color.White
+                                imageVector = Icons.Filled.AddPhotoAlternate,
+                                contentDescription = "Añadir imagen de portada",
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Toca para seleccionar una imagen",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                } else {
-                    // Placeholder si no hay imagen
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Filled.AddPhotoAlternate,
-                            contentDescription = "Añadir imagen de portada",
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "Toca para seleccionar una imagen",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    if (isUploadingCoverImage) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
                 }
-
-                if (isUploadingCoverImage) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    getContentLauncher.launch("image/*")
-                },
-                enabled = !isLoadingDuringSave && !isUploadingCoverImage,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Text(
-                    if (selectedCoverImageUri != null || !currentCoverImageUrl.isNullOrBlank())
-                        "Cambiar Imagen" else "Seleccionar Imagen de Portada",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-        // --- SECCIÓN DE INFORMACIÓN DE LA RUTINA ---
-        item {
-            Text("Información de la Rutina", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = routine.nombrePersonalizado,
-                onValueChange = onNameChange,
-                label = { Text("Nombre de la Rutina") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoadingDuringSave,
-                singleLine = true
-            )
-            OutlinedTextField(
-                value = routine.descripcion ?: "",
-                onValueChange = onDescriptionChange,
-                label = { Text("Descripción (Opcional)") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoadingDuringSave,
-                minLines = 3
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = routine.numeroDeRondas.toString(),
-                    onValueChange = onRoundsChange,
-                    label = { Text("Rondas") },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoadingDuringSave,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = routine.descansoEntreRondasSegundos.toString(),
-                    onValueChange = onRestBetweenRoundsChange,
-                    label = { Text("Descanso (seg)") },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoadingDuringSave,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-            }
-        }
-        // --- SECCIÓN DE EJERCICIOS ---
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Ejercicios", style = MaterialTheme.typography.titleLarge)
-                Row { // Para agrupar los botones de añadir
-                    /*
-                    Button(
-                        onClick = onAddNewBlankExercise,
-                        enabled = !isLoadingDuringSave, // isLoadingDuringSave no está disponible aquí directamente, considera pasarlo o inferirlo
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = "Añadir Ejercicio en Blanco",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "En Blanco",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    */
-                    //Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { onNavigateToSelectExercise(null) }, // null porque estamos añadiendo uno nuevo, no reemplazando
-                        enabled = !isLoadingDuringSave,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Icon(
-                            Icons.Filled.LibraryAdd,
-                            contentDescription = "Añadir desde Biblioteca",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "Todos Ejercicios",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-        }
-        if (routine.ejercicios.isEmpty()) {
-            item {
-                Text(
-                    "No hay ejercicios en esta rutina. ¡Añade algunos!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(vertical = 16.dp)
-                )
-            }
-        } else {
-            items(
-                count = routine.ejercicios.size, // Es buena práctica usar 'count'
-                key = { index -> routine.ejercicios[index].id }
-            ) { exerciseIndex ->
-                val ejercicio = routine.ejercicios[exerciseIndex]
-                EditableExerciseItem(
-                    exercise = ejercicio,
-                    exerciseIndex = exerciseIndex,
-                    isLoadingDuringSave = isLoadingDuringSave,
-                    onSeriesChange = { series -> onExerciseSeriesChange(exerciseIndex, series) },
-                    onRepsChange = { reps -> onExerciseRepsChange(exerciseIndex, reps) },
-                    onDurationChange = { duration -> onExerciseDurationChange(exerciseIndex, duration) },
-                    onRestChange = { rest -> onExerciseRestChange(exerciseIndex, rest) }, // Descanso ENTRE series
-                    onTempoChange = { tempo -> onExerciseTempoChange(exerciseIndex, tempo) },
-                    onIsUnilateralChange = { isUnilateral -> onExerciseIsUnilateralChange(exerciseIndex, isUnilateral) },
-                    onRemove = { onRemoveExercise(exerciseIndex) },
-                    onMoveUp = { onMoveExerciseUp(exerciseIndex) },
-                    onMoveDown = { onMoveExerciseDown(exerciseIndex) },
-                    onDuplicate = { onDuplicateExercise(exerciseIndex) },
-                    isFirstExercise = exerciseIndex == 0,
-                    isLastExercise = exerciseIndex == routine.ejercicios.size - 1,
-                    // Componentes
-                    onComponentNameChange = { compIdx, name -> onExerciseComponentNameChange(exerciseIndex, compIdx, name) },
-                    onComponentRepsChange = { compIdx, reps -> onExerciseComponentRepsChange(exerciseIndex, compIdx, reps) },
-                    onComponentDurationChange = { compIdx, duration -> onExerciseComponentDurationChange(exerciseIndex, compIdx, duration) },
-                    onAddComponent = { onAddComponentToExercise(exerciseIndex) },
-                    onRemoveComponent = { compIdx -> onRemoveComponentFromExercise(exerciseIndex, compIdx) },
-                    onReplaceExerciseClicked = { onNavigateToSelectExercise(exerciseIndex) },
-
-                    // <<< CORRECCIÓN: Así se pasan los callbacks a EditableExerciseItem
-                    onExercisePostRestChange = { newRestValue ->
-                        // 'onExercisePostRestChange' aquí es el parámetro de EditRoutineContent.
-                        // Lo llamamos con el 'exerciseIndex' capturado.
-                        onExercisePostRestChange(exerciseIndex, newRestValue)
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        getContentLauncher.launch("image/*")
                     },
-                    onExerciseNameChanged = if (ejercicio.nombre == "Nuevo Ejercicio" || ejercicio.id.isBlank()) {
-                        // El lambda que se pasa a EditableExerciseItem solo toma 'newName'.
-                        { newNameValue ->
-                            // 'onExerciseNameChange' aquí es el parámetro de EditRoutineContent.
-                            // Lo llamamos con el 'exerciseIndex' capturado.
-                            onExerciseNameChange(exerciseIndex, newNameValue)
-                        }
-                    } else {
-                        null // <<< CORRECCIÓN: 'else null' es necesario para la expresión if
-                    }
-                )
-                if (exerciseIndex < routine.ejercicios.size - 1) {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    enabled = !isLoadingDuringSave && !isUploadingCoverImage,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Text(
+                        if (selectedCoverImageUri != null || !currentCoverImageUrl.isNullOrBlank())
+                            "Cambiar Imagen" else "Seleccionar Imagen de Portada",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
+            // --- SECCIÓN DE INFORMACIÓN DE LA RUTINA ---
+            item {
+                Text("Información de la Rutina", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = routine.nombrePersonalizado,
+                    onValueChange = onNameChange,
+                    label = { Text("Nombre de la Rutina") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoadingDuringSave,
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = routine.descripcion ?: "",
+                    onValueChange = onDescriptionChange,
+                    label = { Text("Descripción (Opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoadingDuringSave,
+                    minLines = 3
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = routine.numeroDeRondas.toString(),
+                        onValueChange = onRoundsChange,
+                        label = { Text("Rondas") },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoadingDuringSave,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedTextField(
+                        value = routine.descansoEntreRondasSegundos.toString(),
+                        onValueChange = onRestBetweenRoundsChange,
+                        label = { Text("Descanso (seg)") },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoadingDuringSave,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+            }
+            item {
+                Column { // Para agrupar título y los FlowRow
+                    Text("Detalles Adicionales", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Nivel Recomendado
+                    Text("Nivel Recomendado:", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        nivelesPosibles.forEach { nivel ->
+                            val isSelected = editableNivelRutina.contains(nivel)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { if (!isLoadingDuringSave) onNivelRutinaChanged(nivel, !isSelected) },
+                                label = { Text(nivel) },
+                                enabled = !isLoadingDuringSave
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Objetivos Principales
+                    Text("Objetivos Principales:", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        objetivosPosibles.forEach { objetivo ->
+                            val isSelected = editableObjetivosRutina.contains(objetivo)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { if (!isLoadingDuringSave) onObjetivoRutinaChanged(objetivo, !isSelected) },
+                                label = { Text(objetivo) },
+                                enabled = !isLoadingDuringSave
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Lugar de Entrenamiento
+                    Text("Lugar de Entrenamiento:", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        lugaresPosibles.forEach { lugarName -> // lugarName es el String del enum
+                            val isSelected = editableLugarEntrenamientoRutina.contains(lugarName)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { if (!isLoadingDuringSave) onLugarEntrenamientoRutinaChanged(lugarName, !isSelected) },
+                                label = {
+                                    Text(
+                                        // --- SOLUCIÓN SIMPLE PARA CAPITALIZAR ---
+                                        lugarName.replaceFirstChar {
+                                            if (it.isLowerCase()) it.uppercaseChar() else it // Convierte a Char mayúscula
+                                            // o it.uppercase() si quieres que devuelva String directamente para el primer char
+                                        }
+                                    )
+                                },
+                                enabled = !isLoadingDuringSave
+                            )
+                        }
+                    }
+                }
+            }
+            // --- SECCIÓN DE EJERCICIOS ---
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Ejercicios", style = MaterialTheme.typography.titleLarge)
+                    Row { // Para agrupar los botones de añadir
+                        /*
+                        Button(
+                            onClick = onAddNewBlankExercise,
+                            enabled = !isLoadingDuringSave, // isLoadingDuringSave no está disponible aquí directamente, considera pasarlo o inferirlo
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = "Añadir Ejercicio en Blanco",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "En Blanco",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        */
+                        //Spacer(Modifier.width(8.dp))
+                    }
+                }
+            }
+            if (routine.ejercicios.isEmpty()) {
+                item {
+                    Text(
+                        "No hay ejercicios en esta rutina. ¡Añade algunos!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            } else {
+                items(
+                    count = routine.ejercicios.size, // Es buena práctica usar 'count'
+                    key = { index -> routine.ejercicios[index].id }
+                ) { exerciseIndex ->
+                    val ejercicio = routine.ejercicios[exerciseIndex]
+                    EditableExerciseItem(
+                        exercise = ejercicio,
+                        exerciseIndex = exerciseIndex,
+                        isLoadingDuringSave = isLoadingDuringSave,
+                        onSeriesChange = { series -> onExerciseSeriesChange(exerciseIndex, series) },
+                        onRepsChange = { reps -> onExerciseRepsChange(exerciseIndex, reps) },
+                        onDurationChange = { duration -> onExerciseDurationChange(exerciseIndex, duration) },
+                        onRestChange = { rest -> onExerciseRestChange(exerciseIndex, rest) }, // Descanso ENTRE series
+                        onTempoChange = { tempo -> onExerciseTempoChange(exerciseIndex, tempo) },
+                        onIsUnilateralChange = { isUnilateral -> onExerciseIsUnilateralChange(exerciseIndex, isUnilateral) },
+                        onRemove = { onRemoveExercise(exerciseIndex) },
+                        onMoveUp = { onMoveExerciseUp(exerciseIndex) },
+                        onMoveDown = { onMoveExerciseDown(exerciseIndex) },
+                        onDuplicate = { onDuplicateExercise(exerciseIndex) },
+                        isFirstExercise = exerciseIndex == 0,
+                        isLastExercise = exerciseIndex == routine.ejercicios.size - 1,
+                        // Componentes
+                        onComponentNameChange = { compIdx, name -> onExerciseComponentNameChange(exerciseIndex, compIdx, name) },
+                        onComponentRepsChange = { compIdx, reps -> onExerciseComponentRepsChange(exerciseIndex, compIdx, reps) },
+                        onComponentDurationChange = { compIdx, duration -> onExerciseComponentDurationChange(exerciseIndex, compIdx, duration) },
+                        onAddComponent = { onAddComponentToExercise(exerciseIndex) },
+                        onRemoveComponent = { compIdx -> onRemoveComponentFromExercise(exerciseIndex, compIdx) },
+                        onReplaceExerciseClicked = { onNavigateToSelectExercise(exerciseIndex) },
+                        // <<< CORRECCIÓN: Así se pasan los callbacks a EditableExerciseItem
+                        onExercisePostRestChange = { newRestValue ->
+                            // 'onExercisePostRestChange' aquí es el parámetro de EditRoutineContent.
+                            // Lo llamamos con el 'exerciseIndex' capturado.
+                            onExercisePostRestChange(exerciseIndex, newRestValue)
+                        },
+                        onExerciseNameChanged = if (ejercicio.nombre == "Nuevo Ejercicio" || ejercicio.id.isBlank()) {
+                            // El lambda que se pasa a EditableExerciseItem solo toma 'newName'.
+                            { newNameValue ->
+                                // 'onExerciseNameChange' aquí es el parámetro de EditRoutineContent.
+                                // Lo llamamos con el 'exerciseIndex' capturado.
+                                onExerciseNameChange(exerciseIndex, newNameValue)
+                            }
+                        } else {
+                            null // <<< CORRECCIÓN: 'else null' es necesario para la expresión if
+                        }
+                    )
+                    if (exerciseIndex < routine.ejercicios.size - 1) {
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
+                }
+            }
+        }
+        // --- FAB para Añadir/Seleccionar Ejercicio ---
+        FloatingActionButton(
+            onClick = { onNavigateToSelectExercise(null) }, // null para añadir nuevo, no reemplazar
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp), // Padding estándar para FABs
+            containerColor = MaterialTheme.colorScheme.primary, // O el color que prefieras
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LibraryAdd,
+                contentDescription = "Añadir Ejercicio desde Biblioteca"
+            )
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditableExerciseItem(
@@ -575,7 +677,9 @@ fun EditableExerciseItem(
                         value = exercise.nombre,
                         onValueChange = { newName -> onExerciseNameChanged.invoke(newName) },
                         label = { Text("Nombre Ejercicio") },
-                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
                         enabled = !isLoadingDuringSave,
                         singleLine = true,
                         textStyle = MaterialTheme.typography.titleMedium
@@ -606,13 +710,17 @@ fun EditableExerciseItem(
             Spacer(modifier = Modifier.height(8.dp))
             // --- Botón para reemplazar/cambiar ejercicio ---
             if (exercise.nombre == "Nuevo Ejercicio" || exercise.id.isBlank()) {
-                Button(onClick = onReplaceExerciseClicked, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Button(onClick = onReplaceExerciseClicked, modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)) {
                     Text("Elegir Ejercicio de Biblioteca")
                 }
             } else {
                 Button(
                     onClick = onReplaceExerciseClicked,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
                     shape = MaterialTheme.shapes.small,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
@@ -757,7 +865,10 @@ fun EditableExerciseItem(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { showComponents = !showComponents }.padding(vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showComponents = !showComponents }
+                        .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -773,7 +884,8 @@ fun EditableExerciseItem(
                 }
                 AnimatedVisibility(visible = showComponents) {
                     Column(
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                        modifier = Modifier
+                            .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                             .background(
                                 MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
                                 RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
@@ -785,7 +897,9 @@ fun EditableExerciseItem(
                             Text(
                                 "Este ${exercise.tipoEjercicio.displayName} aún no tiene ejercicios componentes. ¡Añade algunos!",
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(vertical = 8.dp).align(Alignment.CenterHorizontally)
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp)
+                                    .align(Alignment.CenterHorizontally)
                             )
                         } else {
                             exercise.componentes.forEachIndexed { compIndex, componente ->
@@ -825,7 +939,8 @@ fun EditableExerciseItem(
             if (exercise.tipoEjercicio != TipoDeEjercicio.POR_LADO_ALTERNADO) { // Evita duplicar si POR_LADO ya lo implica
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 10.dp)
+                    modifier = Modifier
+                        .padding(top = 10.dp)
                         .clickable { if (!isLoadingDuringSave) onIsUnilateralChange(!exercise.esUnilateral) }
                         .fillMaxWidth()
                 ) {

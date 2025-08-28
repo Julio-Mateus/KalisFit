@@ -262,8 +262,7 @@ fun KalisNavGraph(navController: NavHostController, settingsViewModel: SettingsV
             // Aquí el composable para EditRoutineScreen
             val editRoutineViewModel: EditRoutineViewModel = viewModel()
             EditRoutineScreen(
-                navController = navController,
-                viewModel = editRoutineViewModel
+                navController = navController
             )
         }
         composable(Routes.ROUTINE_SUCCESS_SCREEN) {

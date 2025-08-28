@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
 import com.jcmateus.kalisfit.data.getUserCustomRoutineById
 import com.jcmateus.kalisfit.data.parsearEjercicioFirestore
@@ -44,12 +45,17 @@ data class EditRoutineUiState(
     val saveSuccess: Boolean = false,
     val selectedCoverImageUri: Uri? = null, // URI de la imagen seleccionada localmente
     val currentCoverImageUrl: String? = null, // URL de la imagen de portada actual (si existe)
-    val isUploadingCoverImage: Boolean = false
+    val isUploadingCoverImage: Boolean = false,
+    val editableNivelRutina: List<String> = emptyList(),
+    val editableObjetivosRutina: List<String> = emptyList(),
+    val editableLugarEntrenamientoRutina: List<String> = emptyList()
     // No hay picker global de ejercicios en esta fase
 )
 class EditRoutineViewModel(
-    private val savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+    private val firebaseStorage: FirebaseStorage = FirebaseStorage.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val TAG = "EditRoutineViewModel_Phase1"
     private val _uiState = MutableStateFlow(EditRoutineUiState())
     val uiState: StateFlow<EditRoutineUiState> = _uiState.asStateFlow()
@@ -77,7 +83,10 @@ class EditRoutineViewModel(
         _uiState.value = _uiState.value.copy(
             isLoading = true,
             selectedCoverImageUri = null, // Limpiar cualquier URI seleccionado previamente
-            currentCoverImageUrl = null   // Limpiar la URL actual antes de cargar la nueva
+            currentCoverImageUrl = null,   // Limpiar la URL actual antes de cargar la nueva
+            editableNivelRutina = emptyList(), // Resetear
+            editableObjetivosRutina = emptyList(), // Resetear
+            editableLugarEntrenamientoRutina = emptyList()
         )
         viewModelScope.launch {
             try {
@@ -86,18 +95,24 @@ class EditRoutineViewModel(
                     customRoutineIdArg != null && !currentUserIdArg.isNullOrBlank() -> {
                         Log.d(TAG, "Cargando rutina personalizada EXISTENTE para edición. customId: $customRoutineIdArg, userId: $currentUserIdArg")
                         val existingCustomRoutine: UserCustomRoutine? =
-                            getUserCustomRoutineById(currentUserIdArg, customRoutineIdArg)
+                            getUserCustomRoutineById(currentUserIdArg, customRoutineIdArg) // Asumo que esta función existe y es suspend
                         if (existingCustomRoutine != null) {
-                            _uiState.value = _uiState.value.copy(
-                                routineToEdit = existingCustomRoutine,
-                                isNewRoutine = false,
-                                originalTemplateId = existingCustomRoutine.originalTemplateId,
-                                currentCoverImageUrl = existingCustomRoutine.imagenUrl, // Correcto: cargar la imagen existente
-                                isLoading = false
-                            )
+                            _uiState.update {
+                                it.copy(
+                                    routineToEdit = existingCustomRoutine,
+                                    isNewRoutine = false,
+                                    originalTemplateId = existingCustomRoutine.originalTemplateId,
+                                    currentCoverImageUrl = existingCustomRoutine.imagenUrl,
+                                    editableNivelRutina = existingCustomRoutine.nivelRecomendado,
+                                    editableObjetivosRutina = existingCustomRoutine.objetivos,
+                                    editableLugarEntrenamientoRutina = existingCustomRoutine.lugarEntrenamiento.map { lugarEnum -> lugarEnum.name },
+                                    isLoading = false,
+                                    errorMessages = emptyList()
+                                )
+                            }
                         } else {
                             Log.w(TAG, "Rutina personalizada (customId: $customRoutineIdArg) no encontrada para el usuario $currentUserIdArg.")
-                            _uiState.value = _uiState.value.copy(errorMessages = listOf("Rutina personalizada no encontrada."), isLoading = false)
+                            _uiState.update { it.copy(errorMessages = listOf("Rutina personalizada no encontrada."), isLoading = false) }
                         }
                     }
                     // CASO 2: Creando una NUEVA rutina, posiblemente basada en una plantilla o en una copia de otra UserCustomRoutine
@@ -174,19 +189,28 @@ class EditRoutineViewModel(
                             userId = currentUserIdArg,
                             nombrePersonalizado = "Nueva Rutina",
                             descripcion = "",
-                            // imagenUrl se deja null por defecto para una rutina en blanco
+                            imagenUrl = null, // Sin imagen de portada por defecto
                             ejercicios = emptyList(),
                             numeroDeRondas = 3,
                             descansoEntreRondasSegundos = 60,
+                            // Los campos de lista se inicializan vacíos por defecto en UserCustomRoutine
+                            // Así que nivelRecomendado, objetivos, lugarEntrenamiento en blankRoutine serán emptyList()
                             fechaCreacion = Timestamp.now(),
                             fechaUltimaModificacion = Timestamp.now()
                         )
-                        _uiState.value = _uiState.value.copy(
-                            routineToEdit = blankRoutine,
-                            isNewRoutine = true,
-                            currentCoverImageUrl = null, // Una rutina nueva desde cero no tiene imagen de portada inicial
-                            isLoading = false
-                        )
+                        _uiState.update {
+                            it.copy(
+                                routineToEdit = blankRoutine,
+                                isNewRoutine = true,
+                                currentCoverImageUrl = null, // Sin imagen de portada inicial
+                                // --- MODIFICACIÓN: Poblar con los valores (vacíos) de la rutina en blanco ---
+                                editableNivelRutina = blankRoutine.nivelRecomendado,      // Será emptyList()
+                                editableObjetivosRutina = blankRoutine.objetivos,        // Será emptyList()
+                                editableLugarEntrenamientoRutina = blankRoutine.lugarEntrenamiento.map { lugarEnum -> lugarEnum.name }, // Será emptyList()
+                                isLoading = false,
+                                errorMessages = emptyList()
+                            )
+                        }
                     }
                     else -> {
                         Log.e(TAG, "Error crítico: ID de usuario no disponible o estado de argumentos inesperado.")
@@ -366,6 +390,42 @@ class EditRoutineViewModel(
             }
         }
     }
+    fun onNivelRutinaChanged(nivel: String, isSelected: Boolean) {
+        _uiState.update { currentState ->
+            val currentNiveles = currentState.editableNivelRutina.toMutableList()
+            if (isSelected) {
+                if (!currentNiveles.contains(nivel)) currentNiveles.add(nivel)
+            } else {
+                currentNiveles.remove(nivel)
+            }
+            currentState.copy(editableNivelRutina = currentNiveles.toList())
+        }
+    }
+
+    fun onObjetivoRutinaChanged(objetivo: String, isSelected: Boolean) {
+        _uiState.update { currentState ->
+            val currentObjetivos = currentState.editableObjetivosRutina.toMutableList()
+            if (isSelected) {
+                if (!currentObjetivos.contains(objetivo)) currentObjetivos.add(objetivo)
+            } else {
+                currentObjetivos.remove(objetivo)
+            }
+            currentState.copy(editableObjetivosRutina = currentObjetivos.toList())
+        }
+    }
+
+    // Asumiendo que guardas los NOMBRES de los enums de LugarEntrenamiento como Strings
+    fun onLugarEntrenamientoRutinaChanged(lugarNombre: String, isSelected: Boolean) {
+        _uiState.update { currentState ->
+            val currentLugares = currentState.editableLugarEntrenamientoRutina.toMutableList()
+            if (isSelected) {
+                if (!currentLugares.contains(lugarNombre)) currentLugares.add(lugarNombre)
+            } else {
+                currentLugares.remove(lugarNombre)
+            }
+            currentState.copy(editableLugarEntrenamientoRutina = currentLugares.toList())
+        }
+    }
     // --- Funciones para gestionar la lista de ejercicios en la rutina ---
     fun onRemoveExercise(exerciseIndex: Int) {
         _uiState.value.routineToEdit?.let { currentRoutine -> // Obtiene la rutina actual del estado
@@ -467,52 +527,79 @@ class EditRoutineViewModel(
     }
     // --- Guardado de la Rutina ---
     fun saveRoutine() {
-        val routineToSave = _uiState.value.routineToEdit ?: return
+        val uiStateValue = _uiState.value // Capturar el valor actual para consistencia en esta función
+        val routineToProcess = uiStateValue.routineToEdit ?: run {
+            _uiState.update { it.copy(errorMessages = listOf("No hay rutina para guardar.")) }
+            return
+        }
         val userId = currentUserIdArg
         if (userId.isNullOrBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessages = listOf("Error: Usuario no identificado para guardar."))
+            _uiState.update { it.copy(errorMessages = listOf("Error: Usuario no identificado para guardar.")) }
+            return
+        }
+        if (routineToProcess.nombrePersonalizado.isBlank()) {
+            _uiState.update { it.copy(errorMessages = listOf("El nombre de la rutina no puede estar vacío.")) }
             return
         }
 
-        if (routineToSave.nombrePersonalizado.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessages = listOf("El nombre de la rutina no puede estar vacío."))
-            return
-        }
-        // Considera si una rutina vacía es válida o si debe tener al menos un ejercicio
-        // if (routineToSave.ejercicios.isEmpty() && !routineToSave.isNewRoutine) { // Ejemplo de validación
-        //    _uiState.value = _uiState.value.copy(errorMessages = listOf("La rutina debe tener al menos un ejercicio."))
-        //    return
-        // }
-
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessages = emptyList())
+        _uiState.update { it.copy(isLoading = true, errorMessages = emptyList(), saveSuccess = false) }
         viewModelScope.launch {
             try {
-                // Asegurar que la fecha de modificación se actualiza y el userId está presente
-                val finalRoutineToSave = routineToSave.copy(
+                var finalImageUrl = uiStateValue.currentCoverImageUrl // URL de imagen existente o heredada
+                val newImageUri = uiStateValue.selectedCoverImageUri
+                // 1. Subir nueva imagen de portada si se seleccionó una
+                if (newImageUri != null) {
+                    _uiState.update { it.copy(isUploadingCoverImage = true) }
+                    Log.d(TAG, "Subiendo nueva imagen de portada desde URI: $newImageUri")
+                    val imageFileName = "rutina_portada_${UUID.randomUUID()}.jpg"
+                    val storageRefPath = "rutinas_portadas/$userId/$imageFileName" // Usar userId verificado
+                    val storageRef = firebaseStorage.reference.child(storageRefPath)
+
+                    storageRef.putFile(newImageUri).await()
+                    finalImageUrl = storageRef.downloadUrl.await().toString()
+                    Log.d(TAG, "Imagen subida exitosamente. URL: $finalImageUrl")
+                    // Actualizar el estado de la UI con la nueva URL y limpiar la URI seleccionada
+                    _uiState.update { it.copy(isUploadingCoverImage = false, currentCoverImageUrl = finalImageUrl, selectedCoverImageUri = null) }
+                }
+                // 2. Construir el objeto UserCustomRoutine actualizado
+                // Los campos como nombre, descripción, ejercicios, etc., ya deberían estar actualizados en
+                // uiStateValue.routineToEdit a través de sus respectivos callbacks.
+                val finalRoutineToSave = routineToProcess.copy(
+                    imagenUrl = finalImageUrl,
+                    // --- MODIFICACIÓN: Usar los valores editables del UiState ---
+                    nivelRecomendado = uiStateValue.editableNivelRutina,
+                    objetivos = uiStateValue.editableObjetivosRutina,
+                    lugarEntrenamiento = uiStateValue.editableLugarEntrenamientoRutina.mapNotNull { lugarNombre ->
+                        try {
+                            LugarEntrenamiento.valueOf(lugarNombre.uppercase()) // Convierte el String (nombre del enum) al objeto Enum
+                        } catch (e: IllegalArgumentException) {
+                            Log.w(TAG, "Lugar de entrenamiento inválido '$lugarNombre' encontrado durante el guardado. Será omitido.")
+                            null // Omite los valores que no se puedan convertir
+                        }
+                    },
                     fechaUltimaModificacion = Timestamp.now(),
-                    userId = userId // Ya debería estar, pero se reasegura
+                    userId = userId // Asegurar que el userId esté
                 )
-                // ***** LOG IMPORTANTE AQUÍ *****
-                Log.d(TAG, "Antes de llamar a saveOrUpdateUserCustomRoutine:")
-                Log.d(TAG, "  Routine ID: ${finalRoutineToSave.id}")
-                Log.d(TAG, "  Routine Nombre: ${finalRoutineToSave.nombrePersonalizado}")
-                Log.d(TAG, "  ViewModel.isNewRoutine: ${_uiState.value.isNewRoutine}")
-                Log.d(TAG, "  originalTemplateId: ${_uiState.value.originalTemplateId}")
-                Log.d(TAG, "  customRoutineIdArg: $customRoutineIdArg")
-                Log.d(TAG, "  templateRoutineIdArg: $templateRoutineIdArg")
-                // Esta función debe existir en tu FirestoreUtils.kt
-                // y ser capaz de guardar/actualizar una UserCustomRoutine.
-                saveOrUpdateUserCustomRoutine(userId, finalRoutineToSave)
+                Log.d(TAG, "Guardando rutina: ID=${finalRoutineToSave.id}, Nombre=${finalRoutineToSave.nombrePersonalizado}, ImagenURL=${finalRoutineToSave.imagenUrl}")
+                Log.d(TAG, "Niveles: ${finalRoutineToSave.nivelRecomendado}, Objetivos: ${finalRoutineToSave.objetivos}, Lugares: ${finalRoutineToSave.lugarEntrenamiento}")
 
-                _uiState.value = _uiState.value.copy(isLoading = false, saveSuccess = true)
-
+                // 3. Guardar en Firestore
+                // Asumo que tienes una función como la que usabas antes: saveOrUpdateUserCustomRoutine(userId, finalRoutineToSave)
+                // O directamente:
+                val routineDocRef = firestore.collection("users").document(userId)
+                    .collection("customRoutines").document(finalRoutineToSave.id) // Asegúrate que el ID sea el correcto
+                routineDocRef.set(finalRoutineToSave).await()
+                _uiState.update { it.copy(isLoading = false, saveSuccess = true, routineToEdit = finalRoutineToSave /* Actualizar con la rutina guardada */) }
             } catch (e: Exception) {
                 Log.e(TAG, "Error al guardar rutina", e)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessages = listOf("Error al guardar la rutina: ${e.message}"),
-                    saveSuccess = false
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isUploadingCoverImage = false,
+                        errorMessages = listOf("Error al guardar la rutina: ${e.message ?: "Error desconocido"}"),
+                        saveSuccess = false
+                    )
+                }
             }
         }
     }
