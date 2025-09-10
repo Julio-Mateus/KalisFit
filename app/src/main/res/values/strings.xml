@@ -408,6 +408,9 @@
     <string name="no_routines_match_search_filters">No hay rutinas que coincidan con tu búsqueda y filtros.</string>
     <string name="no_routines_match_initial_filters">No hay rutinas que coincidan con los filtros aplicados.</string>
     <string name="no_routines_yet">Aún no hay rutinas aquí. ¡Vuelve pronto!</string>
+    <string name="running_summary_overall_metrics_title">Métricas Generales</string>
+    <string name="running_location_needed_for_map_active">Se necesita permiso de ubicación para mostrar el mapa mientras la actividad está en curso. Por favor, actívalo en los ajustes.</string>
+    <string name="google_maps_key" translatable="false">AIzaSyCsAhMTRVbOVP7J7eUmnPYbnyDVA_jmDnU</string>
 </resources>
 
 

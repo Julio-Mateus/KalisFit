@@ -101,6 +101,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -114,6 +115,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
@@ -137,6 +140,7 @@ import com.jcmateus.kalisfit.ui.theme.MustardDeep
 import com.jcmateus.kalisfit.ui.theme.MustardPale
 import com.jcmateus.kalisfit.ui.theme.TextPrimaryLight
 import com.jcmateus.kalisfit.ui.theme.TextSecondaryLight
+import com.jcmateus.kalisfit.util.buildStaticMapUrl
 import com.jcmateus.kalisfit.viewmodel.HistoryViewModel
 import com.jcmateus.kalisfit.viewmodel.ResumenSemanalConFechas
 import kotlinx.coroutines.delay
@@ -185,13 +189,21 @@ fun buildActivityShareText(activity: UserActivity): String {
 @Composable
 fun UserActivityVisualCard(
     activity: UserActivity,
-    routePointsToDraw: List<LatLng> = emptyList() // Asumimos que LatLng aquí ES com.google.android.gms.maps.model.LatLng
+    routePointsToDraw: List<com.google.android.gms.maps.model.LatLng> = emptyList(),
+    staticMapImageUrl: String? = null, // <<< NUEVO PARÁMETRO
+    // Colores forzados para consistencia en la imagen compartida
+    cardBackgroundColor: Color = Color(0xFFFFF0C9), // MustardPale
+    onCardColor: Color = Color(0xFF1C1C1E), // TextPrimaryLight (casi negro)
+    primaryColorTitleAndRoute: Color = Color(0xFFC2850B), // MustardDark
+    secondaryColorIcon: Color = Color(0xFF1976D2), // AccentBlue
+    tertiaryColorHashtag: Color = Color(0xFF388E3C) // AccentGreen
 ) {
     val context = LocalContext.current
-    val esTemaOscuro = isSystemInDarkTheme()
-    val mapStyleOptions = remember(context, esTemaOscuro) {
-        val resourceId =
-            if (esTemaOscuro) R.raw.map_style_dark else R.raw.map_style // Asegúrate que estos R.raw existen
+
+    // Estilos de mapa para el GoogleMap interactivo (fallback si no hay imagen estática)
+    val isDarkTheme = isSystemInDarkTheme()
+    val mapStyleOptions = remember(context, isDarkTheme) {
+        val resourceId = if (isDarkTheme) R.raw.map_style_dark else R.raw.map_style
         try {
             MapStyleOptions.loadRawResourceStyle(context, resourceId)
         } catch (e: Exception) {
@@ -200,118 +212,91 @@ fun UserActivityVisualCard(
         }
     }
 
-    // --- ¡¡¡PRUEBA DE COLORES ABSOLUTOS!!! ---
-    val EXPECTED_CARD_BACKGROUND = Color(0xFFFFF0C9) // MustardPale
-    val EXPECTED_ON_CARD_TEXT_COLOR = Color(0xFF1C1C1E) // TextPrimaryLight (casi negro)
-    val EXPECTED_PRIMARY_COLOR_TITLE = Color(0xFFC2850B) // MustardDark (tu mostaza oscuro)
-    val EXPECTED_SECONDARY_COLOR_ICON = Color(0xFF1976D2) // AccentBlue
-    val EXPECTED_TERTIARY_COLOR_HASHTAG = Color(0xFF388E3C) // AccentGreen
-    // --- FIN DE PRUEBA DE COLORES ABSOLUTOS ---
-
-    // Usaremos estos colores forzados en lugar de los del tema para esta prueba
-    val cardBackgroundColor = EXPECTED_CARD_BACKGROUND
-    val onCardColor = EXPECTED_ON_CARD_TEXT_COLOR
-    val primaryColor = EXPECTED_PRIMARY_COLOR_TITLE
-    val secondaryColor = EXPECTED_SECONDARY_COLOR_ICON
-    val tertiaryColor = EXPECTED_TERTIARY_COLOR_HASHTAG
-
-    Log.d("VisualCardColors", "FORZADO - Fondo Tarjeta: $cardBackgroundColor")
-    Log.d("VisualCardColors", "FORZADO - Texto Detalles: $onCardColor")
-    Log.d("VisualCardColors", "FORZADO - Título/Polilínea: $primaryColor")
-
     Card(
         modifier = Modifier
-            .width(380.dp) // Un poco más ancha para el logo y mejor espaciado
+            .width(380.dp)
             .wrapContentHeight(),
         colors = CardDefaults.cardColors(containerColor = cardBackgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para captura de imagen
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Sin elevación para captura
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // --- Encabezado con Logo ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                // horizontalArrangement = Arrangement.SpaceBetween // Lo ajustamos para que el título pueda crecer
             ) {
-                // Reemplaza `R.drawable.ic_kalisfit_logo_small` con tu recurso de logo real
-                // Si no tienes uno, puedes comentarlo temporalmente o usar un Icon de Material.
                 Image(
-                    painter = painterResource(id = R.drawable.ic_logo2), // ¡¡¡CAMBIA ESTO A TU LOGO!!!
+                    painter = painterResource(id = R.drawable.ic_logo2), // CAMBIA A TU LOGO
                     contentDescription = "Logo KalisFit",
                     modifier = Modifier
-                        .size(48.dp) // Ajusta el tamaño según tu logo
-                        .padding(end = 12.dp) // Más espacio entre logo y texto
+                        .size(48.dp)
+                        .padding(end = 12.dp)
                 )
-                Column(modifier = Modifier.weight(1f)) { // Columna para título y fecha
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "¡Mi Actividad!",
-                        style = MaterialTheme.typography.titleLarge.copy(color = primaryColor),
-                        textAlign = TextAlign.Start, // El título puede empezar desde la izquierda
+                        style = MaterialTheme.typography.titleLarge.copy(color = primaryColorTitleAndRoute),
+                        textAlign = TextAlign.Start,
                     )
                     Text(
                         text = activity.timestamp?.let { activityDateFormatter.format(it) }
                             ?: "Fecha desconocida",
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = onCardColor.copy(
-                                alpha = 0.8f
-                            )
+                            color = onCardColor.copy(alpha = 0.8f)
                         ),
                         textAlign = TextAlign.Start,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp)) // Más espacio después del encabezado
-
-            // --- Mapa (si hay puntos) ---
-            if (routePointsToDraw.isNotEmpty()) {
-                Card(
+            Spacer(modifier = Modifier.height(16.dp))
+            // --- MAPA ---
+            if (!staticMapImageUrl.isNullOrBlank()) {
+                Log.d("UserActivityVisualCard", "Mostrando Static Map Image URL: $staticMapImageUrl")
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(staticMapImageUrl)
+                        .crossfade(true)
+                        // .error(R.drawable.map_error_placeholder) // Opcional: placeholder de error
+                        // .placeholder(R.drawable.map_loading_placeholder) // Opcional: placeholder de carga
+                        .build(),
+                    contentDescription = "Mapa de la ruta",
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
-                        .padding(vertical = 8.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        .clip(MaterialTheme.shapes.medium) // O RoundedCornerShape(8.dp)
+                        .background(Color.LightGray), // Fondo mientras carga
+                    contentScale = ContentScale.Crop, // O ContentScale.Fit si prefieres
+                    onError = { error ->
+                        Log.e("UserActivityVisualCard", "Error cargando imagen estática del mapa: ${error.result.throwable}")
+                    },
+                    onSuccess = { success ->
+                        Log.d("UserActivityVisualCard", "Imagen estática del mapa cargada correctamente.")
+                    }
+                )
+            } else if (routePointsToDraw.isNotEmpty()) {
+                // Fallback al mapa interactivo si no hay URL estática o está vacía
+                Log.d("UserActivityVisualCard", "Mostrando GoogleMap interactivo (fallback). Puntos: ${routePointsToDraw.size}")
+                Card( // Usar una Card interna para el mapa interactivo para mantener la forma
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    shape = MaterialTheme.shapes.medium, // O RoundedCornerShape(8.dp)
+                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray), // Fondo oscuro para el mapa
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     val cameraPositionState = rememberCameraPositionState()
-
                     LaunchedEffect(routePointsToDraw) {
-                        Log.d(
-                            "UserActivityVisualCard",
-                            "LaunchedEffect para mover cámara. Puntos: ${routePointsToDraw.size}"
-                        )
-                        if (routePointsToDraw.size >= 2) {
-                            val builder = LatLngBounds.builder()
-                            routePointsToDraw.forEach { latLng ->
-                                builder.include(latLng)
-                            }
-                            try {
-                                // Mover SIN animación para que sea más rápido para la captura
-                                cameraPositionState.move(
-                                    CameraUpdateFactory.newLatLngBounds(
-                                        builder.build(),
-                                        50
-                                    )
-                                ) // 50px padding
-                                Log.d("UserActivityVisualCard", "Cámara movida a bounds.")
-                            } catch (e: IllegalStateException) {
-                                Log.e(
-                                    "UserActivityVisualCard",
-                                    "Error setting map bounds: ${e.message}. Fallback."
-                                )
-                                routePointsToDraw.firstOrNull()?.let {
-                                    cameraPositionState.move(
-                                        CameraUpdateFactory.newLatLngZoom(
-                                            it,
-                                            13f
-                                        )
-                                    )
+                        if (routePointsToDraw.isNotEmpty()) {
+                            if (routePointsToDraw.size >= 2) {
+                                val builder = LatLngBounds.builder()
+                                routePointsToDraw.forEach { builder.include(it) }
+                                try {
+                                    cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(builder.build(), 50))
+                                } catch (e: IllegalStateException) {
+                                    routePointsToDraw.firstOrNull()?.let { cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f)) }
                                 }
-                            }
-                        } else if (routePointsToDraw.isNotEmpty()) { // Solo un punto
-                            routePointsToDraw.firstOrNull()?.let {
-                                cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f))
-                                Log.d("UserActivityVisualCard", "Cámara movida a un solo punto.")
+                            } else { // Solo un punto
+                                routePointsToDraw.firstOrNull()?.let { cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 13f)) }
                             }
                         }
                     }
@@ -325,7 +310,8 @@ fun UserActivityVisualCard(
                             scrollGesturesEnabled = false,
                             zoomGesturesEnabled = false,
                             tiltGesturesEnabled = false,
-                            mapToolbarEnabled = false
+                            mapToolbarEnabled = false,
+                            rotationGesturesEnabled = false
                         ),
                         properties = MapProperties(
                             isMyLocationEnabled = false,
@@ -336,11 +322,10 @@ fun UserActivityVisualCard(
                         if (routePointsToDraw.size >= 2) {
                             Polyline(
                                 points = routePointsToDraw,
-                                color = primaryColor, // Usar color primario del tema
-                                width = 10f
+                                color = primaryColorTitleAndRoute.copy(alpha = 0.8f), // Usar el color primario con algo de alfa
+                                width = 8f // Un poco más delgada para la visual
                             )
                         }
-                        // Marcador de inicio (verde)
                         routePointsToDraw.firstOrNull()?.let { position ->
                             Marker(
                                 state = rememberMarkerState(position = position),
@@ -348,22 +333,30 @@ fun UserActivityVisualCard(
                                 alpha = 0.9f
                             )
                         }
-                        // Marcador de fin (rojo) solo si hay más de un punto y es diferente al primero
                         if (routePointsToDraw.size > 1 && routePointsToDraw.last() != routePointsToDraw.first()) {
                             routePointsToDraw.lastOrNull()?.let { position ->
                                 Marker(
                                     state = rememberMarkerState(position = position),
-                                    icon = BitmapDescriptorFactory.defaultMarker(
-                                        BitmapDescriptorFactory.HUE_RED
-                                    ),
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
                                     alpha = 0.9f
                                 )
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                // Placeholder si no hay ni URL estática ni puntos para el mapa interactivo
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color.LightGray, MaterialTheme.shapes.medium),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No hay datos de ruta para mostrar el mapa.", color = onCardColor.copy(alpha = 0.7f))
+                }
             }
+            Spacer(modifier = Modifier.height(12.dp))
 
             // --- Detalles de la Actividad ---
             Row(
@@ -373,21 +366,13 @@ fun UserActivityVisualCard(
                 Icon(
                     imageVector = Icons.Filled.DirectionsRun,
                     contentDescription = "Actividad",
-                    tint = secondaryColor,
+                    tint = secondaryColorIcon,
                     modifier = Modifier.size(40.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    InfoRowVisual(
-                        "Duración:",
-                        formatSecondsToHMS(activity.elapsedTimeSeconds),
-                        onCardColor
-                    )
-                    InfoRowVisual(
-                        "Distancia:",
-                        String.format(Locale.US, "%.2f km", activity.distanceKm),
-                        onCardColor
-                    )
+                    InfoRowVisual("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds), onCardColor)
+                    InfoRowVisual("Distancia:", String.format(Locale.US, "%.2f km", activity.distanceKm), onCardColor)
                     InfoRowVisual("Ritmo:", activity.avgPace, onCardColor)
                     InfoRowVisual("Calorías:", "${activity.caloriesBurned} kcal", onCardColor)
                 }
@@ -405,33 +390,33 @@ fun UserActivityVisualCard(
                     style = MaterialTheme.typography.labelSmall.copy(color = onCardColor.copy(alpha = 0.7f)),
                 )
                 Text(
-                    "#KalisFit #${if (activity.distanceKm > 2) "Running" else "Walking"}", // Ajusta la lógica del hashtag si es necesario
-                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColor),
+                    "#KalisFit #${if (activity.distanceKm > 2) "Running" else "Walking"}",
+                    style = MaterialTheme.typography.bodySmall.copy(color = tertiaryColorHashtag),
                 )
             }
         }
     }
 }
-// Actualiza InfoRowVisual para aceptar un color y así asegurar la consistencia del tema
+// InfoRowVisual (asumiendo que está aquí o accesible)
 @Composable
-fun InfoRowVisual(label: String, value: String, textColor: Color) { // Añadido textColor
+fun InfoRowVisual(label: String, value: String, textColor: Color) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(0.45f), // Ligeramente ajustado el peso
-            color = textColor.copy(alpha = 0.9f) // Usar el color pasado
+            modifier = Modifier.weight(0.45f),
+            color = textColor.copy(alpha = 0.9f)
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold, // Valor un poco más destacado
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(0.55f),
-            color = textColor // Usar el color pasado
+            color = textColor
         )
     }
-    Spacer(modifier = Modifier.height(6.dp)) // Un poco más de espacio
+    Spacer(modifier = Modifier.height(6.dp))
 }
 // Formateador de fecha para UserActivity
 @SuppressLint("SimpleDateFormat")
@@ -959,13 +944,17 @@ fun ResumenSemanalVisualCardModern(
         ) {
             // --- ENCABEZADO ---
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_logo2),
                     contentDescription = "Logo KalisFit",
-                    modifier = Modifier.size(52.dp).clip(CircleShape)
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
@@ -1030,7 +1019,9 @@ fun ResumenSemanalVisualCardModern(
             // --- ENFOQUE (si existe) ---
             if (resumen.objetivosRecurrentes.isNotEmpty()) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -1062,7 +1053,9 @@ fun ResumenSemanalVisualCardModern(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1755,9 +1748,6 @@ fun HistorialActividadesLibresContent(
 @Composable
 fun UserActivityCard(activity: UserActivity, context: Context) {
     val coroutineScope = rememberCoroutineScope()
-
-    // Formateador de fecha (si no lo tienes global, defínelo aquí o pásalo)
-    // Para este ejemplo, lo defino localmente si no estuviera ya accesible.
     val localActivityDateFormatter = remember {
         SimpleDateFormat("EEE, d MMM yyyy HH:mm", Locale.getDefault())
     }
@@ -1767,80 +1757,108 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // ... (Contenido de la tarjeta: Fecha, Icono, InfoRows - sin cambios) ...
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = activity.timestamp?.let { localActivityDateFormatter.format(it) }
-                        ?: "Fecha desconocida",
+                    text = activity.timestamp?.let { localActivityDateFormatter.format(it) } ?: "Fecha desconocida",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Icon(
-                    imageVector = Icons.Filled.DirectionsRun, // O un icono más específico si es caminata vs carrera
+                    imageVector = Icons.Filled.DirectionsRun,
                     contentDescription = "Tipo de actividad",
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-
-            InfoRow(
-                "Duración:",
-                formatSecondsToHMS(activity.elapsedTimeSeconds)
-            ) // Asume que formatSecondsToHMS existe
+            InfoRow("Duración:", formatSecondsToHMS(activity.elapsedTimeSeconds))
             InfoRow("Distancia:", String.format(Locale.US, "%.2f km", activity.distanceKm))
             InfoRow("Ritmo Promedio:", activity.avgPace)
             InfoRow("Calorías Quemadas:", "${activity.caloriesBurned} kcal")
-
-            Spacer(modifier = Modifier.height(16.dp)) // Espacio antes de los botones
+            Spacer(modifier = Modifier.height(16.dp))
 
             // --- BOTONES DE COMPARTIR ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(
-                    8.dp,
-                    Alignment.End
-                ) // Alinea a la derecha
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                // Botón Compartir Texto
+                // Botón Compartir Texto (sin cambios)
                 OutlinedButton(onClick = {
-                    val shareText =
-                        buildActivityShareText(activity) // Asume que buildActivityShareText existe
+                    val shareText = buildActivityShareText(activity)
                     val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND // CORREGIDO
+                        action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, shareText)
-                        type = "text/plain" // CORREGIDO
+                        type = "text/plain"
                     }
-                    val shareIntent = Intent.createChooser(sendIntent, "Compartir actividad con...")
-                    context.startActivity(shareIntent)
+                    context.startActivity(Intent.createChooser(sendIntent, "Compartir actividad con..."))
                 }) {
                     Icon(Icons.Default.Share, contentDescription = "Compartir como Texto")
                     Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                     Text("Texto")
                 }
 
-                // Botón Compartir Imagen
+                // Botón Compartir Imagen (CON LÓGICA DE MAPA ESTÁTICO)
                 Button(onClick = {
-                    val pointsForVisualCard: List<LatLng> =
+                    val pointsForMapSdk: List<com.google.android.gms.maps.model.LatLng> =
                         activity.routePoints.map { locationPoint ->
-                            LatLng(locationPoint.latitude, locationPoint.longitude)
+                            com.google.android.gms.maps.model.LatLng(locationPoint.latitude, locationPoint.longitude)
                         }
-                    Log.d("UserActivityCard", "Iniciando captura de imagen. Puntos: ${pointsForVisualCard.size}")
+                    Log.d("UserActivityCard", "Compartir Imagen: Puntos para mapa SDK: ${pointsForMapSdk.size}")
 
                     coroutineScope.launch {
-                        delay(2000) // Mantén o ajusta este retraso según sea necesario para el mapa
-                        Log.d("UserActivityCard", "Retraso completado, procediendo a capturar.")
+                        // El delay puede no ser necesario si la imagen estática se carga rápido,
+                        // pero un pequeño delay para la construcción de URL y la primera carga podría ser útil.
+                        // delay(500) // Reducir o quitar el delay
+
+                        val apiKey = try {
+                            context.getString(R.string.google_maps_key) // Asegúrate que este string existe y tiene tu clave
+                        } catch (e: Exception) {
+                            Log.e("UserActivityCard", "ERROR: google_maps_key no encontrada en strings.xml", e)
+                            Toast.makeText(context, "Error: Clave de API de mapas no configurada.", Toast.LENGTH_LONG).show()
+                            return@launch // No continuar si no hay API key
+                        }
+
+                        if (apiKey.isBlank() || apiKey == "TU_API_KEY") { // Chequeo adicional
+                            Log.e("UserActivityCard", "ERROR: API Key está vacía o es el placeholder.")
+                            Toast.makeText(context, "Error: Clave de API de mapas no configurada correctamente.", Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+
+
+                        val staticMapUrl = if (pointsForMapSdk.isNotEmpty()) {
+                            buildStaticMapUrl( // Llama a la función de utilidad
+                                routePoints = pointsForMapSdk,
+                                apiKey = apiKey,
+                                // Ajusta width/height según el tamaño de tu UserActivityVisualCard
+                                // y la densidad de pantalla deseada para la imagen.
+                                width = 760, // Ejemplo: 380dp * 2x
+                                height = 360, // Ejemplo: 180dp * 2x
+                                // El color de la ruta en la API estática debe ser formato 0xRRGGBBAA o nombre de color.
+                                // Tu primaryColorTitleAndRoute es Color(0xFFC2850B) -> 0xC2850BFF
+                                pathColor = "0xC2850BFF" // MustardDark opaco
+                            )
+                        } else {
+                            null
+                        }
+                        Log.d("UserActivityCard", "URL de Mapa Estático generada: $staticMapUrl")
+
+                        if (staticMapUrl.isNullOrBlank() && pointsForMapSdk.isNotEmpty()) {
+                            Log.w("UserActivityCard", "Se generó una URL de mapa estático vacía a pesar de tener puntos.")
+                            // Considera un fallback o mostrar un error aquí.
+                        }
 
                         captureComposableAsImage(
                             context = context,
                             composable = {
                                 UserActivityVisualCard(
                                     activity = activity,
-                                    routePointsToDraw = pointsForVisualCard
-                                    // Asegúrate que UserActivityVisualCard
-                                    // define sus colores y fondo de forma absoluta
+                                    routePointsToDraw = pointsForMapSdk, // Se puede pasar como fallback
+                                    staticMapImageUrl = staticMapUrl    // <<< SE PASA LA URL AQUÍ
+                                    // Los colores se toman de los defaults de UserActivityVisualCard
                                 )
                             },
                             onImageReady = { imageFile ->
@@ -1848,7 +1866,7 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
                                 try {
                                     val imageUri = FileProvider.getUriForFile(
                                         context,
-                                        "${context.packageName}.provider",
+                                        "${context.packageName}.provider", // CONFIRMA TU AUTHORITY
                                         imageFile
                                     )
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1859,17 +1877,14 @@ fun UserActivityCard(activity: UserActivity, context: Context) {
                                     context.startActivity(
                                         Intent.createChooser(shareIntent, "Compartir imagen de actividad con...")
                                     )
-                                } catch (e: IllegalArgumentException) {
-                                    Log.e("UserActivityCard", "Error al obtener URI para el archivo: ${e.message}")
-                                    Toast.makeText(context, "Error al compartir: No se pudo acceder al archivo de imagen.", Toast.LENGTH_LONG).show()
-                                } catch (e: Exception) {
-                                    Log.e("UserActivityCard", "Error general al intentar compartir la imagen de actividad: ${e.message}")
-                                    Toast.makeText(context, "Error al compartir la imagen de actividad.", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) { // Captura más genérica para FileProvider y otros errores
+                                    Log.e("UserActivityCard", "Error al compartir imagen: ${e.message}", e)
+                                    Toast.makeText(context, "Error al compartir imagen.", Toast.LENGTH_LONG).show()
                                 }
                             },
                             onError = { exception ->
-                                Log.e("UserActivityCard", "Error al capturar la imagen de actividad: ${exception.message}", exception)
-                                Toast.makeText(context, "Error al generar la imagen de actividad: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
+                                Log.e("UserActivityCard", "Error al capturar imagen de actividad: ${exception.message}", exception)
+                                Toast.makeText(context, "Error al generar imagen: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
                         )
                     }
