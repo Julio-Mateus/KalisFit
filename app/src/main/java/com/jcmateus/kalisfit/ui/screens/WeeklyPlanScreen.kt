@@ -72,6 +72,7 @@ import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModel
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
 import java.util.Date
+
 /*
 // --- COMPOSABLES AUXILIARES (sin cambios si ya estaban bien) ---
 @Composable
@@ -395,23 +396,14 @@ fun ScheduleWeeklyReminderDialog(
 ) {
     val context = LocalContext.current
     // Usaremos el Calendar de ICU si tu minSdk es 24+, sino java.util.Calendar
-    val initialCalendar = Calendar.getInstance().apply { time = dayDate }
-    var selectedHour by remember { mutableStateOf(initialCalendar.get(Calendar.HOUR_OF_DAY)) }
-    var selectedMinute by remember { mutableStateOf(initialCalendar.get(Calendar.MINUTE)) }
+    val calendar = remember(dayDate) { Calendar.getInstance().apply { time = dayDate } }
+    var selectedHour by remember(dayDate) { mutableStateOf(calendar.get(Calendar.HOUR_OF_DAY)) }
+    var selectedMinute by remember(dayDate) { mutableStateOf(calendar.get(Calendar.MINUTE)) }
     val isRepeating = false // Como discutimos, para el plan semanal, suele ser no repetitivo
     val intervalMillis: Long? = null
-    // El TimePickerDialog nativo generalmente respeta el tema del sistema/app.
-    // No necesitas aplicar temas manualmente al TimePickerDialog en sí.
-    val timePickerDialog = TimePickerDialog(
-        context,
-        { _, hour: Int, minute: Int ->
-            selectedHour = hour
-            selectedMinute = minute
-        },
-        selectedHour,
-        selectedMinute,
-        true // Formato 24 horas
-    )
+
+    // El TimePickerDialog ya no se crea aquí en cada recomposición.
+
     AlertDialog(
         onDismissRequest = onDismiss,
         // --- COLORES Y ESTILO DEL DIÁLOGO ---
@@ -439,7 +431,19 @@ fun ScheduleWeeklyReminderDialog(
 
                 // --- BOTÓN DE SELECCIONAR HORA MEJORADO ---
                 Button(
-                    onClick = { timePickerDialog.show() },
+                    onClick = {
+                        // Se crea y muestra el diálogo solo al hacer clic.
+                        TimePickerDialog(
+                            context,
+                            { _, hour: Int, minute: Int ->
+                                selectedHour = hour
+                                selectedMinute = minute
+                            },
+                            selectedHour,
+                            selectedMinute,
+                            true // Formato 24 horas
+                        ).show()
+                    },
                     modifier = Modifier
                         .fillMaxWidth(0.8f) // Que no ocupe todo el ancho, pero sí una buena parte
                         .padding(vertical = 8.dp),

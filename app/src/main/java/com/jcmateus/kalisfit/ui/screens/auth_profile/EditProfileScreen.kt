@@ -2,6 +2,7 @@ package com.jcmateus.kalisfit.ui.screens.auth_profile
 
 import android.net.Uri
 import android.widget.Toast
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -141,8 +142,20 @@ fun EditProfileScreen(
     // --- Estado local para la nueva imagen ---
     var newImageUri by remember { mutableStateOf<Uri?>(null) }
     val imagePickerLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            newImageUri = uri
+        //rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) {
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) {
+                        // En algunos proveedores (u OEMs) no se concede permiso persistible.
+                        // Aun así conservamos el URI para intentar la subida en esta sesión.
+                    }
+                }
+                newImageUri = uri
         }
     // --- Estado para el proceso de guardado ---
     val updateState by viewModel.updateState.collectAsState()
@@ -217,7 +230,8 @@ fun EditProfileScreen(
             ProfileImageSection(
                 currentImageUrl = fotoUrlActualDelPerfil,
                 newImageUri = newImageUri,
-                onImageClick = { if (!isLoading) imagePickerLauncher.launch("image/*") }
+                //onImageClick = { if (!isLoading) imagePickerLauncher.launch("image/*") }
+                        onImageClick = { if (!isLoading) imagePickerLauncher.launch(arrayOf("image/*")) }
             )
 
             ProfileSection(title = personalInfoLabel) {
