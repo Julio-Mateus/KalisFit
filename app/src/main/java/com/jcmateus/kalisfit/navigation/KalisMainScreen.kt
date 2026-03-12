@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -59,10 +61,11 @@ fun KalisMainScreen(mainNavController: NavHostController) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? Activity
-    
+
     val cartRepository = remember { CartRepositoryImpl(FirebaseFirestore.getInstance()) }
     val authRepository = remember { AuthRepositoryImpl(FirebaseAuth.getInstance()) }
-    val cartViewModel: CartViewModel = viewModel(factory = CartViewModelFactory(cartRepository, authRepository))
+    val cartViewModel: CartViewModel =
+        viewModel(factory = CartViewModelFactory(cartRepository, authRepository))
     val cartUiState by cartViewModel.uiState.collectAsState()
     val userProfileViewModel: UserProfileViewModel = viewModel()
 
@@ -85,6 +88,7 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                     mainNavController = mainNavController,
                     drawerState = drawerState,
                     scope = scope,
+                    currentMainRoute = currentBottomRoute,
                     userProfileViewModel = userProfileViewModel
                 )
             }
@@ -101,7 +105,13 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                         actions = {
                             if (currentBottomRoute == BottomNavItem.Store.route) {
                                 IconButton(onClick = { mainNavController.navigate(Routes.CART_SCREEN) }) {
-                                    BadgedBox(badge = { if (cartUiState.itemCount > 0) Badge { Text("${cartUiState.itemCount}") } }) {
+                                    BadgedBox(badge = {
+                                        if (cartUiState.itemCount > 0) Badge {
+                                            Text(
+                                                "${cartUiState.itemCount}"
+                                            )
+                                        }
+                                    }) {
                                         Icon(Icons.Filled.ShoppingCart, null)
                                     }
                                 }
@@ -111,7 +121,13 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                 },
                 bottomBar = {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                        listOf(BottomNavItem.Home, BottomNavItem.Calisthenics, BottomNavItem.Stoicism, BottomNavItem.Running, BottomNavItem.Store).forEach { item ->
+                        listOf(
+                            BottomNavItem.Home,
+                            BottomNavItem.Calisthenics,
+                            BottomNavItem.Stoicism,
+                            BottomNavItem.Running,
+                            BottomNavItem.Store
+                        ).forEach { item ->
                             val selected = currentBottomRoute == item.route
                             NavigationBarItem(
                                 selected = selected,
@@ -134,16 +150,26 @@ fun KalisMainScreen(mainNavController: NavHostController) {
                 NavHost(
                     navController = bottomNavController,
                     startDestination = BottomNavItem.Home.route,
-                    modifier = Modifier.padding(contentPadding).fillMaxSize()
+                    modifier = Modifier
+                        .padding(contentPadding)
+                        .fillMaxSize()
                 ) {
                     composable(BottomNavItem.Home.route) { HomeScreen(mainNavController = mainNavController) }
-                    composable(BottomNavItem.Calisthenics.route) { CalisthenicsProgressionScreen(mainNavController = mainNavController) }
-                    composable(BottomNavItem.Stoicism.route) { StoicismContentScreen(mainNavController = mainNavController) }
+                    composable(BottomNavItem.Calisthenics.route) {
+                        CalisthenicsProgressionScreen(
+                            mainNavController = mainNavController
+                        )
+                    }
+                    composable(BottomNavItem.Stoicism.route) {
+                        StoicismContentScreen(
+                            mainNavController = mainNavController
+                        )
+                    }
                     composable(BottomNavItem.Running.route) { RunningTabScreen(navController = mainNavController) }
-                    composable(BottomNavItem.Store.route) { 
-                        StoreScreen(onProductClick = { productId -> 
-                            mainNavController.navigate(Routes.productDetail(productId)) 
-                        }) 
+                    composable(BottomNavItem.Store.route) {
+                        StoreScreen(onProductClick = { productId ->
+                            mainNavController.navigate(Routes.productDetail(productId))
+                        })
                     }
                 }
             }
@@ -157,78 +183,186 @@ fun KalisDrawerContent(
     mainNavController: NavHostController,
     drawerState: DrawerState,
     scope: CoroutineScope,
+    currentMainRoute: String?,
     userProfileViewModel: UserProfileViewModel
 ) {
     val userProfile by userProfileViewModel.user.collectAsState()
-    var expandLugar by remember { mutableStateOf(false) }
-    var expandNivel by remember { mutableStateOf(false) }
-    
-    ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
-        // Header con Logo Original Restaurado
-        Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer).padding(24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(R.drawable.ic_logo2),
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
-                )
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    AsyncImage(
-                        model = userProfile?.fotoUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp).clip(CircleShape).border(2.dp, Color.White, CircleShape),
-                        contentScale = ContentScale.Crop,
-                        error = painterResource(R.drawable.ic_default_avatar)
+
+    ModalDrawerSheet(
+        modifier = Modifier.width(300.dp),
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
+        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+
+    ) {
+        // --- HEADER PROFESIONAL CON RACHAS ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.surface
+                        )
                     )
-                    Text(userProfile?.nombre ?: "Usuario", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                )
+                .padding(horizontal = 24.dp, vertical = 28.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_logo2),
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp))
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = userProfile?.nombre ?: "Usuario",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = userProfile?.email ?: "Miembro Pro",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Foto clickable que lleva al perfil
+                    Box(
+                        contentAlignment = Alignment.BottomCenter,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable {
+                                scope.launch {
+                                    drawerState.close()
+                                    mainNavController.navigate(Routes.PROFILE_SCREEN)
+                                }
+                            }
+                    ) {
+                        AsyncImage(
+                            model = userProfile?.fotoUrl,
+                            contentDescription = null,
+                            modifier = Modifier.size(72.dp).clip(CircleShape).border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                            contentScale = ContentScale.Crop,
+                            error = painterResource(R.drawable.ic_default_avatar)
+                        )
+                        Surface(
+                            modifier = Modifier.offset(y = 4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape,
+                            shadowElevation = 4.dp
+                        ) {
+                            Text(
+                                text = userProfile?.nivel?.take(3)?.uppercase() ?: "BEG",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // --- SECCIÓN DE RACHAS Y LOGROS ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    // Aquí manejamos la racha (Daily Streak)
+                    HeaderStat(
+                        icon = Icons.Default.Whatshot, // Icono de fuego para racha
+                        value = "${userProfile?.progresoActual ?: 0}",
+                        label = "Días Racha",
+                        color = Color(0xFFFF5722) // Naranja intenso para el fuego
+                    )
+                    // Divisor vertical sutil
+                    Box(modifier = Modifier.width(1.dp).height(30.dp).background(MaterialTheme.colorScheme.outlineVariant))
+
+                    HeaderStat(
+                        icon = Icons.Default.FitnessCenter,
+                        value = "${userProfile?.rutinasCompletadas ?: 0}",
+                        label = "Completadas"
+                    )
                 }
             }
         }
-        
-        LazyColumn(modifier = Modifier.padding(12.dp)) {
+        // --- LISTA DE ITEMS ---
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
             item {
-                DrawerItem(Icons.Default.Home, "Inicio") { scope.launch { drawerState.close(); mainNavController.navigate(Routes.MAIN_CONTENT) } }
-                DrawerItem(Icons.Default.MenuBook, "Mis Rutinas") { scope.launch { drawerState.close(); mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) } }
-                
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
-                // Sección de Explorar por Lugar
-                DrawerCollapsibleItem(Icons.Default.Place, "Por Lugar", expandLugar) { expandLugar = !expandLugar }
-                AnimatedVisibility(visible = expandLugar) {
-                    Column(modifier = Modifier.padding(start = 24.dp)) {
-                        LugarEntrenamiento.entries.forEach { lugar ->
-                            DrawerItem(Icons.Default.ChevronRight, lugar.name.lowercase().replaceFirstChar { it.uppercase() }) {
-                                scope.launch { drawerState.close(); mainNavController.navigate("${Routes.ROUTINES_EXPLORER_SCREEN}?${Routes.Args.PLACE_ARG}=${lugar.name}") }
-                            }
-                        }
-                    }
+                DrawerSectionTitle("ENTRENAMIENTO")
+                DrawerItem(
+                    Icons.Default.Home,
+                    "Panel de Inicio",
+                    selected = currentMainRoute == Routes.MAIN_CONTENT
+                ) {
+                    scope.launch { drawerState.close(); mainNavController.navigate(Routes.MAIN_CONTENT) }
                 }
-
-                // Sección de Explorar por Nivel
-                DrawerCollapsibleItem(Icons.Default.BarChart, "Por Nivel", expandNivel) { expandNivel = !expandNivel }
-                AnimatedVisibility(visible = expandNivel) {
-                    Column(modifier = Modifier.padding(start = 24.dp)) {
-                        listOf("PRINCIPIANTE", "INTERMEDIO", "AVANZADO").forEach { nivel ->
-                            DrawerItem(Icons.Default.ChevronRight, nivel.lowercase().replaceFirstChar { it.uppercase() }) {
-                                scope.launch { drawerState.close(); mainNavController.navigate("${Routes.ROUTINES_EXPLORER_SCREEN}?${Routes.Args.LEVEL_ARG}=$nivel") }
-                            }
-                        }
-                    }
+                DrawerItem(
+                    Icons.Default.MenuBook,
+                    "Mis Rutinas",
+                    selected = currentMainRoute == Routes.MY_CUSTOM_ROUTINES_SCREEN
+                ) {
+                    scope.launch { drawerState.close(); mainNavController.navigate(Routes.MY_CUSTOM_ROUTINES_SCREEN) }
                 }
+                DrawerItem(
+                    icon = Icons.Default.Search,
+                    label = "Explorar Catálogo",
+                    selected = currentMainRoute == Routes.ROUTINES_EXPLORER_SCREEN
+                ) {
+                    scope.launch { drawerState.close(); mainNavController.navigate(Routes.ROUTINES_EXPLORER_SCREEN) }
+                }
+            }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                DrawerItem(Icons.AutoMirrored.Filled.FormatListBulleted, "Biblioteca de Ejercicios") {
+            item{
+                DrawerSectionTitle("RECURSOS")
+                DrawerItem(
+                    icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                    label = "Biblioteca de Ejercicios"
+                ){
                     scope.launch { drawerState.close(); mainNavController.navigate(Routes.allExercises(false)) }
                 }
-                DrawerItem(Icons.Default.History, "Historial de Actividad") {
+                DrawerItem(
+                    icon = Icons.Default.History,
+                    label = "Historial de Actividad",
+                    selected = currentMainRoute == Routes.ACTIVITY_HISTORY_SCREEN
+                ){
                     scope.launch { drawerState.close(); mainNavController.navigate(Routes.ACTIVITY_HISTORY_SCREEN) }
                 }
-                DrawerItem(Icons.Default.Settings, "Configuración") {
+            }
+
+            item{
+                DrawerSectionTitle("SOPORTE Y CUENTA")
+                DrawerItem(
+                    icon = Icons.Default.Settings,
+                    label = "Configuración"
+                ){
                     scope.launch { drawerState.close(); mainNavController.navigate(Routes.SETTINGS_SCREEN) }
                 }
-                
-                DrawerItem(Icons.AutoMirrored.Filled.Logout, "Cerrar Sesión", color = MaterialTheme.colorScheme.error) {
+                Spacer(Modifier.height(8.dp))
+                DrawerItem(
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    label = "Cerrar Sesión",
+                    color = MaterialTheme.colorScheme.error
+                ){
                     scope.launch {
                         drawerState.close()
                         FirebaseAuth.getInstance().signOut()
@@ -239,22 +373,66 @@ fun KalisDrawerContent(
         }
     }
 }
-
 @Composable
-fun DrawerItem(icon: ImageVector, label: String, color: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
+fun DrawerItem(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean = false,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit
+) {
     NavigationDrawerItem(
-        icon = { Icon(icon, null, tint = color) },
-        label = { Text(label, color = color) },
-        selected = false,
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = if (selected) MaterialTheme.colorScheme.primary else color.copy(alpha = 0.7f)
+            )
+        },
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+                color = if (selected) MaterialTheme.colorScheme.primary else color
+            )
+        },
+        selected = selected,
         onClick = onClick,
-        modifier = Modifier.padding(vertical = 2.dp)
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            unselectedContainerColor = Color.Transparent
+        )
+    )
+}
+@Composable
+fun DrawerSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+        modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 8.dp)
     )
 }
 
 @Composable
-fun DrawerCollapsibleItem(icon: ImageVector, label: String, isExpanded: Boolean, onClick: () -> Unit) {
+fun DrawerCollapsibleItem(
+    icon: ImageVector,
+    label: String,
+    isExpanded: Boolean,
+    onClick: () -> Unit
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -264,5 +442,29 @@ fun DrawerCollapsibleItem(icon: ImageVector, label: String, isExpanded: Boolean,
             Text(label, style = MaterialTheme.typography.bodyLarge)
         }
         Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
+    }
+}
+
+@Composable
+fun HeaderStat(icon: ImageVector, value: String, label: String, color: Color = MaterialTheme.colorScheme.primary) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, modifier = Modifier.size(16.dp), tint = color)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = color
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
     }
 }

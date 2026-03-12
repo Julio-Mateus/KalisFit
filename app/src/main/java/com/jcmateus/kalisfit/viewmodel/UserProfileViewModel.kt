@@ -78,6 +78,11 @@ class UserProfileViewModel(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) : ViewModel() {
+    // --- Racha puntos ---
+    private val _rachaPuntos = MutableStateFlow(0)
+    val rachaPuntos: StateFlow<Int> = _rachaPuntos.asStateFlow()
+    private val _rachaActual = MutableStateFlow(0)
+    val rachaActual: StateFlow<Int> = _rachaActual.asStateFlow()
     // --- Estados del Perfil del Usuario ---
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user.asStateFlow()
@@ -171,6 +176,78 @@ class UserProfileViewModel(
             _rutinaDeHoy.value = null
         }
     }
+    private fun calcularRachaActual(uid: String) {
+        viewModelScope.launch {
+            try {
+                // Obtenemos los últimos entrenamientos de Firestore
+                val snapshot = firestore.collection("users").document(uid)
+                    .collection("progresoRutinas")
+                    .orderBy("fecha", Query.Direction.DESCENDING)
+                    .limit(30)
+                    .get()
+                    .await()
+
+                val registros = snapshot.toObjects(ProgresoRutina::class.java)
+
+                if (registros.isEmpty()) {
+                    _rachaActual.value = 0
+                    return@launch
+                }
+
+                // Normalizamos las fechas a "solo día" (sin horas) para comparar
+                val fechas = registros.map { it.fecha.toDate() }.map { date ->
+                    Calendar.getInstance().apply {
+                        time = date
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.time
+                }.distinct()
+
+                // Definimos Hoy y Ayer
+                val hoy = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0);
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.time
+
+                val ayer = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, -1)
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0);
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.time
+
+                // Si no entrenó ni hoy ni ayer, la racha se rompió
+                if (fechas.first() != hoy && fechas.first() != ayer) {
+                    _rachaActual.value = 0
+                    return@launch
+                }
+
+                // Contamos los días consecutivos hacia atrás
+                var racha = 0
+                var diaEsperado = fechas.first()
+
+                for (fecha in fechas) {
+                    if (fecha == diaEsperado) {
+                        racha++
+                        val cal = Calendar.getInstance().apply {
+                            time = diaEsperado
+                            add(Calendar.DAY_OF_YEAR, -1)
+                        }
+                        diaEsperado = cal.time
+                    } else {
+                        break
+                    }
+                }
+
+                // ¡Actualizamos el valor final!
+                _rachaActual.value = racha
+
+            } catch (e: Exception) {
+                Log.e("Racha", "Error al calcular racha: ${e.message}")
+            }
+        }
+    }
     // --- Funciones para Actualizar Campos Editables desde la UI ---
     fun onNombreChange(newName: String) { _editableNombre.value = newName }
     fun onNivelChange(nuevoNivel: String) { _editableNivel.value = nuevoNivel }
@@ -227,6 +304,7 @@ class UserProfileViewModel(
                     loadRecommendedRoutines(userProfile)
                     loadUserCustomRoutines()
                     loadHomeScreenData()
+                    calcularRachaActual(uid)
                     userProfile?.let { loadPlanSemanalActual(forceRegenerate = false) } // Modificado
                 } else {
                     Log.w(TAG, "El documento del usuario no existe para UID: $uid")
