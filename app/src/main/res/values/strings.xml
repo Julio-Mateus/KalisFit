@@ -57,6 +57,7 @@
     <string name="stoicism_exercise_negative_visualization_title">Visualización Negativa (Premeditatio Malorum)</string>
     <string name="stoicism_exercise_negative_visualization_desc">Dedica unos momentos a contemplar los posibles reveses...</string>
     <!-- Strings específicos de la sección de Running -->
+    <string name="running_recenter_map">Recentrar mapa</string>
     <string name="running_location_permission_rationale_title">Permiso de Ubicación Necesario</string>
     <string name="running_location_permission_rationale_message">Para registrar tu actividad y mostrar el mapa, KalisFit necesita acceder a tu ubicación. Por favor, concede el permiso.</string>
     <string name="grant_permission_button">Conceder Permiso</string>

@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -53,6 +54,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -410,7 +412,7 @@ fun MapAndMetricsSection(
                     ),
                     uiSettings = MapUiSettings(
                         zoomControlsEnabled = false, // Deshabilitar para un look más limpio, el usuario puede hacer pinch-to-zoom
-                        myLocationButtonEnabled = true, // Permite al usuario recentrar fácilmente (importante si se deshabilitan gestos de scroll)
+                        myLocationButtonEnabled = false, // Usamos un botón propio de recentrado para una UX consistente
                         mapToolbarEnabled = false, // La barra de herramientas de Google Maps no suele ser necesaria aquí
                         compassEnabled = activityState != ActivityState.RUNNING, // Mostrar brújula solo si no está corriendo y el mapa no está fijo
                         scrollGesturesEnabled = activityState != ActivityState.RUNNING, // Permitir scroll solo si no está corriendo activamente
@@ -419,17 +421,29 @@ fun MapAndMetricsSection(
                         rotationGesturesEnabled = activityState != ActivityState.RUNNING // Permitir rotación solo si no está corriendo
                     )
                 ) {
-                    // Dibujar la polilínea de la ruta
+                    // Dibujar la polilínea de la ruta(doble capa para mejor presencia visual)
                     if (routePoints.size >= 2) {
+                        // Capa base tipo "halo" para que resalte sobre cualquier estilo de mapa
                         Polyline(
                             points = routePoints,
-                            color = MaterialTheme.colorScheme.primary, // Usar el color primario del tema
-                            width = 18f, // Polilínea un poco más gruesa y visible
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f), // Usar el color primario del tema
+                            width = 24f, // Polilínea un poco más gruesa y visible
                             geodesic = true, // Líneas curvas que representan mejor las distancias en un esferoide
                             startCap = RoundCap(), // Extremos de la línea redondeados
                             endCap = RoundCap(),
                             jointType = JointType.ROUND, // Uniones entre segmentos redondeadas
-                            zIndex = 1f // Asegurar que la polilínea esté sobre otros elementos si es necesario
+                            zIndex = 0.8f // Asegurar que la polilínea esté sobre otros elementos si es necesario
+                        )
+                        // Capa principal de la ruta
+                        Polyline(
+                            points = routePoints,
+                            color = MaterialTheme.colorScheme.primary,
+                            width = 14f,
+                            geodesic = true,
+                            startCap = RoundCap(),
+                            endCap = RoundCap(),
+                            jointType = JointType.ROUND,
+                            zIndex = 1f
                         )
                     }
 
@@ -449,6 +463,27 @@ fun MapAndMetricsSection(
                                 icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
                             )
                         }
+                    }
+                }
+
+                if (hasLocationPermission && currentLocation != null){
+                    FloatingActionButton(
+                        onClick = {
+                            val focusPoint = routePoints.lastOrNull() ?: currentLocation
+                            focusPoint?.let{
+                                cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(it, 17f))
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ){
+                        Icon(
+                            imageVector = Icons.Filled.MyLocation,
+                            contentDescription = stringResource(R.string.running_recenter_map)
+                        )
                     }
                 }
 

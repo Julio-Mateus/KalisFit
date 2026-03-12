@@ -1,50 +1,39 @@
 package com.jcmateus.kalisfit.viewmodel
 
+import android.app.Application
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.speech.tts.TextToSpeech
 import android.util.Log
-import androidx.annotation.RequiresApi
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
-import com.jcmateus.kalisfit.data.getUserCustomRoutineById
-import com.jcmateus.kalisfit.data.guardarProgresoRutina
-import com.jcmateus.kalisfit.model.ComponenteEjercicio
-import com.jcmateus.kalisfit.model.Ejercicio
-import com.jcmateus.kalisfit.model.Rutina
-import com.jcmateus.kalisfit.model.TipoDeEjercicio
-import com.jcmateus.kalisfit.model.UserCustomRoutine
+import com.jcmateus.kalisfit.data.*
+import com.jcmateus.kalisfit.model.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
-// Enum para los diferentes estados de la rutina, más granular que solo "Pausado"
 enum class RoutineExecutionState {
-    IDLE,               // No ha empezado o está cargando
-    LOADING,            // Cargando la rutina
-    INITIAL_COUNTDOWN,  // Cuenta atrás antes del primer ejercicio
-    EXERCISE_ACTIVE,    // Ejercicio en curso (por repeticiones o tiempo)
-    REST_BETWEEN_SETS,  // Descanso entre series del mismo ejercicio
-    REST_BETWEEN_EXERCISES, // Descanso después de un ejercicio, antes del siguiente
-    REST_BETWEEN_ROUNDS,    // Descanso entre rondas completas
-    PAUSED,             // Rutina pausada (puede ser en cualquier estado activo)
-    FINISHED,           // Rutina completada
-    ERROR               // Algún error que detiene la rutina
+    IDLE, LOADING, INITIAL_COUNTDOWN, EXERCISE_ACTIVE,
+    REST_BETWEEN_SETS, REST_BETWEEN_EXERCISES, REST_BETWEEN_ROUNDS,
+    PAUSED, FINISHED, ERROR
 }
-// Clase de estado para encapsular toda la información de la UI
+
 data class RoutineUiState(
     val rutina: Rutina? = null,
     val ejercicioActual: Ejercicio? = null,
-    val componenteEjercicioActual: ComponenteEjercicio? = null, // NUEVO
-    val indiceComponenteActual: Int = -1, // NUEVO: -1 si no hay componente activo, 0+ si sí
+    val componenteEjercicioActual: ComponenteEjercicio? = null,
+    val indiceComponenteActual: Int = -1,
     val estado: RoutineExecutionState = RoutineExecutionState.IDLE,
     val tiempoRestante: Int = 0,
     val tiempoTotalSesionSegundos: Int = 0,
@@ -58,509 +47,100 @@ data class RoutineUiState(
     val showExitConfirmation: Boolean = false,
     val previousState: RoutineExecutionState = RoutineExecutionState.IDLE,
     val userProfile: UserProfile? = null,
-    val infoMessage: String? = null // NUEVO: Para mensajes informativos no críticos
+    val canResume: Boolean = false
 )
-fun RoutineExecutionState.isRestState(): Boolean {
-    return this == RoutineExecutionState.REST_BETWEEN_SETS ||
-            this == RoutineExecutionState.REST_BETWEEN_EXERCISES ||
-            this == RoutineExecutionState.REST_BETWEEN_ROUNDS
-}
-class RoutineViewModel : ViewModel() {
+
+class RoutineViewModel(application: Application) : AndroidViewModel(application), TextToSpeech.OnInitListener {
+    private val repository = RoutineRepository(application)
+    private val settingsDataStore = application.settingsDataStore
+    private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        (application.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        application.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
+
+    private var tts: TextToSpeech? = TextToSpeech(application, this)
+    private var isTtsReady = false
+    private var voiceCoachEnabled = true
+    private var vibrationEnabled = true
+
     private val _uiState = MutableStateFlow(RoutineUiState())
     val uiState: StateFlow<RoutineUiState> = _uiState.asStateFlow()
-    // Para notificar a la UI sobre eventos de sonido
+
     private val _soundEvents = MutableSharedFlow<String>()
     val soundEvents: SharedFlow<String> = _soundEvents.asSharedFlow()
-    private var sessionTimerJob: Job? = null // Para el temporizador total de la sesión
-    private var currentCountdownJob: Job? = null // Para el temporizador del ejercicio/descanso actual
+
+    private var currentCountdownJob: Job? = null
     private val TAG = "RoutineViewModel"
-    private val tiempoCuentaAtrasInicialGlobal = 3 // Constante para la cuenta atrás inicial
-    private var ladoAlternadoCompletadoParaSerieActual: Boolean = false
 
-    fun canRetroceder(): Boolean {
-        val currentState = _uiState.value
-        val rutina = currentState.rutina
-        val ejercicioActual = currentState.ejercicioActual
-
-        // No se puede retroceder si no hay rutina o estamos en estados "finales", "carga" o "pausa"
-        if (rutina == null ||
-            currentState.estado == RoutineExecutionState.IDLE ||
-            currentState.estado == RoutineExecutionState.LOADING ||
-            currentState.estado == RoutineExecutionState.FINISHED ||
-            currentState.estado == RoutineExecutionState.ERROR ||
-            currentState.estado == RoutineExecutionState.PAUSED) { // No permitir retroceder si está pausado
-            return false
-        }
-
-        // No se puede retroceder MÁS ALLÁ de la cuenta atrás inicial.
-        // Si estamos EN la cuenta atrás inicial, no hay "anterior".
-        if (currentState.estado == RoutineExecutionState.INITIAL_COUNTDOWN) {
-            return false
-        }
-
-        // Siempre se puede retroceder desde un estado de descanso al paso de trabajo anterior.
-        if (currentState.estado.isRestState()) {
-            return true
-        }
-
-        // Si estamos en un ejercicio activo (EXERCISE_ACTIVE)
-        if (currentState.estado == RoutineExecutionState.EXERCISE_ACTIVE && ejercicioActual != null) {
-            // Se puede retroceder si:
-            // 1. Es el segundo lado de un ejercicio POR_LADO_ALTERNADO.
-            if (ejercicioActual.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO &&
-                ejercicioActual.esUnilateral &&
-                ladoAlternadoCompletadoParaSerieActual) {
-                return true
-            }
-            // 2. No es el primer componente de un SUPERSET_SEQUENCIAL o CIRCUITO_TEMPORIZADO.
-            if ((ejercicioActual.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL ||
-                        ejercicioActual.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) &&
-                currentState.indiceComponenteActual > 0) {
-                return true
-            }
-            // 3. No es la primera serie del ejercicio actual.
-            if (currentState.serieActualEjercicio > 1) {
-                return true
-            }
-            // 4. No es el primer ejercicio de la ronda actual.
-            if (currentState.indiceEjercicioActual > 0) {
-                return true
-            }
-            // 5. No es la primera ronda.
-            if (currentState.rondaActual > 1) {
-                return true
-            }
-            // 6. Si es el primerísimo paso de trabajo (primer ejercicio, primera serie, primer componente/lado de la primera ronda)
-            //    Aún se puede retroceder a INITIAL_COUNTDOWN.
-            if (currentState.rondaActual == 1 &&
-                currentState.indiceEjercicioActual == 0 &&
-                currentState.serieActualEjercicio == 1 &&
-                (currentState.indiceComponenteActual <= 0 || ejercicioActual.componentes.isEmpty()) &&
-                !(ejercicioActual.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO && ejercicioActual.esUnilateral && ladoAlternadoCompletadoParaSerieActual)
-            ) {
-                return true // Puede retroceder a INITIAL_COUNTDOWN
-            }
-            // Si estamos en EXERCISE_ACTIVE y no es uno de los casos anteriores que permiten ir "más atrás",
-            // pero tampoco es el primerísimo paso (manejado arriba), significa que estamos en un paso
-            // que puede ser "reiniciado" (ej. el temporizador de un ejercicio).
-            // Si `retrocederPasoAnterior` reinicia el paso actual en este caso, entonces es `true`.
-            return true // Permite reiniciar el paso actual (ej. temporizador de ejercicio)
-        }
-        // Por defecto, si no cae en ninguna condición explícita para retroceder.
-        return false
+    init {
+        observeSettings()
     }
-    fun retrocederPasoAnterior() {
+
+    private fun observeSettings() {
         viewModelScope.launch {
-            currentCountdownJob?.cancel()
-            val currentState = _uiState.value
-            val rutina = currentState.rutina ?: run {
-                _uiState.update { it.copy(infoMessage = "No se puede retroceder, no hay rutina.") }
-                return@launch
-            }
-            val ejercicioActual = currentState.ejercicioActual // Puede ser nulo si estamos en descansos globales
-            val indiceEjercicio = currentState.indiceEjercicioActual
-            val serieActual = currentState.serieActualEjercicio
-            val rondaActual = currentState.rondaActual
-            val indiceComponente = currentState.indiceComponenteActual
-
-            Log.d(TAG, "retrocederPasoAnterior: INICIO. Estado: ${currentState.estado}, EjIdx: $indiceEjercicio, Serie: $serieActual, CompIdx: $indiceComponente, Ronda: $rondaActual")
-
-            when (currentState.estado) {
-                RoutineExecutionState.EXERCISE_ACTIVE -> {
-                    val currentExercise = ejercicioActual ?: run {
-                        _uiState.update { it.copy(infoMessage = "Error al retroceder: ejercicio no definido.") }
-                        return@launch
-                    }
-
-                    // 1. Retroceder desde el SEGUNDO LADO de POR_LADO_ALTERNADO
-                    if (currentExercise.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO &&
-                        currentExercise.esUnilateral &&
-                        ladoAlternadoCompletadoParaSerieActual) {
-                        ladoAlternadoCompletadoParaSerieActual = false
-                        prepareAndStartExerciseStep()
-                        return@launch
-                    }
-
-                    // 2. Retroceder a un COMPONENTE ANTERIOR
-                    if ((currentExercise.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL ||
-                                currentExercise.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) &&
-                        currentExercise.componentes.isNotEmpty() &&
-                        indiceComponente > 0) {
-                        _uiState.update { it.copy(indiceComponenteActual = indiceComponente - 1) }
-                        ladoAlternadoCompletadoParaSerieActual = false
-                        prepareAndStartExerciseStep()
-                        return@launch
-                    }
-
-                    // 3. Retroceder a la SERIE ANTERIOR (o su descanso previo)
-                    if (serieActual > 1) {
-                        val serieAnterior = serieActual - 1
-                        // Si el ejercicio tenía descanso entre series, y estábamos en la serie S,
-                        // retroceder a ese descanso (que ocurrió después de S-1).
-                        // Pero es más directo ir al final de la serie anterior y que prepareAndStartExerciseStep
-                        // determine si hay que reiniciar esa serie anterior o si tenía un descanso *antes* de ella.
-                        // Para simplificar: vamos al inicio de la serie anterior.
-                        _uiState.update {
-                            it.copy(
-                                serieActualEjercicio = serieAnterior,
-                                componenteEjercicioActual = null, // Empezar desde el inicio de la serie anterior
-                                indiceComponenteActual = -1
-                            )
-                        }
-                        ladoAlternadoCompletadoParaSerieActual = false
-                        prepareAndStartExerciseStep()
-                        return@launch
-                    }
-
-                    // 4. Retroceder al EJERCICIO ANTERIOR (o su descanso previo)
-                    if (indiceEjercicio > 0) {
-                        val indiceEjercicioAnterior = indiceEjercicio - 1
-                        val ejercicioAnterior = rutina.ejercicios.getOrNull(indiceEjercicioAnterior) ?: return@launch
-                        _uiState.update {
-                            it.copy(
-                                ejercicioActual = ejercicioAnterior,
-                                indiceEjercicioActual = indiceEjercicioAnterior,
-                                serieActualEjercicio = ejercicioAnterior.numeroDeSeries, // Ir a la última serie del ej. anterior
-                                componenteEjercicioActual = if (ejercicioAnterior.componentes.isNotEmpty()) ejercicioAnterior.componentes.last() else null,
-                                indiceComponenteActual = if (ejercicioAnterior.componentes.isNotEmpty()) ejercicioAnterior.componentes.size - 1 else -1
-                                // El estado sigue siendo EXERCISE_ACTIVE, pero para el ejercicio anterior
-                            )
-                        }
-                        ladoAlternadoCompletadoParaSerieActual = false // Podría necesitar ser true si el anterior es unilateral y se completó
-                        prepareAndStartExerciseStep() // Prepara la última parte del ejercicio anterior
-                        return@launch
-                    }
-
-                    // 5. Retroceder a la RONDA ANTERIOR (o su descanso previo)
-                    if (rondaActual > 1) { // Implica que estamos en el primer ejercicio, primera serie, etc. de la ronda actual
-                        val rondaAnterior = rondaActual - 1
-                        val ultimoEjercicioRondaAnterior = rutina.ejercicios.last()
-                        _uiState.update {
-                            it.copy(
-                                rondaActual = rondaAnterior,
-                                ejercicioActual = ultimoEjercicioRondaAnterior,
-                                indiceEjercicioActual = rutina.ejercicios.size - 1,
-                                serieActualEjercicio = ultimoEjercicioRondaAnterior.numeroDeSeries,
-                                componenteEjercicioActual = if (ultimoEjercicioRondaAnterior.componentes.isNotEmpty()) ultimoEjercicioRondaAnterior.componentes.last() else null,
-                                indiceComponenteActual = if (ultimoEjercicioRondaAnterior.componentes.isNotEmpty()) ultimoEjercicioRondaAnterior.componentes.size - 1 else -1
-                                // El estado sigue siendo EXERCISE_ACTIVE
-                            )
-                        }
-                        ladoAlternadoCompletadoParaSerieActual = false // Similar al caso anterior
-                        prepareAndStartExerciseStep() // Prepara la última parte de la ronda anterior
-                        return@launch
-                    }
-
-                    // 6. Si es el primerísimo paso de trabajo (primer ejercicio, primera serie, primer componente/lado de la primera ronda)
-                    //    Retroceder a INITIAL_COUNTDOWN
-                    if (rondaActual == 1 && indiceEjercicio == 0 && serieActual == 1 &&
-                        (indiceComponente <= 0 || currentExercise.componentes.isEmpty()) &&
-                        !(currentExercise.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO && currentExercise.esUnilateral && ladoAlternadoCompletadoParaSerieActual)
-                    ) {
-                        _uiState.update {
-                            it.copy(
-                                estado = RoutineExecutionState.INITIAL_COUNTDOWN,
-                                tiempoRestante = tiempoCuentaAtrasInicialGlobal,
-                                ejercicioActual = rutina.ejercicios.firstOrNull(), // Reset
-                                indiceEjercicioActual = 0,
-                                serieActualEjercicio = 1,
-                                componenteEjercicioActual = null,
-                                indiceComponenteActual = -1,
-                                rondaActual = 1
-                            )
-                        }
-                        ladoAlternadoCompletadoParaSerieActual = false
-                        startTimer(tiempoCuentaAtrasInicialGlobal) {
-                            // Al terminar, prepareAndStartExerciseStep para el primer ejercicio.
-                            // Asegurarse de que el estado esté listo para el primer ejercicio.
-                            _uiState.update { it.copy(
-                                ejercicioActual = rutina.ejercicios.firstOrNull(),
-                                indiceEjercicioActual = 0,
-                                serieActualEjercicio = 1,
-                                rondaActual = 1,
-                                componenteEjercicioActual = null,
-                                indiceComponenteActual = -1
-                            )}
-                            prepareAndStartExerciseStep()
-                        }
-                        return@launch
-                    }
-
-                    // Si ninguna de las condiciones anteriores para "ir más atrás" se cumple,
-                    // pero estamos en EXERCISE_ACTIVE, reiniciamos el paso actual (ej. su temporizador).
-                    Log.d(TAG, "Retroceder en EXERCISE_ACTIVE: Reiniciando paso actual.")
-                    ladoAlternadoCompletadoParaSerieActual = false // Reset por si acaso
-                    prepareAndStartExerciseStep()
-                }
-
-                RoutineExecutionState.REST_BETWEEN_SETS -> {
-                    // Retroceder desde un descanso entre series nos lleva al final de la serie anterior.
-                    val ejercicioDelDescanso = ejercicioActual ?: rutina.ejercicios.getOrNull(indiceEjercicio) ?: return@launch
-                    val serieQuePrecedioAlDescanso = serieActual - 1 // serieActual es la que *sigue* al descanso
-
-                    if (serieQuePrecedioAlDescanso < 1) { // No debería ocurrir si la lógica de avance es correcta
-                        // Ir al ejercicio anterior o INITIAL_COUNTDOWN si es el primer ejercicio
-                        _uiState.update { it.copy(estado = RoutineExecutionState.EXERCISE_ACTIVE, serieActualEjercicio = 1, componenteEjercicioActual = null, indiceComponenteActual = -1) }
-                        retrocederPasoAnterior() // Dejar que la lógica de EXERCISE_ACTIVE decida
-                        return@launch
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            estado = RoutineExecutionState.EXERCISE_ACTIVE,
-                            ejercicioActual = ejercicioDelDescanso, // Aseguramos el ejercicio actual
-                            indiceEjercicioActual = indiceEjercicio, // Se mantiene
-                            serieActualEjercicio = serieQuePrecedioAlDescanso,
-                            componenteEjercicioActual = if (ejercicioDelDescanso.componentes.isNotEmpty()) ejercicioDelDescanso.componentes.last() else null,
-                            indiceComponenteActual = if (ejercicioDelDescanso.componentes.isNotEmpty()) ejercicioDelDescanso.componentes.size - 1 else -1,
-                            rondaActual = rondaActual // Se mantiene
-                        )
-                    }
-                    ladoAlternadoCompletadoParaSerieActual = false // Asumir reinicio o último lado completado
-                    prepareAndStartExerciseStep()
-                }
-
-                RoutineExecutionState.REST_BETWEEN_EXERCISES -> {
-                    // Retroceder desde un descanso entre ejercicios nos lleva al final del ejercicio anterior.
-                    val indiceEjercicioQuePrecedioAlDescanso = indiceEjercicio - 1 // indiceEjercicio es el que *sigue* al descanso
-
-                    if (indiceEjercicioQuePrecedioAlDescanso < 0) {
-                        _uiState.update { it.copy(estado = RoutineExecutionState.INITIAL_COUNTDOWN, tiempoRestante = tiempoCuentaAtrasInicialGlobal, ejercicioActual = rutina.ejercicios.firstOrNull(), indiceEjercicioActual = 0, serieActualEjercicio = 1, rondaActual = 1, componenteEjercicioActual = null, indiceComponenteActual = -1) }
-                        startTimer(tiempoCuentaAtrasInicialGlobal) { prepareAndStartExerciseStep() }
-                        return@launch
-                    }
-                    val ejercicioAnterior = rutina.ejercicios.getOrNull(indiceEjercicioQuePrecedioAlDescanso) ?: return@launch
-
-                    _uiState.update {
-                        it.copy(
-                            estado = RoutineExecutionState.EXERCISE_ACTIVE,
-                            ejercicioActual = ejercicioAnterior,
-                            indiceEjercicioActual = indiceEjercicioQuePrecedioAlDescanso,
-                            serieActualEjercicio = ejercicioAnterior.numeroDeSeries,
-                            componenteEjercicioActual = if (ejercicioAnterior.componentes.isNotEmpty()) ejercicioAnterior.componentes.last() else null,
-                            indiceComponenteActual = if (ejercicioAnterior.componentes.isNotEmpty()) ejercicioAnterior.componentes.size - 1 else -1,
-                            rondaActual = rondaActual // Se mantiene
-                        )
-                    }
-                    ladoAlternadoCompletadoParaSerieActual = false
-                    prepareAndStartExerciseStep()
-                }
-
-                RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                    // Retroceder desde un descanso entre rondas nos lleva al final de la ronda anterior.
-                    val rondaQuePrecedioAlDescanso = rondaActual - 1 // rondaActual es la que *sigue* al descanso
-
-                    if (rondaQuePrecedioAlDescanso < 1) {
-                        _uiState.update { it.copy(estado = RoutineExecutionState.INITIAL_COUNTDOWN, tiempoRestante = tiempoCuentaAtrasInicialGlobal, ejercicioActual = rutina.ejercicios.firstOrNull(), indiceEjercicioActual = 0, serieActualEjercicio = 1, rondaActual = 1, componenteEjercicioActual = null, indiceComponenteActual = -1) }
-                        startTimer(tiempoCuentaAtrasInicialGlobal) { prepareAndStartExerciseStep() }
-                        return@launch
-                    }
-                    val ultimoEjercicioRondaAnterior = rutina.ejercicios.last()
-                    _uiState.update {
-                        it.copy(
-                            estado = RoutineExecutionState.EXERCISE_ACTIVE,
-                            rondaActual = rondaQuePrecedioAlDescanso,
-                            ejercicioActual = ultimoEjercicioRondaAnterior,
-                            indiceEjercicioActual = rutina.ejercicios.size - 1,
-                            serieActualEjercicio = ultimoEjercicioRondaAnterior.numeroDeSeries,
-                            componenteEjercicioActual = if (ultimoEjercicioRondaAnterior.componentes.isNotEmpty()) ultimoEjercicioRondaAnterior.componentes.last() else null,
-                            indiceComponenteActual = if (ultimoEjercicioRondaAnterior.componentes.isNotEmpty()) ultimoEjercicioRondaAnterior.componentes.size - 1 else -1
-                        )
-                    }
-                    ladoAlternadoCompletadoParaSerieActual = false
-                    prepareAndStartExerciseStep()
-                }
-                RoutineExecutionState.INITIAL_COUNTDOWN,
-                RoutineExecutionState.PAUSED,
-                RoutineExecutionState.IDLE,
-                RoutineExecutionState.LOADING,
-                RoutineExecutionState.FINISHED,
-                RoutineExecutionState.ERROR -> {
-                    Log.d(TAG, "retrocederPasoAnterior: No se puede retroceder desde el estado ${currentState.estado}.")
-                    _uiState.update { it.copy(infoMessage = if(currentState.estado == RoutineExecutionState.INITIAL_COUNTDOWN) "Ya estás al inicio." else "No se puede retroceder ahora.") }
-                }
+            settingsDataStore.data.collect { prefs ->
+                voiceCoachEnabled = prefs[SettingsKeys.VOICE_COACH_ENABLED] ?: true
+                vibrationEnabled = prefs[SettingsKeys.VIBRATION_ENABLED] ?: true
             }
         }
     }
-    // Necesitarás una función startTimer que acepte una acción de finalización.
-// Ejemplo simplificado:
-    private fun startTimer(durationSeconds: Int, onFinished: (() -> Unit)? = null) {
-        currentCountdownJob?.cancel()
-        currentCountdownJob = viewModelScope.launch {
-            try {
-                for (tiempo in durationSeconds downTo 1) {
-                    if (!isActive) throw CancellationException()
-                    _uiState.update { it.copy(tiempoRestante = tiempo) }
-                    delay(1000)
-                }
-                _uiState.update { it.copy(tiempoRestante = 0) }
-                onFinished?.invoke() ?: moveToNextRoutineStep() // Si no hay onFinished, llama a moveToNext por defecto
-            } catch (e: CancellationException) {
-                Log.d(TAG, "Temporizador cancelado: ${e.message}")
-                // No hacer nada más, la cancelación es esperada en algunos flujos
-            }
-        }
-    }
-    fun exitAndCleanUpRoutine() {
-        viewModelScope.launch {
-            currentCountdownJob?.cancel() // Añadido si no estaba
-            sessionTimerJob?.cancel() // Añadido si no estaba
-            _uiState.update {
-                RoutineUiState(
-                    estado = RoutineExecutionState.IDLE,
-                    userProfile = _uiState.value.userProfile, // Mantener perfil
-                    // Resto de campos a valores por defecto
-                    rutina = null,
-                    ejercicioActual = null,
-                    componenteEjercicioActual = null,
-                    indiceComponenteActual = -1,
-                    tiempoRestante = 0,
-                    tiempoTotalSesionSegundos = 0,
-                    rondaActual = 1,
-                    indiceEjercicioActual = 0,
-                    serieActualEjercicio = 1,
-                    isLoading = false,
-                    errorMessage = null,
-                    successMessage = null,
-                    isSavingProgress = false,
-                    showExitConfirmation = false,
-                    previousState = RoutineExecutionState.IDLE
-                )
-            }
-            Log.d(TAG, "exitAndCleanUpRoutine: Rutina limpiada y estado reseteado.")
-        }
-    }
-    private fun startActiveTimerForCurrentStep() {
-        currentCountdownJob?.cancel()
-        val currentState = _uiState.value
-        val currentEjercicio = currentState.ejercicioActual
-        val currentComponente = currentState.componenteEjercicioActual
 
-        if (currentState.estado == RoutineExecutionState.IDLE ||
-            currentState.estado == RoutineExecutionState.LOADING ||
-            currentState.estado == RoutineExecutionState.FINISHED ||
-            currentState.estado == RoutineExecutionState.ERROR ||
-            currentState.estado == RoutineExecutionState.PAUSED) {
-            Log.d(TAG, "startActiveTimerForCurrentStep: No se inicia temporizador para estado ${currentState.estado}")
-            return
-        }
-        var esPorRepeticionesPaso = false
-        var duracionPasoSegundos = 0
-        var nombrePasoLog: String? = "Paso desconocido"
-        if (currentState.estado == RoutineExecutionState.EXERCISE_ACTIVE) {
-            if (currentComponente != null) {
-                // Métricas del componente
-                esPorRepeticionesPaso = !currentComponente.repeticiones.isNullOrEmpty() && (currentComponente.duracionSegundos ?: 0) <= 0
-                duracionPasoSegundos = currentComponente.duracionSegundos ?: 0
-                nombrePasoLog = currentComponente.nombreEspecifico ?: "Componente sin nombre"
-            } else if (currentEjercicio != null) {
-                // Métricas del ejercicio principal
-                esPorRepeticionesPaso = !currentEjercicio.repeticionesOriginal.isNullOrEmpty() && currentEjercicio.repeticionesOriginal != "0" && currentEjercicio.duracionSegundosOriginal <= 0
-                duracionPasoSegundos = currentEjercicio.duracionSegundosOriginal
-                nombrePasoLog = currentEjercicio.nombre
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.let {
+                it.setLanguage(Locale("es", "ES"))
+                isTtsReady = true
             }
-        } else {
-            // Para INITIAL_COUNTDOWN o DESCANSOS, siempre hay tiempo
-            esPorRepeticionesPaso = false
-            duracionPasoSegundos = currentState.tiempoRestante // Usamos el tiempo ya asignado
-            nombrePasoLog = currentState.estado.name
         }
-        if (currentState.estado == RoutineExecutionState.EXERCISE_ACTIVE && esPorRepeticionesPaso) {
-            Log.d(TAG, "startActiveTimerForCurrentStep: Paso '$nombrePasoLog' (Ejercicio/Componente) por repeticiones. No se inicia cuenta atrás automática.")
-            if (currentState.tiempoRestante != 0) {
-                _uiState.update { it.copy(tiempoRestante = 0) }
-            }
-            return
-        }
-        if (currentState.tiempoRestante <= 0) {
-            // Avanzar si el tiempo es 0 para ciertos estados, o ejercicio por tiempo de 0s
-            if (currentState.estado == RoutineExecutionState.INITIAL_COUNTDOWN ||
-                (currentState.estado == RoutineExecutionState.EXERCISE_ACTIVE && duracionPasoSegundos == 0 && !esPorRepeticionesPaso) ||
-                currentState.estado.name.startsWith("REST")) {
-                Log.d(TAG, "startActiveTimerForCurrentStep: Tiempo restante es 0 para $nombrePasoLog (${currentState.estado}), llamando a moveToNextRoutineStep.")
-                viewModelScope.launch { moveToNextRoutineStep() }
-                return
+    }
+
+    private fun speak(text: String) {
+        if (isTtsReady && voiceCoachEnabled) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(audioAttributes)
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "WorkoutTTS")
             } else {
-                Log.d(TAG, "startActiveTimerForCurrentStep: Tiempo restante es 0 para $nombrePasoLog (${currentState.estado}), pero no es un caso para avanzar (duracionPaso: $duracionPasoSegundos, esReps: $esPorRepeticionesPaso). No se inicia temporizador.")
-                return
-            }
-        }
-
-        Log.d(TAG, "startActiveTimerForCurrentStep: Iniciando temporizador para $nombrePasoLog (${currentState.estado}) con ${currentState.tiempoRestante}s")
-
-        currentCountdownJob = viewModelScope.launch {
-            try {
-                var internalRemainingTime = _uiState.value.tiempoRestante
-                while (isActive && internalRemainingTime > 0 && _uiState.value.estado == currentState.estado) {
-                    delay(1000)
-                    if (_uiState.value.estado != RoutineExecutionState.PAUSED) {
-                        internalRemainingTime--
-                        _uiState.update { it.copy(tiempoRestante = internalRemainingTime) }
-
-                        if (internalRemainingTime in 1..3 && _uiState.value.estado != RoutineExecutionState.EXERCISE_ACTIVE ) { // Solo beep para descansos/cuenta atrás
-                            _soundEvents.emit("beep")
-                        } else if (internalRemainingTime in 1..3 && _uiState.value.estado == RoutineExecutionState.EXERCISE_ACTIVE && duracionPasoSegundos > 0 && !esPorRepeticionesPaso) {
-                            _soundEvents.emit("beep") // Beep para ejercicios por tiempo también
-                        }
-                    }
-                }
-
-                if (isActive && internalRemainingTime == 0 && _uiState.value.estado == currentState.estado && _uiState.value.estado != RoutineExecutionState.PAUSED) {
-                    Log.d(TAG, "startActiveTimerForCurrentStep: Temporizador finalizado para $nombrePasoLog (${currentState.estado}). Llamando a moveToNextRoutineStep.")
-                    moveToNextRoutineStep()
-                } else if (!isActive) {
-                    Log.d(TAG, "startActiveTimerForCurrentStep: Job cancelado para $nombrePasoLog (${currentState.estado})")
-                } else if (_uiState.value.estado == RoutineExecutionState.PAUSED) {
-                    Log.d(TAG, "startActiveTimerForCurrentStep: Pausado durante temporizador para $nombrePasoLog (${currentState.estado}). Tiempo restante ${internalRemainingTime}s.")
-                } else if (_uiState.value.estado != currentState.estado) {
-                    Log.d(TAG, "startActiveTimerForCurrentStep: Estado cambió de ${currentState.estado} a ${_uiState.value.estado} durante el temporizador para $nombrePasoLog.")
-                }
-
-            } catch (e: CancellationException) {
-                Log.d(TAG, "startActiveTimerForCurrentStep: Job de temporizador explícitamente cancelado para $nombrePasoLog (${currentState.estado})")
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
             }
         }
     }
-    fun setError(message: String) {
-        Log.e(TAG, "setError: $message")
-        // Asegúrate de cancelar todos los jobs de temporizadores que podrían estar activos
-        currentCountdownJob?.cancel()
-        sessionTimerJob?.cancel()
 
-        _uiState.update {
-            it.copy(
-                errorMessage = message,
-                estado = RoutineExecutionState.ERROR,
-                isLoading = false,
-                tiempoRestante = 0 // Resetea el tiempo restante en caso de error
-            )
+    private fun vibrate(pattern: LongArray) {
+        if (vibrationEnabled) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(pattern, -1)
+            }
         }
     }
+
     fun startRoutine(rutinaId: String, userProfile: UserProfile?) {
-        if (userProfile == null) {
-            setError("Perfil de usuario no disponible.") // Usar la nueva función setError
-            return
-        }
-        _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null, rutina = null, estado = RoutineExecutionState.LOADING, userProfile = userProfile) }
-
+        _uiState.update { it.copy(isLoading = true, userProfile = userProfile, estado = RoutineExecutionState.LOADING) }
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Iniciando proceso de carga para rutina ID: $rutinaId con UserID: ${userProfile.uid}")
-                var finalRutinaToExecute: Rutina? = null
-
-                // Lógica para cargar UserCustomRoutine o Rutina global...
-                val customRoutine: UserCustomRoutine? = getUserCustomRoutineById(userProfile.uid, rutinaId)
-
-                if (customRoutine != null) {
-                    Log.d(TAG, "Rutina encontrada como UserCustomRoutine: ${customRoutine.nombrePersonalizado}")
-                    finalRutinaToExecute = Rutina(
+                val customRoutine = getUserCustomRoutineById(userProfile?.uid ?: "", rutinaId)
+                val finalRutina = if (customRoutine != null) {
+                    Rutina(
                         id = customRoutine.id,
                         nombre = customRoutine.nombrePersonalizado,
                         descripcion = customRoutine.descripcion,
-                        imagenUrl = customRoutine.imagenUrl,
-                        ejercicios = customRoutine.ejercicios.map { ej ->
-                            ej.copy(componentes = ej.componentes.map { comp -> comp.copy() })
-                        },
+                        imagenUrl = customRoutine.imagenUrl ?: "",
+                        ejercicios = customRoutine.ejercicios,
                         numeroDeRondas = customRoutine.numeroDeRondas,
                         descansoEntreRondasSegundos = customRoutine.descansoEntreRondasSegundos,
                         nivelRecomendado = customRoutine.nivelRecomendado,
@@ -568,829 +148,162 @@ class RoutineViewModel : ViewModel() {
                         lugarEntrenamiento = customRoutine.lugarEntrenamiento,
                         slug = customRoutine.id
                     )
-                    Log.d(TAG, "UserCustomRoutine mapeada a Rutina. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
                 } else {
-                    Log.d(TAG, "Rutina con ID $rutinaId no encontrada como UserCustomRoutine. Intentando como plantilla global.")
-                    val globalTemplateRoutine: Rutina? = getRutinaByIdFromFirestore(rutinaId)
-
-                    if (globalTemplateRoutine != null) {
-                        Log.d(TAG, "Rutina encontrada como plantilla global: ${globalTemplateRoutine.nombre}")
-                        finalRutinaToExecute = globalTemplateRoutine
-                        Log.d(TAG, "Plantilla global cargada. ${finalRutinaToExecute.ejercicios.size} ejercicios.")
-                    }
+                    getRutinaByIdFromFirestore(rutinaId)
                 }
-
-                if (finalRutinaToExecute == null) {
-                    setError("Rutina con ID $rutinaId no encontrada.") // Usar setError
-                } else {
-                    if (finalRutinaToExecute.ejercicios.isEmpty()) {
-                        // Asumo que tienes una función como esta, que internamente llamará a setError.
-                        // Si no, reemplaza con setError directamente.
-                        finishRoutineWithError("La rutina '${finalRutinaToExecute.nombre}' no tiene ejercicios.")
-                        return@launch
-                    }
-
-                    finalRutinaToExecute.ejercicios.forEachIndexed { index, ej ->
-                        Log.d(TAG, "Verificando Ejercicio ${index + 1} [${ej.nombre}]: ID=${ej.id}, Tipo=${ej.tipoEjercicio}, Componentes=${ej.componentes.size}, Unilateral=${ej.esUnilateral}, Tempo=${ej.notaTempo}, RepsOrig='${ej.repeticionesOriginal}', DurOrig=${ej.duracionSegundosOriginal}s, Series=${ej.numeroDeSeries}")
-                        if (ej.tipoEjercicio == TipoDeEjercicio.SIMPLE && ej.componentes.isNotEmpty()) {
-                            Log.w(TAG, "Advertencia: Ejercicio '${ej.nombre}' (ID: ${ej.id}) marcado como SIMPLE pero tiene ${ej.componentes.size} componentes.")
-                        }
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            rutina = finalRutinaToExecute,
-                            isLoading = false,
-                            rondaActual = 1,
-                            indiceEjercicioActual = 0,
-                            serieActualEjercicio = if (finalRutinaToExecute.ejercicios.firstOrNull()?.numeroDeSeries ?: 0 > 0) 1 else 0,
-                            tiempoTotalSesionSegundos = 0,
-                            previousState = RoutineExecutionState.IDLE,
-                            componenteEjercicioActual = null,
-                            indiceComponenteActual = -1,
-                            showExitConfirmation = false,
-                            estado = RoutineExecutionState.IDLE
-                        )
-                    }
-                    ladoAlternadoCompletadoParaSerieActual = false
-                    Log.d(TAG, "Rutina '${finalRutinaToExecute.nombre}' lista (${finalRutinaToExecute.ejercicios.size} ej.). Estado UI actualizado. Preparada para iniciar.")
-
+                
+                if (finalRutina != null) {
+                    _uiState.update { it.copy(rutina = finalRutina, isLoading = false, estado = RoutineExecutionState.IDLE) }
                     startInitialCountdown()
-                    startSessionTimer()
-                    Log.d(TAG, "startInitialCountdown y startSessionTimer llamados.")
+                } else {
+                    setError("Rutina no encontrada")
                 }
-            } catch (e: Exception) {
-                setError(e.localizedMessage ?: "Error desconocido al cargar la rutina.") // Usar setError
-                Log.e(TAG, "Error catastrófico al cargar rutina con ID $rutinaId", e)
-            }
+            } catch (e: Exception) { setError(e.localizedMessage ?: "Error") }
         }
     }
-    private fun startSessionTimer() {
-        sessionTimerJob?.cancel()
-        sessionTimerJob = viewModelScope.launch {
-            while (isActive && _uiState.value.estado != RoutineExecutionState.FINISHED && _uiState.value.estado != RoutineExecutionState.ERROR) {
-                delay(1000)
-                if (_uiState.value.estado != RoutineExecutionState.PAUSED) {
-                    _uiState.update { it.copy(tiempoTotalSesionSegundos = it.tiempoTotalSesionSegundos + 1) }
-                }
-            }
-        }
-    }
+
     private fun startInitialCountdown() {
-        val currentUiState = _uiState.value
-        val tiempoDeCuentaAtras: Int
-
-        // Comprobar si estamos reanudando una cuenta atrás inicial que fue pausada
-        if (currentUiState.previousState == RoutineExecutionState.INITIAL_COUNTDOWN &&
-            _uiState.value.estado == RoutineExecutionState.INITIAL_COUNTDOWN && // Ya restaurado por togglePause
-            currentUiState.tiempoRestante > 0) {
-            Log.d(TAG, "Reanudando INITIAL_COUNTDOWN con ${currentUiState.tiempoRestante}s restantes.")
-            tiempoDeCuentaAtras = currentUiState.tiempoRestante
-            // No emitir sonido de inicio si estamos reanudando
-        } else {
-            Log.d(TAG, "Iniciando NUEVO INITIAL_COUNTDOWN.")
-            tiempoDeCuentaAtras = tiempoCuentaAtrasInicialGlobal // Usa tu constante global
-            // Solo emitir sonido de inicio si no es una reanudación desde pausa Y el estado anterior no era pausa
-            if (currentUiState.previousState != RoutineExecutionState.PAUSED) {
-                viewModelScope.launch { _soundEvents.emit("start_sound") }
-            }
-        }
-
-        _uiState.update {
-            it.copy(
-                estado = RoutineExecutionState.INITIAL_COUNTDOWN,
-                tiempoRestante = tiempoDeCuentaAtras
-                // previousState ya está gestionado o se gestionará en togglePause
-            )
-        }
-        startActiveTimerForCurrentStep()
+        _uiState.update { it.copy(estado = RoutineExecutionState.INITIAL_COUNTDOWN, tiempoRestante = 5) }
+        speak("Prepárate para comenzar")
+        startActiveTimer()
     }
-    private suspend fun moveToNextRoutineStep() {
+
+    private fun startActiveTimer() {
         currentCountdownJob?.cancel()
-        Log.d(TAG, "moveToNextRoutineStep: Job de cuenta atrás anterior cancelado.")
-
-        val currentUiState = _uiState.value
-        val rutina = currentUiState.rutina ?: run {
-            Log.e(TAG, "moveToNextRoutineStep: Error interno - Rutina no disponible.")
-            finishRoutineWithError("Error interno: Rutina no disponible.")
-            return
-        }
-        var ejercicioActualLoop = currentUiState.ejercicioActual
-        val componenteActualLoop = currentUiState.componenteEjercicioActual
-        val indiceComponenteLoop = currentUiState.indiceComponenteActual
-
-        Log.i(TAG, "moveToNextRoutineStep: ================== INICIO ==================")
-        Log.i(TAG, "moveToNextRoutineStep: Procesando desde ESTADO=${currentUiState.estado}, EjIdx=${currentUiState.indiceEjercicioActual}, CompIdx=${indiceComponenteLoop}, Serie=${currentUiState.serieActualEjercicio}, Ronda=${currentUiState.rondaActual}")
-        Log.i(TAG, "moveToNextRoutineStep: EjActual=${ejercicioActualLoop?.nombre}, CompActual=${componenteActualLoop?.nombreEspecifico}, LadoAlternadoCompletado=${ladoAlternadoCompletadoParaSerieActual}")
-
-        when (currentUiState.estado) {
-            RoutineExecutionState.INITIAL_COUNTDOWN -> {
-                Log.d(TAG, "INITIAL_COUNTDOWN finalizado. Preparando primer ejercicio.")
-                if (rutina.ejercicios.isEmpty()) {
-                    Log.w(TAG, "moveToNextRoutineStep: La rutina no tiene ejercicios.")
-                    finishRoutineWithError("La rutina no tiene ejercicios.")
-                    return
-                }
-                val primerEjercicio = rutina.ejercicios.first()
-                _uiState.update {
-                    it.copy(
-                        ejercicioActual = primerEjercicio,
-                        indiceEjercicioActual = 0,
-                        serieActualEjercicio = 1,
-                        rondaActual = 1,
-                        componenteEjercicioActual = null,
-                        indiceComponenteActual = -1 // Asegurar reseteo para el primer ejercicio
-                    )
-                }
-                ladoAlternadoCompletadoParaSerieActual = false // Reset para el primer ejercicio
-                prepareAndStartExerciseStep()
-            }
-
-            RoutineExecutionState.EXERCISE_ACTIVE -> {
-                Log.d(TAG, "EXERCISE_ACTIVE finalizado/saltado para Ej: ${ejercicioActualLoop?.nombre}, Comp: ${componenteActualLoop?.nombreEspecifico}.")
-                ejercicioActualLoop = ejercicioActualLoop ?: rutina.ejercicios.getOrNull(currentUiState.indiceEjercicioActual)
-
-                if (ejercicioActualLoop == null) {
-                    Log.e(TAG, "moveToNextRoutineStep: Error - Ejercicio actual nulo al finalizar EXERCISE_ACTIVE. Estado: $currentUiState")
-                    finishRoutineWithError("Error: Ejercicio actual no encontrado.")
-                    return
-                }
-
-                var avanzarASiguienteFasePrincipal = false // Sea serie, ejercicio o ronda
-
-                // 1. Manejo de POR_LADO_ALTERNADO
-                if (ejercicioActualLoop.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO &&
-                    ejercicioActualLoop.esUnilateral &&
-                    !ladoAlternadoCompletadoParaSerieActual) {
-                    Log.d(TAG, "moveToNextRoutineStep: Lado 1 de '${ejercicioActualLoop.nombre}' (POR_LADO_ALTERNADO) completado. Preparando lado 2.")
-                    ladoAlternadoCompletadoParaSerieActual = true
-                    // El ejercicio actual, serie, ronda, etc., NO cambian.
-                    // indiceComponenteActual y componenteEjercicioActual también deberían ser los mismos (usualmente nulos para POR_LADO_ALTERNADO simple)
-                    // Se re-prepara el MISMO paso de ejercicio.
-                    prepareAndStartExerciseStep()
-                    return // Fin de este moveToNextRoutineStep, el siguiente se manejará después del segundo lado.
-                }
-                // Si llegamos aquí para POR_LADO_ALTERNADO, el segundo lado (o el único si no es unilateral) se completó.
-
-                // 2. Manejo de Componentes (SUPERSET_SEQUENCIAL, CIRCUITO_TEMPORIZADO)
-                if ((ejercicioActualLoop.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL ||
-                            ejercicioActualLoop.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) &&
-                    ejercicioActualLoop.componentes.isNotEmpty()) {
-
-                    // Si componenteActualLoop es null, significa que estamos empezando el primer componente (o hubo un error)
-                    // Si indiceComponenteLoop es -1, también significa que es el primero.
-                    val proximoIndiceComponente = if (indiceComponenteLoop == -1) 0 else indiceComponenteLoop + 1
-
-                    if (proximoIndiceComponente < ejercicioActualLoop.componentes.size) {
-                        Log.d(TAG, "Pasando al siguiente componente (índice $proximoIndiceComponente) de '${ejercicioActualLoop.nombre}'.")
-                        _uiState.update { it.copy(
-                            // ejercicioActual, serieActual, rondaActual se mantienen
-                            indiceComponenteActual = proximoIndiceComponente // Preparamos el índice para el siguiente prepareAndStart
-                            // componenteEjercicioActual se actualizará en prepareAndStartExerciseStep
-                        )}
-                        prepareAndStartExerciseStep()
-                    } else {
-                        Log.d(TAG, "Todos los componentes de '${ejercicioActualLoop.nombre}' completados para la serie actual.")
-                        _uiState.update { it.copy(componenteEjercicioActual = null, indiceComponenteActual = -1) } // Limpiar
-                        avanzarASiguienteFasePrincipal = true
+        currentCountdownJob = viewModelScope.launch {
+            try {
+                while (isActive && _uiState.value.tiempoRestante > 0) {
+                    val rem = _uiState.value.tiempoRestante
+                    if (rem == 5 && _uiState.value.estado.name.contains("REST")) {
+                        speak("Prepárate en cinco segundos")
+                        vibrate(longArrayOf(0, 200))
+                    } else if (rem <= 3) {
+                        _soundEvents.emit("beep")
+                        vibrate(longArrayOf(0, 100))
                     }
+                    delay(1000)
+                    if (_uiState.value.estado != RoutineExecutionState.PAUSED) {
+                        _uiState.update { it.copy(tiempoRestante = it.tiempoRestante - 1) }
+                    }
+                }
+                if (isActive && _uiState.value.estado != RoutineExecutionState.PAUSED && _uiState.value.tiempoRestante == 0) {
+                    moveToNextStep()
+                }
+            } catch (e: CancellationException) { /* Ignored */ }
+        }
+    }
+
+    suspend fun moveToNextStep() {
+        val st = _uiState.value
+        val rutina = st.rutina ?: return
+        val ex = st.ejercicioActual ?: rutina.ejercicios.firstOrNull() ?: return
+        val compIdx = st.indiceComponenteActual
+
+        when (st.estado) {
+            RoutineExecutionState.INITIAL_COUNTDOWN -> prepareExercise(0, 1, -1)
+            RoutineExecutionState.EXERCISE_ACTIVE -> {
+                // LÓGICA DE SUPERSETS / COMPONENTES RESTAURADA
+                if (ex.esTipoComplejo() && compIdx < ex.componentes.size - 1) {
+                    prepareExercise(st.indiceEjercicioActual, st.serieActualEjercicio, compIdx + 1)
                 } else {
-                    // Si no era un ejercicio con componentes, o ya se completaron todos.
-                    Log.d(TAG, "Ejercicio SIMPLE o último componente de '${ejercicioActualLoop.nombre}' finalizado.")
-                    avanzarASiguienteFasePrincipal = true
+                    if (st.serieActualEjercicio < ex.numeroDeSeries) {
+                        val rest = ex.descansoEntreSeriesSegundos
+                        if (rest > 0) {
+                            _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_SETS, tiempoRestante = rest) }
+                            speak("Descanso")
+                            vibrate(longArrayOf(0, 600, 200, 600))
+                            startActiveTimer()
+                        } else prepareExercise(st.indiceEjercicioActual, st.serieActualEjercicio + 1, -1)
+                    } else if (st.indiceEjercicioActual < rutina.ejercicios.size - 1) {
+                        val rest = ex.descansoDespuesEjercicioSegundos
+                        if (rest > 0) {
+                            _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_EXERCISES, tiempoRestante = rest) }
+                            speak("Descanso de ejercicio")
+                            vibrate(longArrayOf(0, 600, 200, 600))
+                            startActiveTimer()
+                        } else prepareExercise(st.indiceEjercicioActual + 1, 1, -1)
+                    } else if (st.rondaActual < rutina.numeroDeRondas) {
+                        val rest = rutina.descansoEntreRondasSegundos
+                        _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_ROUNDS, tiempoRestante = rest, rondaActual = it.rondaActual + 1) }
+                        speak("Ronda completada")
+                        vibrate(longArrayOf(0, 800, 200, 800))
+                        startActiveTimer()
+                    } else finishRoutine()
                 }
-
-                if (avanzarASiguienteFasePrincipal) {
-                    Log.d(TAG, "Fase de ejercicio/componentes de '${ejercicioActualLoop.nombre}' (Serie ${currentUiState.serieActualEjercicio}/${ejercicioActualLoop.numeroDeSeries}) finalizada. Evaluando siguiente paso principal.")
-                    ladoAlternadoCompletadoParaSerieActual = false // Reset para la próxima serie o el próximo ejercicio.
-
-                    // Siguiente SERIE del mismo ejercicio
-                    if (currentUiState.serieActualEjercicio < ejercicioActualLoop.numeroDeSeries) {
-                        Log.d(TAG, "Pasando a la siguiente serie del ejercicio '${ejercicioActualLoop.nombre}'.")
-                        if (ejercicioActualLoop.descansoEntreSeriesSegundos > 0) {
-                            Log.d(TAG, "Iniciando REST_BETWEEN_SETS de ${ejercicioActualLoop.descansoEntreSeriesSegundos}s.")
-                            viewModelScope.launch { _soundEvents.emit("rest_start") }
-                            _uiState.update {
-                                it.copy(
-                                    estado = RoutineExecutionState.REST_BETWEEN_SETS,
-                                    tiempoRestante = ejercicioActualLoop.descansoEntreSeriesSegundos
-                                    // componente e índice se resetearán DESPUÉS del descanso, en el case de REST_BETWEEN_SETS
-                                )
-                            }
-                            startActiveTimerForCurrentStep()
-                        } else {
-                            Log.d(TAG, "Sin descanso entre series. Iniciando siguiente serie directamente.")
-                            _uiState.update {
-                                it.copy(
-                                    serieActualEjercicio = it.serieActualEjercicio + 1,
-                                    componenteEjercicioActual = null, // Reset para nueva serie
-                                    indiceComponenteActual = -1
-                                )
-                            }
-                            prepareAndStartExerciseStep() // ladoAlternado ya reseteado
-                        }
-                    }
-                    // Siguiente EJERCICIO de la misma ronda
-                    else if (currentUiState.indiceEjercicioActual < rutina.ejercicios.size - 1) {
-                        Log.d(TAG, "Todas las series de '${ejercicioActualLoop.nombre}' completadas. Pasando al siguiente ejercicio.")
-                        if (ejercicioActualLoop.descansoDespuesEjercicioSegundos > 0) {
-                            // LOGS ADICIONALES
-                            Log.d(TAG, "DEBUG: Ejercicio actual: ${ejercicioActualLoop.nombre}")
-                            Log.d(TAG, "DEBUG: descansoEntreSeriesSegundos REAL: ${ejercicioActualLoop.descansoEntreSeriesSegundos}")
-                            Log.d(TAG, "DEBUG: descansoDespuesEjercicioSegundos REAL: ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}")
-                            Log.d(TAG, "DEBUG: Se usará para tiempoRestante (REST_BETWEEN_EXERCISES): ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}")
-                            // FIN LOGS ADICIONALES
-                            Log.d(TAG, "Iniciando REST_BETWEEN_EXERCISES de ${ejercicioActualLoop.descansoDespuesEjercicioSegundos}s.")
-                            viewModelScope.launch { _soundEvents.emit("rest_start") }
-                            _uiState.update {
-                                it.copy(
-                                    estado = RoutineExecutionState.REST_BETWEEN_EXERCISES,
-                                    tiempoRestante = ejercicioActualLoop.descansoDespuesEjercicioSegundos
-                                )
-                            }
-                            startActiveTimerForCurrentStep()
-                        } else {
-                            Log.d(TAG, "Sin descanso después de ejercicio. Iniciando siguiente ejercicio directamente.")
-                            // Avanzar al siguiente ejercicio (lógica ahora en el case de REST_BETWEEN_EXERCISES o aquí si no hay descanso)
-                            val nuevoIndice = currentUiState.indiceEjercicioActual + 1
-                            val proximoEjercicio = rutina.ejercicios.getOrNull(nuevoIndice) ?: run {
-                                finishRoutineWithError("Error: Próximo ejercicio nulo.")
-                                return
-                            }
-                            _uiState.update {
-                                it.copy(
-                                    indiceEjercicioActual = nuevoIndice,
-                                    serieActualEjercicio = 1, // Reset serie
-                                    ejercicioActual = proximoEjercicio,
-                                    componenteEjercicioActual = null, // Reset componente
-                                    indiceComponenteActual = -1
-                                )
-                            }
-                            prepareAndStartExerciseStep() // ladoAlternado ya reseteado
-                        }
-                    }
-                    // Siguiente RONDA
-                    else if (currentUiState.rondaActual < rutina.numeroDeRondas) {
-                        Log.d(TAG, "Último ejercicio de la ronda ${currentUiState.rondaActual} completado. Pasando a la siguiente ronda.")
-                        if (rutina.descansoEntreRondasSegundos > 0) {
-                            Log.d(TAG, "Iniciando REST_BETWEEN_ROUNDS de ${rutina.descansoEntreRondasSegundos}s.")
-                            viewModelScope.launch { _soundEvents.emit("rest_start") }
-                            _uiState.update {
-                                it.copy(
-                                    estado = RoutineExecutionState.REST_BETWEEN_ROUNDS,
-                                    tiempoRestante = rutina.descansoEntreRondasSegundos
-                                )
-                            }
-                            startActiveTimerForCurrentStep()
-                        } else {
-                            Log.d(TAG, "Sin descanso entre rondas. Iniciando siguiente ronda directamente.")
-                            // Avanzar a la siguiente ronda (lógica ahora en el case de REST_BETWEEN_ROUNDS o aquí)
-                            val primerEjercicioSiguienteRonda = rutina.ejercicios.firstOrNull() ?: run {
-                                finishRoutineWithError("Error: No hay ejercicios para la siguiente ronda.")
-                                return
-                            }
-                            _uiState.update {
-                                it.copy(
-                                    rondaActual = it.rondaActual + 1,
-                                    indiceEjercicioActual = 0, // Reset
-                                    serieActualEjercicio = 1, // Reset
-                                    ejercicioActual = primerEjercicioSiguienteRonda,
-                                    componenteEjercicioActual = null, // Reset
-                                    indiceComponenteActual = -1
-                                )
-                            }
-                            prepareAndStartExerciseStep() // ladoAlternado ya reseteado
-                        }
-                    }
-                    // FIN de la rutina
-                    else {
-                        Log.i(TAG, "Todas las series, ejercicios y rondas completadas. Finalizando rutina.")
-                        finishRoutine()
-                    }
-                }
-            } // Fin de EXERCISE_ACTIVE
-
-            RoutineExecutionState.REST_BETWEEN_SETS -> {
-                Log.d(TAG, "REST_BETWEEN_SETS finalizado para ejercicio '${currentUiState.ejercicioActual?.nombre}'.")
-                viewModelScope.launch { _soundEvents.emit("rest_end") }
-
-                _uiState.update {
-                    it.copy(
-                        serieActualEjercicio = it.serieActualEjercicio + 1,
-                        componenteEjercicioActual = null, // Reset para nueva serie
-                        indiceComponenteActual = -1      // y su índice
-                    )
-                }
-                ladoAlternadoCompletadoParaSerieActual = false // Reset para la nueva serie
-                prepareAndStartExerciseStep()
             }
-
-            RoutineExecutionState.REST_BETWEEN_EXERCISES -> {
-                Log.d(TAG, "REST_BETWEEN_EXERCISES finalizado.")
-                viewModelScope.launch { _soundEvents.emit("rest_end") }
-
-                val nuevoIndice = currentUiState.indiceEjercicioActual + 1
-                val proximoEjercicio = rutina.ejercicios.getOrNull(nuevoIndice) ?: run {
-                    Log.e(TAG, "moveToNextRoutineStep: Error - No se encontró el próximo ejercicio (índice: $nuevoIndice) después de REST_BETWEEN_EXERCISES.")
-                    finishRoutineWithError("Error: Próximo ejercicio no encontrado.")
-                    return
-                }
-                _uiState.update {
-                    it.copy(
-                        indiceEjercicioActual = nuevoIndice,
-                        serieActualEjercicio = 1, // Reset serie
-                        ejercicioActual = proximoEjercicio,
-                        componenteEjercicioActual = null, // Reset componente
-                        indiceComponenteActual = -1
-                    )
-                }
-                ladoAlternadoCompletadoParaSerieActual = false // Reset para el nuevo ejercicio
-                prepareAndStartExerciseStep()
-            }
-
-            RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                Log.d(TAG, "REST_BETWEEN_ROUNDS finalizado.")
-                viewModelScope.launch { _soundEvents.emit("rest_end") }
-
-                val proximaRonda = currentUiState.rondaActual + 1
-                // La condición de si hay más rondas ya se chequeó antes de entrar a este descanso.
-                val primerEjercicioDeRonda = rutina.ejercicios.firstOrNull() ?: run {
-                    Log.e(TAG, "moveToNextRoutineStep: Error - No hay ejercicios para la siguiente ronda ($proximaRonda) después de REST_BETWEEN_ROUNDS.")
-                    finishRoutineWithError("Error: No hay ejercicios para la siguiente ronda.")
-                    return
-                }
-                _uiState.update {
-                    it.copy(
-                        rondaActual = proximaRonda,
-                        indiceEjercicioActual = 0, // Reset
-                        serieActualEjercicio = 1, // Reset
-                        ejercicioActual = primerEjercicioDeRonda,
-                        componenteEjercicioActual = null, // Reset
-                        indiceComponenteActual = -1
-                    )
-                }
-                ladoAlternadoCompletadoParaSerieActual = false // Reset para la nueva ronda
-                prepareAndStartExerciseStep()
-            }
-            RoutineExecutionState.PAUSED,
-            RoutineExecutionState.IDLE,
-            RoutineExecutionState.LOADING,
-            RoutineExecutionState.FINISHED,
-            RoutineExecutionState.ERROR -> {
-                Log.w(TAG, "moveToNextRoutineStep llamado desde un estado no procesable o ya final: ${currentUiState.estado}.")
-            }
+            RoutineExecutionState.REST_BETWEEN_SETS -> prepareExercise(st.indiceEjercicioActual, st.serieActualEjercicio + 1, -1)
+            RoutineExecutionState.REST_BETWEEN_EXERCISES -> prepareExercise(st.indiceEjercicioActual + 1, 1, -1)
+            RoutineExecutionState.REST_BETWEEN_ROUNDS -> prepareExercise(0, 1, -1)
+            else -> {}
         }
-        Log.i(TAG, "moveToNextRoutineStep: =================== FIN ====================")
     }
-    private fun prepareAndStartExerciseStep() {
-        val stateBeforeCall = _uiState.value
-        var ejercicioParaPreparar = stateBeforeCall.ejercicioActual
 
-        Log.d(TAG, "prepareAndStartExerciseStep: ================== INICIO (Entrada) ==================")
-        Log.d(TAG, "prepareAndStartExerciseStep: Estado ENTRADA: ${stateBeforeCall.estado}, Ej: ${ejercicioParaPreparar?.nombre}, Serie: ${stateBeforeCall.serieActualEjercicio}, CompIdxIndicado: ${stateBeforeCall.indiceComponenteActual}, LadoAlternado: $ladoAlternadoCompletadoParaSerieActual")
+    private fun prepareExercise(idx: Int, set: Int, compIdx: Int) {
+        val exercise = _uiState.value.rutina?.ejercicios?.getOrNull(idx) ?: return
+        val component = if (compIdx >= 0) exercise.componentes.getOrNull(compIdx) else null
+        
+        val time = component?.duracionSegundos ?: exercise.duracionSegundosOriginal
+        val name = component?.nombreEspecifico ?: exercise.nombre
 
-        if (ejercicioParaPreparar == null) {
-            Log.e(TAG, "prepareAndStartExerciseStep: Error - Ejercicio nulo. Estado de entrada: ${stateBeforeCall.estado}")
-            finishRoutineWithError("Error: Ejercicio nulo al preparar.")
-            return
-        }
-        var tiempoParaPaso: Int
-        var esPorRepeticionesPaso: Boolean
-        var nombrePasoLog: String = ejercicioParaPreparar.nombre // Default
-        var isResumingTimedPaso = false
-        var componenteQueSePrepara: ComponenteEjercicio? = null
-        var indiceComponenteASetearEnState = stateBeforeCall.indiceComponenteActual // Por defecto, el que ya está
-
-        // A. Determinar si estamos REANUDANDO un paso específico por TIEMPO
-        if (stateBeforeCall.previousState == RoutineExecutionState.EXERCISE_ACTIVE &&
-            stateBeforeCall.estado == RoutineExecutionState.EXERCISE_ACTIVE && // Estado actual ya es EXERCISE_ACTIVE (restaurado por togglePausa)
-            stateBeforeCall.tiempoRestante > 0) {
-
-            val componentePausado = stateBeforeCall.componenteEjercicioActual
-            if (componentePausado != null && (componentePausado.duracionSegundos ?: 0) > 0) {
-                isResumingTimedPaso = true
-                componenteQueSePrepara = componentePausado
-                nombrePasoLog = componentePausado.nombreEspecifico ?: ejercicioParaPreparar.nombre
-                Log.d(TAG, "prepareAndStartExerciseStep: Reanudando COMPONENTE POR TIEMPO '${nombrePasoLog}' con ${stateBeforeCall.tiempoRestante}s.")
-            } else if (componentePausado == null && ejercicioParaPreparar.duracionSegundosOriginal > 0 && (ejercicioParaPreparar.repeticionesOriginal.isNullOrEmpty() || ejercicioParaPreparar.repeticionesOriginal == "0")) {
-                isResumingTimedPaso = true
-                nombrePasoLog = ejercicioParaPreparar.nombre
-                Log.d(TAG, "prepareAndStartExerciseStep: Reanudando EJERCICIO PRINCIPAL POR TIEMPO '${nombrePasoLog}' con ${stateBeforeCall.tiempoRestante}s.")
-            }
-        }
-        // B. Configurar el paso (nuevo o reanudado)
-        if (isResumingTimedPaso) {
-            tiempoParaPaso = stateBeforeCall.tiempoRestante
-            esPorRepeticionesPaso = false // Si se reanuda, era por tiempo
-            // componenteQueSePrepara ya está seteado si es un componente.
-            // indiceComponenteASetearEnState se mantiene como el del componente pausado.
-            Log.d(TAG, "prepareAndStartExerciseStep: Paso configurado para REANUDACIÓN. Nombre: $nombrePasoLog, Tiempo: $tiempoParaPaso")
-        } else {
-            // Es un inicio NUEVO de un paso (ejercicio o componente)
-            // Resetear previousState ya que no estamos reanudando
-            _uiState.update { it.copy(previousState = RoutineExecutionState.IDLE) } // Se resetea para que la próxima pausa no tenga un previousState incorrecto si este paso no es temporizado.
-
-            // B1. Manejo de POR_LADO_ALTERNADO (tiene prioridad para mostrar el "lado")
-            if (ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.POR_LADO_ALTERNADO &&
-                ejercicioParaPreparar.esUnilateral &&
-                ladoAlternadoCompletadoParaSerieActual) {
-                // Este es el SEGUNDO lado. La UI debe indicarlo.
-                // Las métricas (tiempo/reps) son las mismas que el primer lado.
-                Log.d(TAG, "prepareAndStartExerciseStep: Preparando SEGUNDO LADO de '${ejercicioParaPreparar.nombre}'.")
-            }
-            // B2. Determinar si es un COMPONENTE o el ejercicio principal
-            if ((ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.SUPERSET_SEQUENCIAL ||
-                        ejercicioParaPreparar.tipoEjercicio == TipoDeEjercicio.CIRCUITO_TEMPORIZADO) &&
-                ejercicioParaPreparar.componentes.isNotEmpty()) {
-                // Si indiceComponenteActual es -1 (inicio de superset) o un índice válido.
-                // moveToNextStep ya debería haber incrementado indiceComponenteActual para el siguiente.
-                // Si venimos de un REST_BETWEEN_SETS, indiceComponenteActual debería ser -1, y aquí lo ponemos a 0.
-                val indiceDelComponenteAUsar = if (stateBeforeCall.indiceComponenteActual == -1) 0 else stateBeforeCall.indiceComponenteActual
-                // ***** INICIO LOGS ADICIONALES PARA COMPONENTES *****
-                Log.d(TAG, "prepareAndStartExerciseStep: Es SUPERSET/CIRCUITO. Índice de componente en state (stateBeforeCall.indiceComponenteActual): ${stateBeforeCall.indiceComponenteActual}. Índice a usar para buscar componente (indiceDelComponenteAUsar): $indiceDelComponenteAUsar. Total componentes: ${ejercicioParaPreparar.componentes.size}")
-                // ***** FIN LOGS ADICIONALES PARA COMPONENTES *****
-
-                componenteQueSePrepara = ejercicioParaPreparar.componentes.getOrNull(indiceDelComponenteAUsar)
-                indiceComponenteASetearEnState = indiceDelComponenteAUsar // Aseguramos que el state refleje el componente actual
-
-                if (componenteQueSePrepara != null) {
-                    // ***** INICIO LOGS ADICIONALES PARA COMPONENTES *****
-                    Log.d(TAG, "prepareAndStartExerciseStep: Componente recuperado: '${componenteQueSePrepara.nombreEspecifico}', Orden: ${componenteQueSePrepara.orden}, Duración: ${componenteQueSePrepara.duracionSegundos}, Reps: ${componenteQueSePrepara.repeticiones}")
-                    // ***** FIN LOGS ADICIONALES PARA COMPONENTES *****
-                    nombrePasoLog = componenteQueSePrepara.nombreEspecifico ?: ejercicioParaPreparar.nombre
-                    if ((componenteQueSePrepara.duracionSegundos ?: 0) > 0) {
-                        tiempoParaPaso = componenteQueSePrepara.duracionSegundos!!
-                        esPorRepeticionesPaso = false
-                    } else { // Por repeticiones
-                        tiempoParaPaso = 0
-                        esPorRepeticionesPaso = true
-                    }
-                    Log.d(TAG, "prepareAndStartExerciseStep: Preparando NUEVO COMPONENTE '${nombrePasoLog}' (Índice $indiceDelComponenteAUsar). Tiempo: $tiempoParaPaso, EsReps: $esPorRepeticionesPaso")
-                } else { // No debería pasar si la lógica de moveToNext es correcta y los datos son consistentes
-                    Log.e(TAG, "prepareAndStartExerciseStep: Error CRÍTICO - Se esperaba un componente para ${ejercicioParaPreparar.nombre} en índice $indiceDelComponenteAUsar pero no se encontró (getOrNull devolvió null). Verifique datos y lógica de `moveToNextRoutineStep`. Volviendo al ejercicio principal como fallback.")
-                    // Fallback a ejercicio principal si el componente es nulo (error de lógica/datos)
-                    tiempoParaPaso = ejercicioParaPreparar.duracionSegundosOriginal
-                    esPorRepeticionesPaso = !ejercicioParaPreparar.repeticionesOriginal.isNullOrEmpty() && ejercicioParaPreparar.repeticionesOriginal != "0" && ejercicioParaPreparar.duracionSegundosOriginal <= 0
-                    nombrePasoLog = ejercicioParaPreparar.nombre
-                    componenteQueSePrepara = null // Asegurar que no hay componente
-                    indiceComponenteASetearEnState = -1 // Resetear índice de componente en el estado
-                }
-            } else {
-                // Ejercicio SIMPLE, CON_TEMPO, POR_LADO_ALTERNADO (primer lado), COMBINADO_TEMPORIZADO
-                // O un superset/circuito sin componentes definidos (tratar como simple)
-                Log.d(TAG, "prepareAndStartExerciseStep: No es SUPERSET/CIRCUITO con componentes, o componentes están vacíos. Tratando como ejercicio principal/simple: ${ejercicioParaPreparar.nombre}")
-                componenteQueSePrepara = null // No hay componente activo
-                indiceComponenteASetearEnState = -1 // Resetear índice de componente
-
-                if (ejercicioParaPreparar.duracionSegundosOriginal > 0) {
-                    tiempoParaPaso = ejercicioParaPreparar.duracionSegundosOriginal
-                    esPorRepeticionesPaso = false
-                    if (!ejercicioParaPreparar.repeticionesOriginal.isNullOrEmpty() && ejercicioParaPreparar.repeticionesOriginal != "0") {
-                        // Es un ejercicio con tiempo Y repeticiones (ej. AMRAP en X tiempo). La UI lo manejará.
-                        // El temporizador correrá por `duracionSegundosOriginal`.
-                        Log.d(TAG, "prepareAndStartExerciseStep: Ejercicio '${ejercicioParaPreparar.nombre}' con tiempo ($tiempoParaPaso s) Y repeticiones (${ejercicioParaPreparar.repeticionesOriginal}).")
-                    } else {
-                        Log.d(TAG, "prepareAndStartExerciseStep: Preparando ejercicio POR TIEMPO '${ejercicioParaPreparar.nombre}'. Duración: ${tiempoParaPaso}s.")
-                    }
-                } else { // Por repeticiones
-                    tiempoParaPaso = 0
-                    esPorRepeticionesPaso = true
-                    Log.d(TAG, "prepareAndStartExerciseStep: Preparando ejercicio POR REPETICIONES '${ejercicioParaPreparar.nombre}'. Reps: ${ejercicioParaPreparar.repeticionesOriginal}.")
-                }
-                nombrePasoLog = ejercicioParaPreparar.nombre
-            }
-        }
-
-        Log.d(TAG, "prepareAndStartExerciseStep: Final Calculado: nombrePaso=$nombrePasoLog, tiempoPaso=$tiempoParaPaso, esReps=$esPorRepeticionesPaso, isResuming=$isResumingTimedPaso, compAct=${componenteQueSePrepara?.nombreEspecifico}, indiceCompASetear=$indiceComponenteASetearEnState")
-
-        _uiState.update {
-            it.copy(
-                estado = RoutineExecutionState.EXERCISE_ACTIVE,
-                tiempoRestante = tiempoParaPaso,
-                ejercicioActual = ejercicioParaPreparar, // Puede ser redundante si no cambió, pero asegura consistencia
-                componenteEjercicioActual = componenteQueSePrepara,
-                indiceComponenteActual = indiceComponenteASetearEnState
-                // previousState se reseteó arriba si no es reanudación, o se mantuvo si es reanudación
-            )
-        }
-
-        if (!isResumingTimedPaso) { // Solo emitir sonido de inicio si no estamos reanudando este mismo paso
-            Log.d(TAG, "prepareAndStartExerciseStep: Emitiendo sonido 'exercise_start' para $nombrePasoLog.")
-            viewModelScope.launch { _soundEvents.emit("exercise_start") }
-        } else {
-            Log.d(TAG, "prepareAndStartExerciseStep: NO emitiendo sonido 'exercise_start' (reanudando $nombrePasoLog).")
-        }
-        Log.d(TAG, "prepareAndStartExerciseStep: Llamando a startActiveTimerForCurrentStep().")
-        Log.d(TAG, "prepareAndStartExerciseStep: =================== FIN (Salida) ====================")
-        startActiveTimerForCurrentStep()
+        _uiState.update { it.copy(
+            estado = RoutineExecutionState.EXERCISE_ACTIVE, 
+            ejercicioActual = exercise, 
+            componenteEjercicioActual = component,
+            indiceEjercicioActual = idx, 
+            serieActualEjercicio = set, 
+            indiceComponenteActual = compIdx,
+            tiempoRestante = time
+        ) }
+        
+        speak("Comienza $name")
+        vibrate(longArrayOf(0, 500))
+        if (time > 0) startActiveTimer()
     }
-    fun startCustomRoutine(customRoutine: UserCustomRoutine, userProfile: UserProfile?) {
-        if (userProfile == null) {
-            setError("Perfil de usuario no disponible para iniciar rutina personalizada.")
-            return
-        }
-        if (customRoutine.ejercicios.isEmpty()) {
-            setError("La rutina personalizada '${customRoutine.nombrePersonalizado}' no tiene ejercicios.")
-            return
-        }
 
-        _uiState.update {
-            it.copy(
-                isLoading = true,
-                errorMessage = null,
-                successMessage = null,
-                rutina = null, // Limpiar rutina anterior
-                estado = RoutineExecutionState.LOADING,
-                userProfile = userProfile // Guardar el perfil de usuario
-            )
-        }
-        Log.d(TAG, "startCustomRoutine: Iniciando rutina personalizada '${customRoutine.nombrePersonalizado}' para UserID: ${userProfile.uid}")
+    private fun finishRoutine() {
+        _uiState.update { it.copy(estado = RoutineExecutionState.FINISHED) }
+        speak("Entrenamiento completado")
+        vibrate(longArrayOf(0, 500, 200, 500, 200, 1000))
+        saveProgress()
+    }
 
+    private fun saveProgress() {
+        val st = _uiState.value
+        val user = st.userProfile ?: return
+        val routine = st.rutina ?: return
         viewModelScope.launch {
-            try {
-                // Mapear UserCustomRoutine a Rutina (el modelo interno del ViewModel)
-                val rutinaToExecute = Rutina(
-                    id = customRoutine.id,
-                    nombre = customRoutine.nombrePersonalizado,
-                    descripcion = customRoutine.descripcion,
-                    imagenUrl = customRoutine.imagenUrl,
-                    ejercicios = customRoutine.ejercicios.map { ej ->
-                        ej.copy(componentes = ej.componentes.map { comp -> comp.copy() })
-                    },
-                    numeroDeRondas = customRoutine.numeroDeRondas,
-                    descansoEntreRondasSegundos = customRoutine.descansoEntreRondasSegundos,
-                    nivelRecomendado = customRoutine.nivelRecomendado,
-                    objetivos = customRoutine.objetivos,
-                    lugarEntrenamiento = customRoutine.lugarEntrenamiento,
-                    slug = customRoutine.id
-                )
-
-                rutinaToExecute.ejercicios.forEachIndexed { index, ej ->
-                    Log.d(TAG, "Verificando Ejercicio ${index + 1} [${ej.nombre}]: ID=${ej.id}, Tipo=${ej.tipoEjercicio}, Componentes=${ej.componentes.size}, Unilateral=${ej.esUnilateral}, Tempo=${ej.notaTempo}, RepsOrig='${ej.repeticionesOriginal}', DurOrig=${ej.duracionSegundosOriginal}s, Series=${ej.numeroDeSeries}")
-                    if (ej.tipoEjercicio == TipoDeEjercicio.SIMPLE && ej.componentes.isNotEmpty()) {
-                        Log.w(TAG, "Advertencia: Ejercicio '${ej.nombre}' (ID: ${ej.id}) marcado como SIMPLE pero tiene ${ej.componentes.size} componentes.")
-                    }
-                }
-
-                _uiState.update {
-                    it.copy(
-                        rutina = rutinaToExecute,
-                        isLoading = false,
-                        rondaActual = 1,
-                        indiceEjercicioActual = 0,
-                        serieActualEjercicio = if (rutinaToExecute.ejercicios.firstOrNull()?.numeroDeSeries ?: 0 > 0) 1 else 0,
-                        tiempoTotalSesionSegundos = 0,
-                        previousState = RoutineExecutionState.IDLE,
-                        componenteEjercicioActual = null,
-                        indiceComponenteActual = -1,
-                        showExitConfirmation = false,
-                        estado = RoutineExecutionState.IDLE
-                    )
-                }
-                ladoAlternadoCompletadoParaSerieActual = false
-                Log.d(TAG, "Rutina personalizada '${rutinaToExecute.nombre}' lista (${rutinaToExecute.ejercicios.size} ej.). Estado UI actualizado. Preparada para iniciar.")
-
-                // Iniciar automáticamente la cuenta atrás y el temporizador de sesión
-                // (Asumiendo que tienes funciones similares a startInitialCountdown y startSessionTimer)
-                startInitialCountdown() // Necesitas esta función definida, o similar
-                startSessionTimer()     // Necesitas esta función definida, o similar
-                Log.d(TAG, "startCustomRoutine: startInitialCountdown y startSessionTimer llamados.")
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error catastrófico al procesar rutina personalizada '${customRoutine.nombrePersonalizado}'", e)
-                setError(e.localizedMessage ?: "Error desconocido al procesar la rutina personalizada.")
-            }
+            guardarProgresoRutina(user.uid, routine, user, st.rondaActual, st.tiempoTotalSesionSegundos, {}, {})
         }
     }
+
     fun togglePausa() {
-        val currentStateValue = _uiState.value // Captura el estado en el momento de llamar a togglePausa
-
-        if (currentStateValue.estado == RoutineExecutionState.PAUSED) {
-            // REANUDAR
-            // 1. Actualizamos el estado para salir de PAUSED y volver al previousState.
-            //    El tiempoRestante que está en currentStateValue.tiempoRestante es el correcto de cuando se pausó.
-            _uiState.update {
-                it.copy(
-                    estado = currentStateValue.previousState // Volver al estado anterior
-                    // tiempoRestante ya es el correcto (el que se guardó al pausar)
-                    // previousState se podría limpiar aquí para la siguiente pausa, o dejarlo como está.
-                    // previousState = RoutineExecutionState.IDLE // Opcional
-                )
-            }
-            // En este punto, _uiState.value.estado es el estado al que volvemos (e.g., EXERCISE_ACTIVE)
-            // y _uiState.value.tiempoRestante es el tiempo que quedó.
-
-            Log.d(TAG, "Reanudando desde PAUSA. Estado restaurado a: ${_uiState.value.estado}, Tiempo restante: ${_uiState.value.tiempoRestante}")
-
-            // 2. Ahora llamamos a la función apropiada para reiniciar el temporizador/paso
-            //    con el estado y tiempo restantes ACTUALES en _uiState.value.
-            when (_uiState.value.estado) { // Usar el estado ACTUAL (que acabamos de restaurar)
-                RoutineExecutionState.INITIAL_COUNTDOWN -> {
-                    // startInitialCountdown configura estado y tiempo y llama a startActiveTimerForCurrentStep.
-                    // Ya está diseñado para usar _uiState.value.tiempoRestante si venimos de pausa.
-                    startInitialCountdown()
-                }
-                RoutineExecutionState.EXERCISE_ACTIVE -> {
-                    // prepareAndStartExerciseStep configura estado y tiempo y llama a startActiveTimerForCurrentStep.
-                    // Ya está diseñado para usar _uiState.value.tiempoRestante si venimos de pausa.
-                    prepareAndStartExerciseStep()
-                }
-                RoutineExecutionState.REST_BETWEEN_SETS,
-                RoutineExecutionState.REST_BETWEEN_EXERCISES,
-                RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                    // Para los descansos, el estado y el tiempoRestante ya son correctos.
-                    // Simplemente reiniciamos el temporizador con el tiempo restante.
-                    startActiveTimerForCurrentStep()
-                }
-                else -> {
-                    Log.d(TAG, "togglePausa: Estado restaurado ${_uiState.value.estado} no requiere reinicio de temporizador explícito o es un estado no activo/finalizado.")
-                }
-            }
-
-        } else { // PAUSAR
-            // Solo pausar si estamos en un estado activo
-            if (currentStateValue.estado != RoutineExecutionState.IDLE &&
-                currentStateValue.estado != RoutineExecutionState.LOADING &&
-                currentStateValue.estado != RoutineExecutionState.FINISHED &&
-                currentStateValue.estado != RoutineExecutionState.ERROR &&
-                currentStateValue.estado != RoutineExecutionState.PAUSED) {
-
-                currentCountdownJob?.cancel() // Cancelar el job del temporizador actual
-                // Guardamos el estado actual (currentStateValue.estado) como previousState
-                // y el tiempoRestante actual (currentStateValue.tiempoRestante) se queda como está en uiState.
-                _uiState.update {
-                    it.copy(
-                        previousState = currentStateValue.estado, // Guardar el estado actual como previousState
-                        estado = RoutineExecutionState.PAUSED
-                        // El tiempoRestante de 'it' es el tiempo actual en el momento de la pausa
-                    )
-                }
-                Log.d(TAG, "Rutina PAUSADA. Estado anterior guardado: ${currentStateValue.estado}, Tiempo restante guardado: ${_uiState.value.tiempoRestante}")
-            } else {
-                Log.d(TAG, "Intento de pausar desde un estado no pausable o ya pausado: ${currentStateValue.estado}")
-            }
-        }
-    }
-    suspend fun saltarSiguientePaso() {
-        currentCountdownJob?.cancel() // Siempre cancelar el temporizador actual
-        val currentState = _uiState.value
-        Log.d(TAG, "saltarSiguientePaso: Intentando saltar desde ${currentState.estado}")
-
-        // La lógica de saltar es esencialmente la misma que si el paso actual terminara naturalmente.
-        // Así que, en la mayoría de los casos, simplemente llamamos a moveToNextRoutineStep.
-        // Sin embargo, si estamos en un descanso, queremos emitir "rest_end" antes.
-
-        when (currentState.estado) {
-            RoutineExecutionState.INITIAL_COUNTDOWN,
-            RoutineExecutionState.EXERCISE_ACTIVE -> {
-                Log.d(TAG, "Saltando ${currentState.estado}. Dejando que moveToNextRoutineStep decida.")
-                // No es necesario modificar el estado aquí, moveToNextRoutineStep lo hará.
-                moveToNextRoutineStep()
-            }
-            RoutineExecutionState.REST_BETWEEN_SETS,
-            RoutineExecutionState.REST_BETWEEN_EXERCISES,
-            RoutineExecutionState.REST_BETWEEN_ROUNDS -> {
-                Log.d(TAG, "Saltando ${currentState.estado}. Emitiendo rest_end y llamando a moveToNextRoutineStep.")
-                _soundEvents.emit("rest_end")
-                // No es necesario actualizar el estado aquí para indicar que el descanso terminó (como poner tiempoRestante=0),
-                // moveToNextRoutineStep se encargará de la transición DESDE este estado de descanso.
-                moveToNextRoutineStep()
-            }
-            RoutineExecutionState.PAUSED -> {
-                Log.d(TAG, "Intentando saltar mientras está PAUSADO. Primero reanudando y luego saltando.")
-                // Reanudar primero para que el estado sea el correcto, luego saltar.
-                // Esto podría necesitar un pequeño delay o una forma de asegurar que el estado se actualice.
-                // O mejor, el usuario debería reanudar primero y luego saltar.
-                // Por simplicidad, asumimos que la UI no permite saltar directamente desde pausa,
-                // o si lo hace, se encarga de reanudar primero.
-                // Si quieres manejarlo aquí:
-                // togglePausa() // Reanuda
-                // viewModelScope.launch { delay(50); moveToNextRoutineStep() } // Un pequeño delay puede ser necesario
-                // Pero es más limpio que la UI maneje esto.
-                _uiState.update { it.copy(errorMessage = "Reanuda la rutina antes de saltar.") }
-            }
-            else -> {
-                Log.d(TAG, "No se puede saltar desde el estado: ${currentState.estado} o no es necesario.")
-            }
-        }
-    }
-    fun reiniciarRutina() {
-        // routineJob?.cancel() // Ya no se usa así
-        sessionTimerJob?.cancel()
-        currentCountdownJob?.cancel()
-        val rutinaActual = _uiState.value.rutina
-        _uiState.update {
-            RoutineUiState( // Resetear a un estado inicial limpio pero manteniendo la rutina cargada
-                rutina = rutinaActual,
-                isLoading = false,
-                estado = RoutineExecutionState.IDLE, // Esperar a que el usuario inicie
-                // ejercicioActual = rutinaActual?.ejercicios?.firstOrNull(), // Se seteará en startRoutine
-                // Los demás valores se resetean a default en startRoutine/startInitialCountdown
-            )
-        }
-        Log.d(TAG, "Rutina reiniciada al estado IDLE.")
-        // El usuario deberá presionar "Iniciar" de nuevo, lo cual llamará a startRoutine.
-    }
-    private fun finishRoutineWithError(errorMessage: String) {
-        Log.e(TAG, "Error en la rutina: $errorMessage")
-        sessionTimerJob?.cancel()
-        currentCountdownJob?.cancel()
-        _uiState.update {
-            it.copy(
-                estado = RoutineExecutionState.ERROR,
-                errorMessage = errorMessage,
-                isLoading = false
-            )
-        }
-    }
-    @RequiresApi(Build.VERSION_CODES.O)
-    fun saveRoutineProgress(
-        userId: String,
-        userProfile: UserProfile, // Asumiendo que UserProfile es nullable o tienes un valor por defecto
-        rutinaId: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        val currentUiValue = _uiState.value
-        val completedRoutine = currentUiValue.rutina
-        // Asegúrate de que rondasCompletadas refleje las rondas realmente finalizadas.
-        // Si la rutina termina en la ronda X, se completaron X rondas.
-        // Si se detiene a mitad de la ronda X, se completaron X-1 rondas.
-        // Ajusta esta lógica según cómo quieras contar.
-        val rondasCompletadas = if (currentUiValue.estado == RoutineExecutionState.FINISHED) {
-            currentUiValue.rondaActual
+        if (_uiState.value.estado == RoutineExecutionState.PAUSED) {
+            _uiState.update { it.copy(estado = it.previousState) }
+            if (_uiState.value.tiempoRestante > 0) startActiveTimer()
         } else {
-            maxOf(0, currentUiValue.rondaActual -1) // Si no terminó, es la ronda anterior
-        }
-        val tiempoTotalSegundos = currentUiValue.tiempoTotalSesionSegundos
-
-        if (completedRoutine == null) {
-            val errorMsg = "No hay rutina para guardar."
-            _uiState.update { it.copy(errorMessage = errorMsg, isSavingProgress = false) }
-            onError(errorMsg)
-            return
-        }
-        if (userId.isBlank()) { // userProfile puede ser opcional dependiendo de tu lógica de guardado
-            val errorMsg = "Datos de usuario incompletos para guardar."
-            _uiState.update { it.copy(errorMessage = errorMsg, isSavingProgress = false) }
-            onError(errorMsg)
-            return
-        }
-
-        _uiState.update { it.copy(isSavingProgress = true, errorMessage = null, successMessage = null) }
-
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Intentando guardar progreso para userID: $userId, rutina: ${completedRoutine.nombre}, rondas: $rondasCompletadas, tiempo: $tiempoTotalSegundos")
-
-                guardarProgresoRutina( // Simulación
-                    userIdAuth = userId,
-                    rutinaRealizada = completedRoutine,
-                    perfilUsuarioActual = userProfile, // Puede ser null si tu función lo maneja
-                    rondasCompletadasEnSesion = rondasCompletadas,
-                    tiempoTotalDeLaSesionSegundos = tiempoTotalSegundos,
-                    onSuccess = {
-                        Log.i(TAG, "Progreso de rutina guardado exitosamente para userID: $userId")
-                        _uiState.update { it.copy(successMessage = "¡Progreso guardado!", isSavingProgress = false) }
-                        onSuccess()
-                    },
-                    onError = { errorMsgDb ->
-                        Log.e(TAG, "Error al guardar progreso de rutina para userID: $userId. Error: $errorMsgDb")
-                        _uiState.update { it.copy(errorMessage = errorMsgDb, isSavingProgress = false) }
-                        onError(errorMsgDb)
-                    }
-                )
-            } catch (e: Exception) {
-                val errorMsg = e.localizedMessage ?: "Error desconocido al intentar guardar el progreso."
-                Log.e(TAG, "Excepción al guardar progreso de rutina para userID: $userId", e)
-                _uiState.update { it.copy(errorMessage = errorMsg, isSavingProgress = false) }
-                onError(errorMsg)
-            }
+            _uiState.update { it.copy(previousState = it.estado, estado = RoutineExecutionState.PAUSED) }
+            currentCountdownJob?.cancel()
         }
     }
-    private suspend fun finishRoutine() {
-        // routineJob?.cancel() // No se usa un job global de rutina
-        sessionTimerJob?.cancel()
-        currentCountdownJob?.cancel()
-        _uiState.update { it.copy(estado = RoutineExecutionState.FINISHED, tiempoRestante = 0) }
-        _soundEvents.emit("routine_finish_sound") // Sonido al finalizar la rutina
-        Log.d(TAG, "Rutina finalizada.")
-        // La UI debería observar el estado FINISHED para navegar o mostrar resumen.
-    }
-    override fun onCleared() {
-        super.onCleared()
-        // routineJob?.cancel()
-        sessionTimerJob?.cancel()
-        currentCountdownJob?.cancel()
-        Log.d(TAG, "RoutineViewModel onCleared: Jobs cancelados.")
-    }
-    fun clearSuccessMessage() {
-        _uiState.update { it.copy(successMessage = null) }
-    }
-    fun clearErrorMessage() {
-        _uiState.update { it.copy(errorMessage = null) }
-    }
-    fun setShowExitConfirmation(show: Boolean) {
-        _uiState.update { it.copy(showExitConfirmation = show) }
-    }
+
+    fun saltarSiguientePaso() { viewModelScope.launch { moveToNextStep() } }
+    fun exitAndCleanUpRoutine() { _uiState.update { RoutineUiState() } }
+    private fun setError(msg: String) { _uiState.update { it.copy(errorMessage = msg, estado = RoutineExecutionState.ERROR, isLoading = false) } }
+    fun setShowExitConfirmation(show: Boolean) = _uiState.update { it.copy(showExitConfirmation = show) }
+    
+    private fun mapToRutina(c: UserCustomRoutine) = Rutina(
+        id = c.id,
+        slug = c.id,
+        nombre = c.nombrePersonalizado,
+        descripcion = c.descripcion,
+        imagenUrl = c.imagenUrl,
+        numeroDeRondas = c.numeroDeRondas,
+        descansoEntreRondasSegundos = c.descansoEntreRondasSegundos,
+        nivelRecomendado = c.nivelRecomendado,
+        objetivos = c.objetivos,
+        lugarEntrenamiento = c.lugarEntrenamiento,
+        ejercicios = c.ejercicios
+    )
+
+    override fun onCleared() { super.onCleared(); tts?.shutdown() }
 }

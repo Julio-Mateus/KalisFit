@@ -7,6 +7,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +49,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
@@ -137,7 +140,7 @@ fun OnboardingScreen(
     var alturaState by remember { mutableFloatStateOf(170f) }
     var frecuenciaState by remember { mutableFloatStateOf(3f) }
     var currentStep by remember { mutableStateOf(0) }
-
+    var selectedPresetTitle by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
     val profilePresets = remember {
@@ -181,357 +184,376 @@ fun OnboardingScreen(
         )
     }
     val stepIsValid = when (currentStep) {
-        0 -> nivelSeleccionado != null && sexoSeleccionado != null && objetivosSeleccionados.isNotEmpty() && lugaresSeleccionados.isNotEmpty()
-        else -> true // Puedes ajustar esto según tus necesidades
+        0 -> nivelSeleccionado != null && sexoSeleccionado != null
+        1 -> objetivosSeleccionados.isNotEmpty() && lugaresSeleccionados.isNotEmpty()
+        else -> true
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.onboarding_animation))
-        LottieAnimation(
-            composition = composition,
-            iterations = Int.MAX_VALUE,
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.65f)
-                .height(180.dp)
-        )
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp)
+                .padding(16.dp, bottom = 90.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.onboarding_animation))
+            LottieAnimation(
+                composition = composition,
+                iterations = Int.MAX_VALUE,
+                modifier = Modifier
+                    .fillMaxWidth(0.65f)
+                    .height(180.dp)
+            )
 
-        Text(
-            text = "¡Bienvenido a KalisFit!", // Considera usar stringResource
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
+            Text(
+                text = "¡Bienvenido a KalisFit!", // Considera usar stringResource
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "Configura tu perfil en 3 pasos rápidos",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+            Text(
+                text = "Configura tu perfil en 3 pasos rápidos",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
 
-        Spacer(modifier = Modifier.height(14.dp))
-        LinearProgressIndicator(
-            progress = { (currentStep + 1) / 3f },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = "Paso ${currentStep + 1} de 3",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
+            Spacer(modifier = Modifier.height(14.dp))
+            LinearProgressIndicator(
+                progress = { (currentStep + 1) / 3f },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Paso ${currentStep + 1} de 3",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
 
-        Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-        Column(modifier = Modifier.animateContentSize()) {
-            when (currentStep) {
-                0 -> {
-                    OnboardingSectionCard(title = "Hazlo rápido ⚡") {
-                        Text(
-                            text = "Elige una sugerencia y autocompleta la mayoría de campos.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+            Column(modifier = Modifier.animateContentSize()) {
+                when (currentStep) {
+                    0 -> {
+                        OnboardingSectionCard(title = "Hazlo rápido ⚡") {
+                            Text(
+                                text = "Elige una sugerencia y autocompleta la mayoría de campos.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
 
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            profilePresets.forEach { preset ->
-                                StyledFilterChip(
-                                    text = preset.title,
-                                    selected = false,
-                                    onSelectedChange = {
-                                        edadState = preset.edad
-                                        pesoState = preset.peso
-                                        alturaState = preset.altura
-                                        frecuenciaState = preset.frecuencia
-                                        objetivosSeleccionados.clear()
-                                        objetivosSeleccionados.addAll(preset.objetivos)
-                                        lugaresSeleccionados.clear()
-                                        lugaresSeleccionados.addAll(preset.lugares)
-                                        Toast.makeText(
-                                            context,
-                                            "Sugerencia aplicada: ${preset.subtitle}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                )
-                            }
-                        }
-
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OnboardingSectionCard(title = "Tu base") {
-                        SliderInputField(
-                            label = "Edad",
-                            value = edadState,
-                            onValueChange = { edadState = it },
-                            valueRange = 12f..80f,
-                            steps = 67,
-                            displayValueSuffix = " años",
-                            icon = Icons.Filled.Cake
-                        )
-                        SliderInputField(
-                            label = "Peso",
-                            value = pesoState,
-                            onValueChange = { pesoState = it },
-                            valueRange = 30f..200f,
-                            steps = 169,
-                            displayValueSuffix = " kg",
-                            icon = Icons.Filled.MonitorWeight
-                        )
-                        SliderInputField(
-                            label = "Altura",
-                            value = alturaState,
-                            onValueChange = { alturaState = it },
-                            valueRange = 120f..220f,
-                            steps = 99,
-                            displayValueSuffix = " cm",
-                            icon = Icons.Filled.Height
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OnboardingSectionCard(title = "Tu nivel y sexo") {
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            niveles.forEachIndexed { index, nivel ->
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = niveles.size
-                                    ),
-                                    onClick = { nivelSeleccionado = nivel },
-                                    selected = (nivel == nivelSeleccionado),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(nivel.displayName)
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            sexos.forEachIndexed { index, sexo ->
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = sexos.size
-                                    ),
-                                    onClick = { sexoSeleccionado = sexo },
-                                    selected = (sexo == sexoSeleccionado),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(sexo.displayName)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                1 -> {
-                    OnboardingSectionCard(title = "¿Qué quieres lograr?") {
-                        FlowRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            objetivosDisponibles.forEach { objetivo ->
-                                StyledFilterChip(
-                                    text = objetivo.displayName,
-                                    selected = objetivo in objetivosSeleccionados,
-                                    onSelectedChange = {
-                                        if (objetivo in objetivosSeleccionados) objetivosSeleccionados.remove(
-                                            objetivo
-                                        )
-                                        else objetivosSeleccionados.add(objetivo)
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OnboardingSectionCard(title = "¿Dónde sueles entrenar?") { // Considera usar stringResource
-                        FlowRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            lugares.forEach { lugar ->
-                                StyledFilterChip(
-                                    text = lugar.displayName,
-                                    selected = lugar in lugaresSeleccionados,
-                                    onSelectedChange = {
-                                        if (lugar in lugaresSeleccionados) lugaresSeleccionados.remove(
-                                            lugar
-                                        )
-                                        else lugaresSeleccionados.add(lugar)
-                                    },
-                                    leadingIcon = { // Ejemplo de iconos para lugares
-                                        when (lugar) {
-                                            LugarEntrenamiento.CASA -> Icon(
-                                                Icons.Filled.Home,
-                                                null,
-                                                tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
-                                            )
-
-                                            LugarEntrenamiento.GIMNASIO -> Icon(
-                                                Icons.Filled.FitnessCenter,
-                                                null,
-                                                tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
-                                            )
-
-                                            LugarEntrenamiento.EXTERIOR -> Icon(
-                                                Icons.Filled.Terrain,
-                                                null,
-                                                tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
-                                            )
-
-                                            LugarEntrenamiento.CALISTENIA -> Icon(
-                                                Icons.Filled.SportsGymnastics,
-                                                null,
-                                                tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OnboardingSectionCard(title = "Frecuencia semanal") {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(2, 3, 4, 5, 6).forEach { day ->
-                                StyledFilterChip(
-                                    text = "$day días",
-                                    selected = frecuenciaState.toInt() == day,
-                                    onSelectedChange = { frecuenciaState = day.toFloat() },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.EventRepeat,
-                                            contentDescription = null
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { frecuenciaState = 3f }) {
-                            Text("Sugerir para mi: 3 días")
-                        }
-                    }
-                }
-
-                else -> {
-                    OnboardingSectionCard(title = "Resumen") {
-                        Text("Nivel: ${nivelSeleccionado?.displayName ?: "_"}")
-                        Text("Sexo: ${sexoSeleccionado?.displayName ?: "_"}")
-                        Text("Edad/Peso/Altura: ${edadState.toInt()} años ° ${pesoState.toInt()} kg ° ${alturaState.toInt()} cm")
-                        Text("Frecuencia: ${frecuenciaState.toInt()} días")
-                        Text("Objetivos: ${objetivosSeleccionados.joinToString { it.displayName }}")
-                        Text("Lugares: ${lugaresSeleccionados.joinToString { it.displayName }}")
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (currentStep > 0) {
-                            Button(
-                                onClick = { if (!isLoading) currentStep -= 1 },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Atrás")
-                            }
+                                profilePresets.forEach { preset ->
+                                    StyledFilterChip(
+                                        text = preset.title,
+                                        selected = selectedPresetTitle == preset.title, // Ahora sí cambia de color
+                                        onSelectedChange = {
+                                            selectedPresetTitle =
+                                                preset.title // Guardamos cuál se seleccionó
+                                            // Solo actualizamos edad/peso/altura si el usuario NO los ha movido (están en default)
+                                            if (edadState == 25f) edadState = preset.edad
+                                            if (pesoState == 70f) pesoState = preset.peso
+                                            if (alturaState == 170f) alturaState = preset.altura
+                                            frecuenciaState = preset.frecuencia
+                                            objetivosSeleccionados.clear()
+                                            objetivosSeleccionados.addAll(preset.objetivos)
+                                            lugaresSeleccionados.clear()
+                                            lugaresSeleccionados.addAll(preset.lugares)
 
-                        }
-                        Button(
-                            onClick = {
-                                if (!stepIsValid) {
-                                    Toast.makeText(
-                                        context,
-                                        "Completa este paso para continuar",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    return@Button
-                                }
-                                if (currentStep < 2) {
-                                    currentStep += 1
-                                    return@Button
-                                }
-
-                                isLoading = true
-                                authViewModel.updateProfileAfterRegister(
-                                    nivel = nivelSeleccionado!!.displayName,
-                                    objetivos = objetivosSeleccionados.map { it.displayName },
-                                    peso = pesoState,
-                                    altura = alturaState,
-                                    edad = edadState.toInt(),
-                                    sexo = sexoSeleccionado!!.displayName,
-                                    frecuenciaSemanal = frecuenciaState.toInt(),
-                                    lugarEntrenamiento = lugaresSeleccionados.map { it.displayName },
-                                    onResult = { success, message ->
-                                        isLoading = false
-                                        if (success) {
                                             Toast.makeText(
                                                 context,
-                                                "Perfil actualizado con éxito",
+                                                "Sugerencia aplicada: ${preset.title}",
                                                 Toast.LENGTH_SHORT
                                             ).show()
-                                            onFinish()
-                                        } else {
-                                            Toast.makeText(
-                                                context,
-                                                "Error al actualizar: ${message ?: "Desconocido"}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
                                         }
+                                    )
+                                }
+                            }
+
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OnboardingSectionCard(title = "Tu base") {
+                            SliderInputField(
+                                label = "Edad",
+                                value = edadState,
+                                onValueChange = { edadState = it },
+                                valueRange = 12f..80f,
+                                steps = 67,
+                                displayValueSuffix = " años",
+                                icon = Icons.Filled.Cake
+                            )
+                            SliderInputField(
+                                label = "Peso",
+                                value = pesoState,
+                                onValueChange = { pesoState = it },
+                                valueRange = 30f..200f,
+                                steps = 169,
+                                displayValueSuffix = " kg",
+                                icon = Icons.Filled.MonitorWeight
+                            )
+                            SliderInputField(
+                                label = "Altura",
+                                value = alturaState,
+                                onValueChange = { alturaState = it },
+                                valueRange = 120f..220f,
+                                steps = 99,
+                                displayValueSuffix = " cm",
+                                icon = Icons.Filled.Height
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OnboardingSectionCard(title = "Tu nivel y sexo") {
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                niveles.forEachIndexed { index, nivel ->
+                                    SegmentedButton(
+                                        shape = SegmentedButtonDefaults.itemShape(
+                                            index = index,
+                                            count = niveles.size
+                                        ),
+                                        onClick = { nivelSeleccionado = nivel },
+                                        selected = (nivel == nivelSeleccionado),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(nivel.displayName)
                                     }
-                                )
-                            },
-                            enabled = !isLoading && stepIsValid,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text(
-                                    if (currentStep < 2) "Siguente" else "Guardar y Continuar",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                sexos.forEachIndexed { index, sexo ->
+                                    SegmentedButton(
+                                        shape = SegmentedButtonDefaults.itemShape(
+                                            index = index,
+                                            count = sexos.size
+                                        ),
+                                        onClick = { sexoSeleccionado = sexo },
+                                        selected = (sexo == sexoSeleccionado),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(sexo.displayName)
+                                    }
+                                }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    1 -> {
+                        OnboardingSectionCard(title = "¿Qué quieres lograr?") {
+                            FlowRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                objetivosDisponibles.forEach { objetivo ->
+                                    StyledFilterChip(
+                                        text = objetivo.displayName,
+                                        selected = objetivo in objetivosSeleccionados,
+                                        onSelectedChange = {
+                                            if (objetivo in objetivosSeleccionados) objetivosSeleccionados.remove(
+                                                objetivo
+                                            )
+                                            else objetivosSeleccionados.add(objetivo)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OnboardingSectionCard(title = "¿Dónde sueles entrenar?") { // Considera usar stringResource
+                            FlowRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                lugares.forEach { lugar ->
+                                    StyledFilterChip(
+                                        text = lugar.displayName,
+                                        selected = lugar in lugaresSeleccionados,
+                                        onSelectedChange = {
+                                            if (lugar in lugaresSeleccionados) lugaresSeleccionados.remove(
+                                                lugar
+                                            )
+                                            else lugaresSeleccionados.add(lugar)
+                                        },
+                                        leadingIcon = { // Ejemplo de iconos para lugares
+                                            when (lugar) {
+                                                LugarEntrenamiento.CASA -> Icon(
+                                                    Icons.Filled.Home,
+                                                    null,
+                                                    tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
+                                                )
+
+                                                LugarEntrenamiento.GIMNASIO -> Icon(
+                                                    Icons.Filled.FitnessCenter,
+                                                    null,
+                                                    tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
+                                                )
+
+                                                LugarEntrenamiento.EXTERIOR -> Icon(
+                                                    Icons.Filled.Terrain,
+                                                    null,
+                                                    tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
+                                                )
+
+                                                LugarEntrenamiento.CALISTENIA -> Icon(
+                                                    Icons.Filled.SportsGymnastics,
+                                                    null,
+                                                    tint = if (lugar in lugaresSeleccionados) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        OnboardingSectionCard(title = "Frecuencia semanal") {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(2, 3, 4, 5, 6).forEach { day ->
+                                    StyledFilterChip(
+                                        text = "$day días",
+                                        selected = frecuenciaState.toInt() == day,
+                                        onSelectedChange = { frecuenciaState = day.toFloat() },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.EventRepeat,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = { frecuenciaState = 3f }) {
+                                Text("Sugerir para mi: 3 días")
+                            }
+                        }
+                    }
+
+                    else -> {
+                        OnboardingSectionCard(title = "Resumen") {
+                            Text("Nivel: ${nivelSeleccionado?.displayName ?: "_"}")
+                            Text("Sexo: ${sexoSeleccionado?.displayName ?: "_"}")
+                            Text("Edad/Peso/Altura: ${edadState.toInt()} años ° ${pesoState.toInt()} kg ° ${alturaState.toInt()} cm")
+                            Text("Frecuencia: ${frecuenciaState.toInt()} días")
+                            Text("Objetivos: ${objetivosSeleccionados.joinToString { it.displayName }}")
+                            Text("Lugares: ${lugaresSeleccionados.joinToString { it.displayName }}")
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
+        }
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp
+        ){
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (currentStep > 0) {
+                    Button(
+                        onClick = { if (!isLoading) currentStep -= 1 },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Atrás")
+                    }
+
+                }
+                Button(
+                    onClick = {
+                        if (!stepIsValid) {
+                            Toast.makeText(
+                                context,
+                                "Completa este paso para continuar",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@Button
+                        }
+                        if (currentStep < 2) {
+                            currentStep += 1
+                            return@Button
+                        }
+
+                        isLoading = true
+                        authViewModel.updateProfileAfterRegister(
+                            nivel = nivelSeleccionado!!.displayName,
+                            objetivos = objetivosSeleccionados.map { it.displayName },
+                            peso = pesoState,
+                            altura = alturaState,
+                            edad = edadState.toInt(),
+                            sexo = sexoSeleccionado!!.displayName,
+                            frecuenciaSemanal = frecuenciaState.toInt(),
+                            lugarEntrenamiento = lugaresSeleccionados.map { it.displayName },
+                            onResult = { success, message ->
+                                isLoading = false
+                                if (success) {
+                                    Toast.makeText(
+                                        context,
+                                        "Perfil actualizado con éxito",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    onFinish()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Error al actualizar: ${message ?: "Desconocido"}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        )
+                    },
+                    enabled = !isLoading && stepIsValid,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            if (currentStep < 2) "Siguente" else "Guardar y Continuar",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
             }
         }

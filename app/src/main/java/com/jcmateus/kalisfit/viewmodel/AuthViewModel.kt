@@ -18,18 +18,38 @@ class AuthViewModel(
 
     private val _currentUser = MutableStateFlow(firebaseAuth.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
-    // En init o donde configures listeners
+
     init {
         firebaseAuth.addAuthStateListener { auth ->
             _currentUser.value = auth.currentUser
         }
     }
+
     fun login(email: String, password: String, onResult: (Boolean, String?) -> Unit) {
-        firebaseAuth.signInWithEmailAndPassword(email, password)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) onResult(true, null)
-                else onResult(false, task.exception?.message)
-            }
+        Log.d("KALISFIT_DEBUG", "--- INTENTO DE LOGIN ---")
+        Log.d("KALISFIT_DEBUG", "Email: '$email', Password Length: ${password.length}")
+
+        if (email.isBlank() || password.isBlank()) {
+            Log.e("KALISFIT_DEBUG", "Error: Campos vacíos detectados antes de llamar a Firebase")
+            onResult(false, "El correo y la contraseña no pueden estar vacíos.")
+            return
+        }
+
+        try {
+            firebaseAuth.signInWithEmailAndPassword(email.trim(), password)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Log.d("KALISFIT_DEBUG", "Login Exitoso")
+                        onResult(true, null)
+                    } else {
+                        Log.e("KALISFIT_DEBUG", "Login Fallido: ${task.exception?.message}")
+                        onResult(false, task.exception?.message ?: "Error de autenticación")
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("KALISFIT_DEBUG", "Excepción atrapada en login: ${e.message}")
+            onResult(false, e.message)
+        }
     }
 
     fun register(
@@ -40,30 +60,23 @@ class AuthViewModel(
         objetivos: List<String>,
         onResult: (Boolean, String?) -> Unit
     ) {
-        firebaseAuth.createUserWithEmailAndPassword(email, password)
+        Log.d("KALISFIT_DEBUG", "--- INTENTO DE REGISTRO ---")
+        if (email.isBlank() || password.isBlank() || name.isBlank()) {
+            onResult(false, "Por favor completa todos los campos obligatorios.")
+            return
+        }
+
+        firebaseAuth.createUserWithEmailAndPassword(email.trim(), password)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val uid = firebaseAuth.currentUser?.uid ?: ""
                     val userData = mapOf(
                         "uid" to uid,
                         "nombre" to name,
-                        "email" to email,
+                        "email" to email.trim(),
                         "nivel" to nivel,
                         "objetivos" to objetivos,
-                        "fechaRegistro" to Timestamp.now() // <--- CAMBIO AQUÍ
-                        // Puedes añadir otros campos de UserProfile con valores iniciales/por defecto aquí
-                        // si tu data class UserProfile los tiene y quieres que se creen al registrarse.
-                        // Por ejemplo:
-                        // "peso" to 0f,
-                        // "altura" to 0f,
-                        // "edad" to 0,
-                        // "sexo" to "",
-                        // "frecuenciaSemanal" to 3, // O un valor por defecto
-                        // "lugarEntrenamiento" to emptyList<String>(),
-                        // "insignias" to emptyList<String>(),
-                        // "rutinasCompletadas" to 0,
-                        // "progresoActual" to "",
-                        // "fotoUrl" to ""
+                        "fechaRegistro" to Timestamp.now()
                     )
                     firestore.collection("users").document(uid).set(userData)
                         .addOnSuccessListener { onResult(true, null) }
@@ -75,94 +88,58 @@ class AuthViewModel(
     }
 
     fun saveUserIfNew(nombre: String, email: String, onFinish: () -> Unit) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (uid == null) {
-            Log.w("AuthViewModel", "saveUserIfNew: UID es nulo, no se puede guardar.")
-            onFinish() // Llama a onFinish para no bloquear el flujo, pero registra el problema.
-            return
-        }
-        val docRef = FirebaseFirestore.getInstance().collection("users").document(uid)
+        val uid = firebaseAuth.currentUser?.uid ?: return onFinish()
+        val docRef = firestore.collection("users").document(uid)
 
-        docRef.get().addOnSuccessListener { documentSnapshot -> // Cambiado 'it' por 'documentSnapshot' para claridad
+        docRef.get().addOnSuccessListener { documentSnapshot ->
             if (!documentSnapshot.exists()) {
                 val userData = mapOf(
                     "uid" to uid,
                     "nombre" to nombre,
-                    "email" to email,
-                    "fechaRegistro" to Timestamp.now() // <--- CAMBIO AQUÍ
-                    // Similar a register, considera añadir otros campos de UserProfile con valores iniciales
-                    // si esta función puede ser la primera vez que se crea el perfil.
+                    "email" to email.trim(),
+                    "fechaRegistro" to Timestamp.now()
                 )
-                docRef.set(userData)
-                    .addOnSuccessListener {
-                        Log.d("AuthViewModel", "Nuevo usuario guardado desde saveUserIfNew.")
-                        onFinish()
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("AuthViewModel", "Error al guardar nuevo usuario en saveUserIfNew: ${e.message}", e)
-                        onFinish() // Llama a onFinish incluso si hay error para desbloquear
-                    }
+                docRef.set(userData).addOnCompleteListener { onFinish() }
             } else {
-                Log.d("AuthViewModel", "El usuario ya existe, no se guardó desde saveUserIfNew.")
                 onFinish()
             }
-        }.addOnFailureListener { e ->
-            Log.e("AuthViewModel", "Error al obtener documento en saveUserIfNew: ${e.message}", e)
-            onFinish() // Llama a onFinish en caso de error de lectura
-        }
+        }.addOnFailureListener { onFinish() }
     }
-
 
     fun updateProfileAfterRegister(
         nivel: String,
-        objetivos: List<String>, // Ya es List<String>, ¡bien!
+        objetivos: List<String>,
         peso: Float,
         altura: Float,
         edad: Int,
         sexo: String,
         frecuenciaSemanal: Int,
-        lugarEntrenamiento: List<String>, // <--- CAMBIADO DE String A List<String>
+        lugarEntrenamiento: List<String>,
         onResult: (Boolean, String?) -> Unit
     ) {
         val uid = firebaseAuth.currentUser?.uid ?: run {
-            onResult(false, "Usuario no autenticado.") // Añadir mensaje de error y return
+            onResult(false, "Usuario no autenticado.")
             return
         }
 
-        // Usar .update() es bueno si el documento ya existe y solo quieres añadir/modificar estos campos.
-        // Si 'register' ya creó el documento con algunos datos y esto es para completar,
-        // .update() es más seguro que .set() sin merge, para no borrar campos existentes accidentalmente.
-        // Si 'register' NO crea el documento del usuario en la colección 'users' y esta es la primera escritura,
-        // entonces .set(..., SetOptions.merge()) o simplemente .set(...) si sabes que no hay nada antes, sería la opción.
-        // Dado que 'register' SÍ crea el documento, .update() está bien o .set(..., SetOptions.merge()).
-        // Voy a asumir que quieres actualizar/añadir estos campos, así que .update() es correcto.
-
         val profileUpdates = mapOf(
             "nivel" to nivel,
-            "objetivos" to objetivos, // Firebase maneja List<String> como un Array
+            "objetivos" to objetivos,
             "peso" to peso,
             "altura" to altura,
             "edad" to edad,
             "sexo" to sexo,
             "frecuenciaSemanal" to frecuenciaSemanal,
-            "lugarEntrenamiento" to lugarEntrenamiento // Firebase lo guardará como un Array
-            // NO añadas fechaRegistro aquí si ya la estableciste en la función `register`
-            // o si solo quieres actualizarla en momentos específicos.
-            // Si esta función también puede ser llamada para un usuario que se registró
-            // pero no completó el onboarding inmediatamente, y quieres que la fecha de "completado de perfil"
-            // se actualice, podrías añadir:
-            // "fechaCompletadoPerfil" to FieldValue.serverTimestamp() // O System.currentTimeMillis()
+            "lugarEntrenamiento" to lugarEntrenamiento
         )
 
         firestore.collection("users").document(uid)
-            .update(profileUpdates) // .update() es correcto si el doc ya existe por la función register
-            .addOnSuccessListener {
-                Log.d("AuthViewModel", "Perfil actualizado después del registro.")
-                onResult(true, null)
-            }
-            .addOnFailureListener { e ->
-                Log.e("AuthViewModel", "Error al actualizar el perfil después del registro", e)
-                onResult(false, e.message)
-            }
+            .update(profileUpdates)
+            .addOnSuccessListener { onResult(true, null) }
+            .addOnFailureListener { e -> onResult(false, e.message) }
     }
+
+    // Funciones requeridas por la pantalla de Running
+    fun updateLocationPermission(isGranted: Boolean) {}
+    fun onSummaryDone() {}
 }

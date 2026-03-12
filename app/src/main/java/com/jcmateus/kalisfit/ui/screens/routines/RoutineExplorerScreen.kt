@@ -2,74 +2,27 @@ package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ClearAll
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Park
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.surfaceColorAtElevation
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -80,6 +33,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -92,8 +46,7 @@ import com.jcmateus.kalisfit.viewmodel.AuthViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModel
 import com.jcmateus.kalisfit.viewmodel.RoutineExplorerViewModelFactory
 
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) // ExperimentalLayoutApi para FlowRow
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
 fun RoutineExplorerScreen(
@@ -103,462 +56,197 @@ fun RoutineExplorerScreen(
     authViewModel: AuthViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val filterAllOptionString = stringResource(R.string.filter_all_option)
-    val application = LocalContext.current.applicationContext as Application
+    val application = context.applicationContext as Application
     val factory = RoutineExplorerViewModelFactory(application)
-    val routineExplorerViewModel: RoutineExplorerViewModel = viewModel(factory = factory)
-    val rutinas: List<Rutina> by routineExplorerViewModel.rutinasFiltradas.collectAsState()
-    val isLoading by routineExplorerViewModel.isLoading.collectAsState()
-    val errorMessage by routineExplorerViewModel.errorMessage.collectAsState()
+    val viewModel: RoutineExplorerViewModel = viewModel(factory = factory)
+    
+    val rutinas by viewModel.rutinasFiltradas.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
-    // Estados de la UI para la búsqueda y filtros desde el ViewModel
-    val searchTerm by routineExplorerViewModel.searchTerm.collectAsState()
-    val isSearchAndFilterUiVisible by routineExplorerViewModel.isSearchAndFilterUiVisible.collectAsState()
-    val selectedNivelVM by routineExplorerViewModel.selectedNivel.collectAsState() // Renombrar para evitar conflicto con argumento
-    val selectedLugarVM by routineExplorerViewModel.selectedLugar.collectAsState()
-    val selectedGrupoMuscularVM by routineExplorerViewModel.selectedGrupoMuscular.collectAsState()
-    // LaunchedEffects para los argumentos de navegación
-    LaunchedEffect(placeFilterArgument, routineExplorerViewModel) {
-        if (placeFilterArgument != null) {
+    
+    val searchTerm by viewModel.searchTerm.collectAsState()
+    val isSearchVisible by viewModel.isSearchAndFilterUiVisible.collectAsState()
+    val selectedNivel by viewModel.selectedNivel.collectAsState()
+    val selectedLugar by viewModel.selectedLugar.collectAsState()
+
+    LaunchedEffect(placeFilterArgument) {
+        placeFilterArgument?.let {
             try {
-                val lugarEnum = LugarEntrenamiento.valueOf(placeFilterArgument.uppercase())
-                // Solo aplicar si es diferente al estado actual del VM para evitar bucles si se navega de nuevo
-                if (routineExplorerViewModel.selectedLugar.value != lugarEnum) {
-                    routineExplorerViewModel.setLugarFilter(lugarEnum)
-                }
-            } catch (e: IllegalArgumentException) {
-                if (routineExplorerViewModel.selectedLugar.value != null) {
-                    routineExplorerViewModel.setLugarFilter(null)
-                }
-            }
-        } else {
-            // Si el argumento es nulo, pero el VM tiene un filtro de lugar (quizás de una acción anterior),
-            // no lo limpiamos automáticamente aquí a menos que esa sea la intención deseada.
-            // La UI de filtros permitirá al usuario limpiarlo.
-            // Si vienes de otra pantalla sin filtro de lugar, los filtros existentes en el VM persistirán.
+                val lugar = LugarEntrenamiento.valueOf(it.uppercase())
+                viewModel.setLugarFilter(lugar)
+            } catch (e: Exception) {}
         }
     }
-    LaunchedEffect(levelFilterArgument, routineExplorerViewModel) {
-        if (routineExplorerViewModel.selectedNivel.value != levelFilterArgument) {
-            routineExplorerViewModel.setNivelFilter(levelFilterArgument)
-        }
+
+    LaunchedEffect(levelFilterArgument) {
+        levelFilterArgument?.let { viewModel.setNivelFilter(it) }
     }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Explorar Rutinas") },
+                title = { 
+                    Column {
+                        Text("Explorar", fontWeight = FontWeight.Black)
+                        Text("Encuentra tu rutina ideal", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.desc_navigate_back)
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 actions = {
-                    // Opcional: Mostrar un botón de limpiar en la TopAppBar si la UI de búsqueda está visible
-                    if (isSearchAndFilterUiVisible) {
-                        IconButton(onClick = { routineExplorerViewModel.clearFilters() }) {
-                            Icon(
-                                Icons.Filled.ClearAll,
-                                contentDescription = stringResource(R.string.clear_all_filters_desc)
-                            )
-                        }
+                    IconButton(onClick = { viewModel.toggleSearchAndFilterUiVisibility() }) {
+                        Icon(if (isSearchVisible) Icons.Filled.FilterListOff else Icons.Filled.FilterList, null)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding) // Aplicar el padding del Scaffold aquí
-        ) {
-            // Contenido principal de la pantalla (tu Column)
-            Column(
-                modifier = Modifier.fillMaxSize() // La Column ocupa todo el Box
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            AnimatedVisibility(
+                visible = isSearchVisible,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
-                // --- Sección de Búsqueda y Filtros (Animada) ---
-                AnimatedVisibility(
-                    visible = isSearchAndFilterUiVisible,
-                    enter = fadeIn() + expandVertically(animationSpec = tween(durationMillis = 300)),
-                    exit = fadeOut() + shrinkVertically(animationSpec = tween(durationMillis = 300))
-                ) {
-                    SearchAndFilterSection(
-                        searchTerm = searchTerm,
-                        onSearchTermChange = { routineExplorerViewModel.setSearchTerm(it) },
-                        selectedNivel = selectedNivelVM,
-                        onNivelSelected = { nivelSeleccionado ->
-                            routineExplorerViewModel.setNivelFilter(nivelSeleccionado)
-                        },
-                        selectedLugar = selectedLugarVM,
-                        onLugarSelected = { lugarSeleccionado ->
-                            routineExplorerViewModel.setLugarFilter(lugarSeleccionado)
-                        },
-                        selectedGrupoMuscular = selectedGrupoMuscularVM,
-                        onGrupoMuscularSelected = { grupoSeleccionado ->
-                            routineExplorerViewModel.setGrupoMuscularFilter(grupoSeleccionado)
-                        },
-                        onClearFiltersClick = { routineExplorerViewModel.clearFilters() }
-                    )
-                }
-                // --- Contenido Principal (Lista de rutinas o mensajes) ---
-                Box(
-                    modifier = Modifier
-                        .weight(1f) // Ocupa el espacio restante
-                        .fillMaxSize()
-                ) {
-                    if (isLoading && rutinas.isEmpty()) { // Mostrar loading solo si no hay datos previos
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    } else if (errorMessage != null) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.ErrorOutline,
-                                null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Error: $errorMessage",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    } else {
-                        if (rutinas.isEmpty()) {
-                            val noResultsText = when {
-                                searchTerm.isNotBlank() || selectedNivelVM != null || selectedLugarVM != null || selectedGrupoMuscularVM != null -> stringResource(
-                                    R.string.no_routines_match_search_filters
-                                )
+                SearchAndFilterSection(
+                    searchTerm = searchTerm,
+                    onSearchChange = { viewModel.setSearchTerm(it) },
+                    selectedNivel = selectedNivel,
+                    onNivelSelected = { viewModel.setNivelFilter(it) },
+                    selectedLugar = selectedLugar,
+                    onLugarSelected = { viewModel.setLugarFilter(it) },
+                    onClear = { viewModel.clearFilters() }
+                )
+            }
 
-                                placeFilterArgument != null || levelFilterArgument != null -> stringResource(
-                                    R.string.no_routines_match_initial_filters
-                                )
-
-                                else -> stringResource(R.string.no_routines_yet)
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    Icons.Filled.SearchOff,
-                                    null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = noResultsText,
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    horizontal = 16.dp,
-                                    vertical = 12.dp
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(items = rutinas, key = { it.id }) { rutina ->
-                                    RutinaCardEnhanced(rutina = rutina, onClick = {
-                                        val userIdForNavigation: String? = currentUser?.uid
-                                        navController.navigate(
-                                            Routes.routineDetail(
-                                                rutina.id,
-                                                userIdForNavigation
-                                            )
-                                        )
-                                    })
-                                }
-                            }
+            if (isLoading && rutinas.isEmpty()) {
+                Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+            } else if (errorMessage != null) {
+                ErrorState(errorMessage!!)
+            } else if (rutinas.isEmpty()) {
+                EmptyExplorerState()
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    items(rutinas, key = { it.id }) { rutina ->
+                        ExplorerRoutineCard(rutina) {
+                            navController.navigate(Routes.routineDetail(rutina.id, currentUser?.uid))
                         }
                     }
                 }
-            }
-            FloatingActionButton(
-                onClick = { routineExplorerViewModel.toggleSearchAndFilterUiVisibility() },
-                modifier = Modifier
-                    .align(Alignment.TopEnd) // <-- ALINEACIÓN A LA ESQUINA SUPERIOR DERECHA
-                    .padding(16.dp),         // <-- Padding para separarlo de los bordes
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ) {
-                Icon(
-                    imageVector = if (isSearchAndFilterUiVisible) Icons.Filled.Close else Icons.Filled.Search,
-                    contentDescription = if (isSearchAndFilterUiVisible) stringResource(R.string.close_search_desc) else stringResource(R.string.open_search_filters_desc)
-                )
             }
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) // ExperimentalLayoutApi si usas FlowRow de foundation
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SearchAndFilterSection(
     searchTerm: String,
-    onSearchTermChange: (String) -> Unit,
+    onSearchChange: (String) -> Unit,
     selectedNivel: String?,
     onNivelSelected: (String?) -> Unit,
     selectedLugar: LugarEntrenamiento?,
     onLugarSelected: (LugarEntrenamiento?) -> Unit,
-    selectedGrupoMuscular: String?,
-    onGrupoMuscularSelected: (String?) -> Unit,
-    onClearFiltersClick: () -> Unit
+    onClear: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
-    val context = LocalContext.current // Para obtener strings
-    val filterAllOptionString = stringResource(R.string.filter_all_option)
-    // Opciones para los filtros
-    val nivelesPosibles = remember { listOf(context.getString(R.string.filter_all_option)) + listOf("Principiante", "Intermedio", "Avanzado", "Experto") }
-    val lugaresPosibles =
-        remember { listOf<LugarEntrenamiento?>(null) + LugarEntrenamiento.entries.toList() } // null representa "Todos"
-    val gruposMuscularesPosibles = remember { // Define tus grupos musculares
-        listOf(context.getString(R.string.filter_all_option), "Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Abdomen", "Full Body")
+    
+    Column(modifier = Modifier.padding(16.dp)) {
+        OutlinedTextField(
+            value = searchTerm,
+            onValueChange = onSearchChange,
+            placeholder = { Text("Buscar rutinas...") },
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { Icon(Icons.Filled.Search, null) },
+            shape = RoundedCornerShape(16.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
+        )
+        
+        Spacer(Modifier.height(12.dp))
+        
+        FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Niveles
+            listOf("Principiante", "Intermedio", "Avanzado").forEach { nivel ->
+                FilterChip(
+                    selected = selectedNivel == nivel,
+                    onClick = { onNivelSelected(if (selectedNivel == nivel) null else nivel) },
+                    label = { Text(nivel) }
+                )
+            }
+            // Lugares
+            LugarEntrenamiento.entries.forEach { lugar ->
+                FilterChip(
+                    selected = selectedLugar == lugar,
+                    onClick = { onLugarSelected(if (selectedLugar == lugar) null else lugar) },
+                    label = { Text(lugar.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                )
+            }
+        }
     }
+}
+
+@Composable
+fun ExplorerRoutineCard(rutina: Rutina, onClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp))
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()) // Para que los filtros puedan scrollear si son muchos
-        ) {
-            // Barra de Búsqueda
-            OutlinedTextField(
-                value = searchTerm,
-                onValueChange = onSearchTermChange,
-                label = { Text(stringResource(R.string.search_routines_hint)) },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_icon_desc)) },
-                trailingIcon = {
-                    if (searchTerm.isNotBlank()) {
-                        IconButton(onClick = { onSearchTermChange("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.clear_search_desc))
-                        }
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
+        Box(modifier = Modifier.height(200.dp)) {
+            AsyncImage(
+                model = rutina.imagenUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(stringResource(R.string.filter_by_label), style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            // Filtro de Nivel
-            Text(stringResource(R.string.level_label_filter), style = MaterialTheme.typography.labelLarge)
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                nivelesPosibles.forEach { nivelOption -> // Renombrar para claridad
-                    val isSelected = nivelOption.equals(selectedNivel, ignoreCase = true) || (selectedNivel == null && nivelOption == filterAllOptionString)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            if (nivelOption == filterAllOptionString) {
-                                onNivelSelected(null) // Pasar null si "Todos" es seleccionado
-                            } else {
-                                onNivelSelected(nivelOption)
-                            }
-                        },
-                        label = { Text(nivelOption) }
-                    )
+            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
+            
+            Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                Text(rutina.nombre, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Bolt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(rutina.nivelRecomendado.firstOrNull() ?: "General", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.width(12.dp))
+                    Icon(Icons.Filled.Timer, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${rutina.ejercicios.size * 5} min", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Filtro de Lugar
-            Text(stringResource(R.string.training_place_label_filter), style = MaterialTheme.typography.labelLarge)
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape
             ) {
-                lugaresPosibles.forEach { lugarOption ->
-                    val isSelected = lugarOption == selectedLugar
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onLugarSelected(lugarOption) }, // El ViewModel ya maneja null para "Todos" aquí
-                        label = { Text(lugarOption?.toString()?.replaceFirstChar { it.titlecase(java.util.Locale.getDefault()) } ?: filterAllOptionString) }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Filtro de Grupo Muscular
-            Text(stringResource(R.string.muscle_group_label_filter), style = MaterialTheme.typography.labelLarge)
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                gruposMuscularesPosibles.forEach { grupoOption ->
-                    val isSelected = grupoOption.equals(selectedGrupoMuscular, ignoreCase = true) || (selectedGrupoMuscular == null && grupoOption == filterAllOptionString)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            if (grupoOption == filterAllOptionString) {
-                                onGrupoMuscularSelected(null) // Pasar null si "Todos" es seleccionado
-                            } else {
-                                onGrupoMuscularSelected(grupoOption)
-                            }
-                        },
-                        label = { Text(grupoOption) }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onClearFiltersClick,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text(stringResource(R.string.clear_all_button))
+                Icon(Icons.Filled.Add, null, modifier = Modifier.padding(8.dp).size(20.dp), tint = Color.White)
             }
         }
     }
 }
+
 @Composable
-fun RutinaCardEnhanced(rutina: Rutina, onClick: () -> Unit) {
-    Log.d("RutinaCardEnhanced", "ID Rutina: ${rutina.id}, Nombre: ${rutina.nombre}, ImageURL: ${rutina.imagenUrl}")
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Column { // Quitamos el padding aquí para que la imagen ocupe todo el ancho
-            // --- INICIO: Mostrar Imagen de la Rutina ---
-            if (!rutina.imagenUrl.isNullOrBlank()) {
-                Log.d("RutinaCardEnhanced", "Mostrando AsyncImage para: ${rutina.imagenUrl}")
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(rutina.imagenUrl)
-                        .crossfade(true) // Opcional: para una carga más suave
-                        // .placeholder(R.drawable.placeholder_image) // Opcional: imagen mientras carga
-                        // .error(R.drawable.error_image) // Opcional: imagen si hay error
-                        .build(),
-                    contentDescription = "Imagen de la rutina: ${rutina.nombre}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(500.dp) // O una altura fija: .height(180.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop // O ContentScale.Fit, según prefieras
-                )
-            }else {
-                // ----> INICIO DEBUG <----
-                Log.d("RutinaCardEnhanced", "ImageURL es nula o vacía para la rutina: ${rutina.nombre}")
-                // ----> FIN DEBUG <----
-            }
-            // --- FIN: Mostrar Imagen de la Rutina ---
-
-            // Contenido de texto con padding
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = rutina.nombre,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-
-                if (rutina.descripcion.isNotBlank()) {
-                    Text(
-                        text = rutina.descripcion,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                RutinaDetailItemWithIcon(
-                    icon = Icons.Filled.Star,
-                    label = "Nivel",
-                    value = rutina.nivelRecomendado.joinToString(" / ")
-                )
-                RutinaDetailItemWithIcon(
-                    icon = Icons.Filled.CheckCircle,
-                    label = "Objetivos",
-                    value = rutina.objetivos.joinToString(", ")
-                )
-                RutinaDetailItemWithIcon(
-                    icon = determinePlaceIcon(rutina.lugarEntrenamiento.firstOrNull()?.toString()), // Asegúrate que lugarEntrenamiento es String o conviértelo
-                    label = "Lugares",
-                    value = rutina.lugarEntrenamiento.joinToString(", ") { it.toString() } // Si es una lista de Enums
-                )
-            }
-        }
+fun EmptyExplorerState() {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Filled.SearchOff, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+        Text("No encontramos lo que buscas", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.outline)
     }
 }
+
 @Composable
-fun RutinaDetailItemWithIcon(icon: ImageVector, label: String, value: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 4.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label, // Para accesibilidad
-            modifier = Modifier.size(18.dp), // Tamaño del icono
-            tint = MaterialTheme.colorScheme.primary // Color del icono
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "$label: ",
-            style = MaterialTheme.typography.labelLarge, // Un poco más grande para la etiqueta
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1, // Para que no se desborde si el valor es muy largo
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-// Helper para determinar el icono del lugar
-@Composable
-fun determinePlaceIcon(lugarNombre: String?): ImageVector {
-    return when (lugarNombre?.uppercase()) { // Hacemos uppercase para comparar con los enums
-        LugarEntrenamiento.CASA.name -> Icons.Filled.Home
-        LugarEntrenamiento.GIMNASIO.name -> Icons.Filled.FitnessCenter
-        LugarEntrenamiento.EXTERIOR.name -> Icons.Filled.Park // O Terrain
-        LugarEntrenamiento.CALISTENIA.name -> Icons.Filled.SelfImprovement
-        else -> Icons.Filled.Place // Icono por defecto
+fun ErrorState(msg: String) {
+    Box(Modifier.fillMaxSize(), Alignment.Center) {
+        Text("Error: $msg", color = MaterialTheme.colorScheme.error)
     }
 }

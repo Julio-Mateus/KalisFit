@@ -6,87 +6,77 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Opcional: Permiso para ubicación en segundo plano si lo necesitas más adelante -->
-    <!-- <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> -->
+    <!-- Permisos para Vibración -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Permisos para Servicio en Primer Plano (Requeridos para Running en segundo plano) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- ===================================================================== -->
     <!--          PERMISOS PARA NOTIFICACIONES Y ALARMAS                      -->
     <!-- ===================================================================== -->
-    <!-- Requerido a partir de Android 13 (API 33) para enviar notificaciones -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Requerido para programar alarmas exactas. Considera las implicaciones
-         en el consumo de batería y las políticas de Google Play. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Algunas versiones de Android pueden requerir este también para alarmas exactas. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-
-    <!-- Requerido para recibir un broadcast cuando el dispositivo ha terminado de arrancar,
-         para poder reprogramar alarmas. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Si tus notificaciones desde una alarma necesitan iniciar un servicio en primer plano -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" /> si es para sincronizar datos -->
-    <!-- ===================================================================== -->
 
     <application
         android:name=".KalisFitApplication"
-    android:allowBackup="true"
-    android:dataExtractionRules="@xml/data_extraction_rules"
-    android:fullBackupContent="@xml/backup_rules"
-    android:icon="@mipmap/ic_launcher"
-    android:label="@string/app_name"
-    android:roundIcon="@mipmap/ic_launcher_round"
-    android:supportsRtl="true"
-    android:theme="@style/Theme.KalisFit"
-    tools:targetApi="31"> <!-- Considera actualizar targetApi si tu compileSdk es más alto -->
-
-    <!-- API Key de Google Maps REQUERIDA -->
-    <meta-data
-        android:name="com.google.android.geo.API_KEY"
-        android:value="AIzaSyCsAhMTRVbOVP7J7eUmnPYbnyDVA_jmDnU" />
-
-    <activity
-        android:name="com.jcmateus.kalisfit.MainActivity"
-        android:exported="true"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/Theme.KalisFit">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
-    </activity>
-    <provider
-        android:name="androidx.core.content.FileProvider"
-        android:authorities="${applicationId}.provider"
-        android:exported="false"
-        android:grantUriPermissions="true">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.KalisFit"
+        tools:targetApi="31">
+
         <meta-data
-            android:name="android.support.FILE_PROVIDER_PATHS"
-            android:resource="@xml/file_paths" />
-    </provider>
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
 
-    <!-- ===================================================================== -->
-    <!--          DECLARACIÓN DE RECEIVERS PARA NOTIFICACIONES                -->
-    <!-- ===================================================================== -->
-    <!-- Receptor para cuando el dispositivo se reinicia (para reprogramar alarmas) -->
-    <!-- Asegúrate de que el .name apunte a la ubicación correcta de tu BroadcastReceiver -->
-    <receiver
-        android:name=".notifications.BootCompletedReceiver"
-        android:enabled="true"
-        android:exported="true"
-        tools:ignore="MissingClass">
-        <intent-filter>
-            <action android:name="android.intent.action.BOOT_COMPLETED" />
-        </intent-filter>
-    </receiver>
+        <activity
+            android:name="com.jcmateus.kalisfit.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.KalisFit">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
-    <!-- Receptor para las alarmas de notificación -->
-    <!-- Asegúrate de que el .name apunte a la ubicación correcta de tu BroadcastReceiver -->
-    <receiver android:name=".notifications.NotificationReceiver"
-        android:enabled="true"
-        android:exported="false"
-        tools:ignore="MissingClass" /> <!-- Generalmente exported="false" es más seguro para receivers de alarmas internas -->
-</application>
+        <!-- Servicio de Running en Primer Plano -->
+        <service
+            android:name=".services.RunningForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <receiver
+            android:name=".notifications.BootCompletedReceiver"
+            android:enabled="true"
+            android:exported="true"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".notifications.NotificationReceiver"
+            android:enabled="true"
+            android:exported="false"
+            tools:ignore="MissingClass" />
+    </application>
 </manifest>

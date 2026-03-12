@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "536221531880-60lapbt5l9ajjpvton805pkjsl4cmhe2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.jcmateus.kalisfit",
+            "certificate_hash": "f19548b7a6d3c5e95213b6742e1c8a9d4f3b5c7e"
+          }
+        },
+        {
           "client_id": "536221531880-92r51c0ith9p4thc5n6g6pnc3fotjc4b.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

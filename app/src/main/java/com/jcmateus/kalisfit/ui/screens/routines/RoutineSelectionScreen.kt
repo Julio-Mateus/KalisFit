@@ -2,229 +2,182 @@ package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.icu.text.SimpleDateFormat
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Hotel
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import java.util.Locale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.jcmateus.kalisfit.model.TipoDiaEntrenamiento
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.UserProfileViewModel
-import java.util.Date
-import kotlin.text.take
+import java.util.*
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineSelectionScreen(
     navController: NavHostController,
     dateInMillis: Long
 ) {
     val context = LocalContext.current
-    val selectedDate = remember { Date(dateInMillis) } // La fecha para la que se elige rutina
-    val dateFormatter = remember {
-        SimpleDateFormat(
-            "EEEE dd 'de' MMMM",
-            Locale.getDefault()
-        )
-    }
-    // Obtener rutinas generales y personalizadas del ViewModel
-    // Obtener el NavBackStackEntry de la ruta MAIN_CONTENT.
+    val selectedDate = remember { Date(dateInMillis) }
+    val dateFormatter = remember { SimpleDateFormat("EEEE, dd MMM", Locale.getDefault()) }
+    
     val mainContentEntry = remember(navController.currentBackStackEntry) {
         navController.getBackStackEntry(Routes.MAIN_CONTENT)
     }
     val userViewModel: UserProfileViewModel = viewModel(viewModelStoreOwner = mainContentEntry)
-    val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState() // O todas las rutinas
+    val recommendedRoutines by userViewModel.recommendedRoutines.collectAsState()
     val userCustomRoutines by userViewModel.userCustomRoutines.collectAsState()
-    // Podrías necesitar cargar todas las rutinas si `recommendedRoutines` es limitado
-    // LaunchedEffect(Unit) { userViewModel.loadAllRoutinesIfNeeded() }
+    
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Rutinas Sugeridas", "Mis Rutinas")
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Elegir Rutina para ${dateFormatter.format(selectedDate)}") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                title = {
+                    Column {
+                        Text("PLANIFICAR DÍA", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(4.dp))
+                            Text(dateFormatter.format(selectedDate).uppercase(), style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    }
+                }
             )
         }
-    ) { paddingValues ->
-        Column(modifier = Modifier.padding(paddingValues)) {
-            TabRow(selectedTabIndex = selectedTab) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            PrimaryTabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                divider = {}
             ) {
-                when (selectedTab) {
-                    0 -> { // Rutinas Sugeridas/Generales
-                        if (recommendedRoutines.isEmpty()) {
-                            item { Text("No hay rutinas sugeridas disponibles.") }
-                        }
-                        items(recommendedRoutines, key = { it.id }) { rutina ->
-                            RoutineSelectionItemCard(
-                                title = rutina.nombre,
-                                subtitle = rutina.descripcion.take(100) + "...", // O algún detalle
-                                imageUrl = rutina.imagenUrl,
-                                onClick = {
-                                    userViewModel.updateDayInWeeklyPlan(
-                                        dateToUpdate = selectedDate,
-                                        rutinaId = rutina.id, // o rutina.slug si es lo que usas
-                                        rutinaNombre = rutina.nombre,
-                                        esCustom = false,
-                                        tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name
-                                    )
-                                    navController.popBackStack() // Volver a la pantalla anterior
-                                    Toast.makeText(context, "${rutina.nombre} asignada", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }
-                    }
-                    1 -> { // Mis Rutinas Personalizadas
-                        if (userCustomRoutines.isEmpty()) {
-                            item { Text("No tienes rutinas personalizadas guardadas.") }
-                        }
-                        items(userCustomRoutines, key = { it.id }) { customRutina ->
-                            RoutineSelectionItemCard(
-                                title = customRutina.nombrePersonalizado,
-                                subtitle = "${customRutina.ejercicios.size} ejercicios",
-                                imageUrl = customRutina.imagenUrl,
-                                onClick = {
-                                    userViewModel.updateDayInWeeklyPlan(
-                                        dateToUpdate = selectedDate,
-                                        rutinaId = customRutina.id,
-                                        rutinaNombre = customRutina.nombrePersonalizado,
-                                        esCustom = true,
-                                        tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name
-                                    )
-                                    navController.popBackStack()
-                                    Toast.makeText(context, "${customRutina.nombrePersonalizado} asignada", Toast.LENGTH_SHORT).show()
-                                }
-                            )
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("SUGERIDAS", fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.Star, null) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("MIS RUTINAS", fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.History, null) }
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                val listToDisplay = if (selectedTab == 0) recommendedRoutines else userCustomRoutines
+                
+                if (listToDisplay.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                            Text("No hay rutinas en esta categoría", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
-                // Opción para marcar como día de descanso
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    Button(
+
+                items(listToDisplay) { item ->
+                    val title = if (selectedTab == 0) (item as com.jcmateus.kalisfit.model.Rutina).nombre else (item as com.jcmateus.kalisfit.model.UserCustomRoutine).nombrePersonalizado
+                    val img = if (selectedTab == 0) (item as com.jcmateus.kalisfit.model.Rutina).imagenUrl else (item as com.jcmateus.kalisfit.model.UserCustomRoutine).imagenUrl
+                    
+                    SelectionRoutineCard(
+                        title = title,
+                        imageUrl = img,
                         onClick = {
                             userViewModel.updateDayInWeeklyPlan(
                                 dateToUpdate = selectedDate,
-                                rutinaId = null,
-                                rutinaNombre = null,
-                                esCustom = null,
-                                tipoDeDia = TipoDiaEntrenamiento.DESCANSO.name
+                                rutinaId = if (selectedTab == 0) (item as com.jcmateus.kalisfit.model.Rutina).id else (item as com.jcmateus.kalisfit.model.UserCustomRoutine).id,
+                                rutinaNombre = title,
+                                esCustom = selectedTab == 1,
+                                tipoDeDia = TipoDiaEntrenamiento.ENTRENAMIENTO.name
                             )
                             navController.popBackStack()
-                            Toast.makeText(context, "Día marcado como descanso", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Marcar como Día de Descanso")
-                    }
+                            Toast.makeText(context, "Rutina asignada", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+
+            // Botón de Descanso resaltado
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(20.dp),
+                onClick = {
+                    userViewModel.updateDayInWeeklyPlan(selectedDate, null, null, null, TipoDiaEntrenamiento.DESCANSO.name)
+                    navController.popBackStack()
+                }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Default.Hotel, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Text("MARCAR COMO DÍA DE DESCANSO", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
-fun RoutineSelectionItemCard(
-    title: String,
-    subtitle: String,
-    imageUrl: String?,
-    onClick: () -> Unit
-) {
+fun SelectionRoutineCard(title: String, imageUrl: String?, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = title,
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(Modifier.width(12.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Seleccionar")
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.primary)
         }
     }
 }

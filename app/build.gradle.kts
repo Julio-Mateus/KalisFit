@@ -1,4 +1,4 @@
-
+import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,13 +7,22 @@ plugins {
     id("kotlin-parcelize")
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()){
+    localPropertiesFile.inputStream().use {localProperties.load(it)}
+}
+val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY", "")
+
+
 android {
     namespace = "com.jcmateus.kalisfit"
     compileSdk = 35
 
     defaultConfig {
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         applicationId = "com.jcmateus.kalisfit"
-        minSdk = 24
+        minSdk = 26 // ACTUALIZADO: Requerido por Health Connect
         targetSdk = 35
         versionCode = 8
         versionName = "1.0.7"
@@ -117,4 +126,10 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
 
     implementation("com.google.accompanist:accompanist-placeholder-material:0.36.0") // Revisa la última versión
+
+    // Health Connect para métricas de Salud (Ritmo cardíaco, etc.)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
+
+    // Play Services Wearable para comunicación móvil <-> reloj
+    implementation("com.google.android.gms:play-services-wearable:18.1.0")
 }
