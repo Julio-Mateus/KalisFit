@@ -47,10 +47,13 @@ data class RoutineUiState(
     val showExitConfirmation: Boolean = false,
     val previousState: RoutineExecutionState = RoutineExecutionState.IDLE,
     val userProfile: UserProfile? = null,
-    val canResume: Boolean = false
+    val canResume: Boolean = false,
+    val isVoiceEnabled: Boolean = true,
+    val isVibrationEnabled: Boolean = true
 )
 
-class RoutineViewModel(application: Application) : AndroidViewModel(application), TextToSpeech.OnInitListener {
+class RoutineViewModel(application: Application) : AndroidViewModel(application),
+    TextToSpeech.OnInitListener {
     private val repository = RoutineRepository(application)
     private val settingsDataStore = application.settingsDataStore
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -90,47 +93,96 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.let {
-                it.setLanguage(Locale("es", "ES"))
+            tts?.let { engine ->
+                // Establecemos el idioma base
+                engine.setLanguage(Locale("es", "ES"))
+
+                // Intentamos configurar la voz según el género del perfil cargado
+                _uiState.value.userProfile?.let { profile ->
+                    configurarVozPorGenero(profile.sexo)
+                }
                 isTtsReady = true
             }
         }
     }
 
-    private fun speak(text: String) {
-        if (isTtsReady && voiceCoachEnabled) {
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                    .setAudioAttributes(audioAttributes)
-                    .build()
-                audioManager.requestAudioFocus(focusRequest)
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "WorkoutTTS")
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+    private fun configurarVozPorGenero(sexo: String) {
+        tts?.let { engine ->
+            val voices = engine.voices
+            if (voices != null) {
+                // Buscamos una voz que coincida con el género y el idioma español
+                val targetVoice = if (sexo.lowercase() == "hombre") {
+                    voices.find {
+                        it.name.lowercase().contains("male") && it.locale.language == "es"
+                    }
+                } else {
+                    voices.find {
+                        it.name.lowercase().contains("female") && it.locale.language == "es"
+                    }
+                }
+                // Si encontramos la voz específica, la asignamos; si no, Android usará la de sistema
+                targetVoice?.let { engine.voice = it }
             }
         }
     }
 
+    private fun speak(text: String) {
+        if (isTtsReady && uiState.value.isVoiceEnabled) {
+            if (isTtsReady && voiceCoachEnabled) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val focusRequest =
+                        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                            .setAudioAttributes(audioAttributes)
+                            .build()
+                    audioManager.requestAudioFocus(focusRequest)
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "WorkoutTTS")
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.requestAudioFocus(
+                        null,
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                    )
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                }
+            }
+        }
+    }
+
+    fun toggleVoiceCoach() {
+        _uiState.update { it.copy(isVoiceEnabled = !it.isVoiceEnabled) }
+    }
+
+    fun toggleVibration() {
+        _uiState.update { it.copy(isVibrationEnabled = !it.isVibrationEnabled) }
+    }
+
     private fun vibrate(pattern: LongArray) {
-        if (vibrationEnabled) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, -1)
+        if (uiState.value.isVibrationEnabled) {
+            if (vibrationEnabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(pattern, -1)
+                }
             }
         }
     }
 
     fun startRoutine(rutinaId: String, userProfile: UserProfile?) {
-        _uiState.update { it.copy(isLoading = true, userProfile = userProfile, estado = RoutineExecutionState.LOADING) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                userProfile = userProfile,
+                estado = RoutineExecutionState.LOADING
+            )
+        }
         viewModelScope.launch {
             try {
                 val customRoutine = getUserCustomRoutineById(userProfile?.uid ?: "", rutinaId)
@@ -151,19 +203,32 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     getRutinaByIdFromFirestore(rutinaId)
                 }
-                
+
                 if (finalRutina != null) {
-                    _uiState.update { it.copy(rutina = finalRutina, isLoading = false, estado = RoutineExecutionState.IDLE) }
+                    _uiState.update {
+                        it.copy(
+                            rutina = finalRutina,
+                            isLoading = false,
+                            estado = RoutineExecutionState.IDLE
+                        )
+                    }
                     startInitialCountdown()
                 } else {
                     setError("Rutina no encontrada")
                 }
-            } catch (e: Exception) { setError(e.localizedMessage ?: "Error") }
+            } catch (e: Exception) {
+                setError(e.localizedMessage ?: "Error")
+            }
         }
     }
 
     private fun startInitialCountdown() {
-        _uiState.update { it.copy(estado = RoutineExecutionState.INITIAL_COUNTDOWN, tiempoRestante = 5) }
+        _uiState.update {
+            it.copy(
+                estado = RoutineExecutionState.INITIAL_COUNTDOWN,
+                tiempoRestante = 5
+            )
+        }
         speak("Prepárate para comenzar")
         startActiveTimer()
     }
@@ -174,13 +239,23 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             try {
                 while (isActive && _uiState.value.tiempoRestante > 0) {
                     val rem = _uiState.value.tiempoRestante
-                    if (rem == 5 && _uiState.value.estado.name.contains("REST")) {
-                        speak("Prepárate en cinco segundos")
-                        vibrate(longArrayOf(0, 200))
-                    } else if (rem <= 3) {
+                    val estadoActual = _uiState.value.estado
+
+                    // Avisos a los 5 segundos finales
+                    if (rem == 5) {
+                        if (estadoActual.name.contains("REST")) {
+                            speak("Faltan 5 segundos, prepárate")
+                            vibrate(longArrayOf(0, 400, 200, 400)) // Doble pulso para alertar
+                        } else if (estadoActual == RoutineExecutionState.EXERCISE_ACTIVE) {
+                            speak("Últimos 5 segundos, ¡tú puedes!")
+                            vibrate(longArrayOf(0, 400, 200, 400))
+                        }
+                    } else if (rem <= 3 && rem > 0) {
+                        // Beeps normales para los últimos 3 segundos
                         _soundEvents.emit("beep")
-                        vibrate(longArrayOf(0, 100))
+                        vibrate(longArrayOf(0, 150))
                     }
+
                     delay(1000)
                     if (_uiState.value.estado != RoutineExecutionState.PAUSED) {
                         _uiState.update { it.copy(tiempoRestante = it.tiempoRestante - 1) }
@@ -189,7 +264,8 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 if (isActive && _uiState.value.estado != RoutineExecutionState.PAUSED && _uiState.value.tiempoRestante == 0) {
                     moveToNextStep()
                 }
-            } catch (e: CancellationException) { /* Ignored */ }
+            } catch (e: CancellationException) { /* Ignored */
+            }
         }
     }
 
@@ -209,30 +285,61 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                     if (st.serieActualEjercicio < ex.numeroDeSeries) {
                         val rest = ex.descansoEntreSeriesSegundos
                         if (rest > 0) {
-                            _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_SETS, tiempoRestante = rest) }
+                            _uiState.update {
+                                it.copy(
+                                    estado = RoutineExecutionState.REST_BETWEEN_SETS,
+                                    tiempoRestante = rest
+                                )
+                            }
                             speak("Descanso")
                             vibrate(longArrayOf(0, 600, 200, 600))
                             startActiveTimer()
-                        } else prepareExercise(st.indiceEjercicioActual, st.serieActualEjercicio + 1, -1)
+                        } else prepareExercise(
+                            st.indiceEjercicioActual,
+                            st.serieActualEjercicio + 1,
+                            -1
+                        )
                     } else if (st.indiceEjercicioActual < rutina.ejercicios.size - 1) {
                         val rest = ex.descansoDespuesEjercicioSegundos
                         if (rest > 0) {
-                            _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_EXERCISES, tiempoRestante = rest) }
+                            _uiState.update {
+                                it.copy(
+                                    estado = RoutineExecutionState.REST_BETWEEN_EXERCISES,
+                                    tiempoRestante = rest
+                                )
+                            }
                             speak("Descanso de ejercicio")
                             vibrate(longArrayOf(0, 600, 200, 600))
                             startActiveTimer()
                         } else prepareExercise(st.indiceEjercicioActual + 1, 1, -1)
                     } else if (st.rondaActual < rutina.numeroDeRondas) {
                         val rest = rutina.descansoEntreRondasSegundos
-                        _uiState.update { it.copy(estado = RoutineExecutionState.REST_BETWEEN_ROUNDS, tiempoRestante = rest, rondaActual = it.rondaActual + 1) }
+                        _uiState.update {
+                            it.copy(
+                                estado = RoutineExecutionState.REST_BETWEEN_ROUNDS,
+                                tiempoRestante = rest,
+                                rondaActual = it.rondaActual + 1
+                            )
+                        }
                         speak("Ronda completada")
                         vibrate(longArrayOf(0, 800, 200, 800))
                         startActiveTimer()
                     } else finishRoutine()
                 }
             }
-            RoutineExecutionState.REST_BETWEEN_SETS -> prepareExercise(st.indiceEjercicioActual, st.serieActualEjercicio + 1, -1)
-            RoutineExecutionState.REST_BETWEEN_EXERCISES -> prepareExercise(st.indiceEjercicioActual + 1, 1, -1)
+
+            RoutineExecutionState.REST_BETWEEN_SETS -> prepareExercise(
+                st.indiceEjercicioActual,
+                st.serieActualEjercicio + 1,
+                -1
+            )
+
+            RoutineExecutionState.REST_BETWEEN_EXERCISES -> prepareExercise(
+                st.indiceEjercicioActual + 1,
+                1,
+                -1
+            )
+
             RoutineExecutionState.REST_BETWEEN_ROUNDS -> prepareExercise(0, 1, -1)
             else -> {}
         }
@@ -240,22 +347,34 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     private fun prepareExercise(idx: Int, set: Int, compIdx: Int) {
         val exercise = _uiState.value.rutina?.ejercicios?.getOrNull(idx) ?: return
-        val component = if (compIdx >= 0) exercise.componentes.getOrNull(compIdx) else null
-        
+        val finalCompIdx = if (exercise.esTipoComplejo() && compIdx == -1) 0 else compIdx
+        val component =
+            if (finalCompIdx >= 0) exercise.componentes.getOrNull(finalCompIdx) else null
+
         val time = component?.duracionSegundos ?: exercise.duracionSegundosOriginal
+        val reps = component?.repeticiones ?: exercise.repeticionesOriginal
         val name = component?.nombreEspecifico ?: exercise.nombre
 
-        _uiState.update { it.copy(
-            estado = RoutineExecutionState.EXERCISE_ACTIVE, 
-            ejercicioActual = exercise, 
-            componenteEjercicioActual = component,
-            indiceEjercicioActual = idx, 
-            serieActualEjercicio = set, 
-            indiceComponenteActual = compIdx,
-            tiempoRestante = time
-        ) }
-        
-        speak("Comienza $name")
+        _uiState.update {
+            it.copy(
+                estado = RoutineExecutionState.EXERCISE_ACTIVE,
+                ejercicioActual = exercise,
+                componenteEjercicioActual = component,
+                indiceEjercicioActual = idx,
+                serieActualEjercicio = maxOf(1, set),
+                indiceComponenteActual = finalCompIdx,
+                tiempoRestante = time
+            )
+        }
+
+        // --- COACH INTELIGENTE ---
+        val voiceMsg = if (time > 0) {
+            "Comienza $name por $time segundos"
+        } else {
+            "Comienza $name, realiza $reps repeticiones"
+        }
+        speak(voiceMsg)
+
         vibrate(longArrayOf(0, 500))
         if (time > 0) startActiveTimer()
     }
@@ -272,7 +391,14 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         val user = st.userProfile ?: return
         val routine = st.rutina ?: return
         viewModelScope.launch {
-            guardarProgresoRutina(user.uid, routine, user, st.rondaActual, st.tiempoTotalSesionSegundos, {}, {})
+            guardarProgresoRutina(
+                user.uid,
+                routine,
+                user,
+                st.rondaActual,
+                st.tiempoTotalSesionSegundos,
+                {},
+                {})
         }
     }
 
@@ -281,16 +407,37 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             _uiState.update { it.copy(estado = it.previousState) }
             if (_uiState.value.tiempoRestante > 0) startActiveTimer()
         } else {
-            _uiState.update { it.copy(previousState = it.estado, estado = RoutineExecutionState.PAUSED) }
+            _uiState.update {
+                it.copy(
+                    previousState = it.estado,
+                    estado = RoutineExecutionState.PAUSED
+                )
+            }
             currentCountdownJob?.cancel()
         }
     }
 
-    fun saltarSiguientePaso() { viewModelScope.launch { moveToNextStep() } }
-    fun exitAndCleanUpRoutine() { _uiState.update { RoutineUiState() } }
-    private fun setError(msg: String) { _uiState.update { it.copy(errorMessage = msg, estado = RoutineExecutionState.ERROR, isLoading = false) } }
-    fun setShowExitConfirmation(show: Boolean) = _uiState.update { it.copy(showExitConfirmation = show) }
-    
+    fun saltarSiguientePaso() {
+        viewModelScope.launch { moveToNextStep() }
+    }
+
+    fun exitAndCleanUpRoutine() {
+        _uiState.update { RoutineUiState() }
+    }
+
+    private fun setError(msg: String) {
+        _uiState.update {
+            it.copy(
+                errorMessage = msg,
+                estado = RoutineExecutionState.ERROR,
+                isLoading = false
+            )
+        }
+    }
+
+    fun setShowExitConfirmation(show: Boolean) =
+        _uiState.update { it.copy(showExitConfirmation = show) }
+
     private fun mapToRutina(c: UserCustomRoutine) = Rutina(
         id = c.id,
         slug = c.id,
@@ -305,5 +452,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         ejercicios = c.ejercicios
     )
 
-    override fun onCleared() { super.onCleared(); tts?.shutdown() }
+    override fun onCleared() {
+        super.onCleared(); tts?.shutdown()
+    }
 }

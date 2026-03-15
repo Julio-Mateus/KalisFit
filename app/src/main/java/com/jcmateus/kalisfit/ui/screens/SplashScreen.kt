@@ -2,8 +2,10 @@ package com.jcmateus.kalisfit.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -13,7 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
@@ -25,83 +30,71 @@ import com.jcmateus.kalisfit.navigation.Routes
 import kotlinx.coroutines.delay
 import com.jcmateus.kalisfit.R
 
+// Modificación en SplashScreen.kt
 @Composable
 fun SplashScreen(
     onUserLoggedIn: () -> Unit,
     onUserNotLoggedIn: () -> Unit
 ) {
-    val composition by rememberLottieComposition(
-        LottieCompositionSpec.RawRes(R.raw.exercise)
-    )
-    val progress by animateLottieCompositionAsState(
-        composition,
-        iterations = LottieConstants.IterateForever
-    )
-
-    var showText by remember { mutableStateOf(false) }
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.exercise))
+    val progress by animateLottieCompositionAsState(composition, iterations = LottieConstants.IterateForever)
+    var startAnimation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        // Retardo para mostrar el texto "Bienvenido a KalisFit"
-        delay(2000) // espera antes de mostrar el texto
-        showText = true
-
-        // Espera adicional antes de verificar y navegar.
-        // El delay total será 2000ms (para showText) + 2000ms (este delay) = 4000ms
-        // Ajusta este segundo delay si quieres que la animación se vea más tiempo después de que aparezca el texto.
-        // Si el delay de 4000 en tu código original era el *total* de la splash,
-        // entonces este delay debería ser 2000 (4000 total - 2000 para showText).
-        delay(2000) // Espera adicional (total 4 segundos desde el inicio de la splash)
-        // Verificar estado de autenticación de Firebase
+        startAnimation = true
+        delay(3500)
         val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser != null) {
-            onUserLoggedIn()
-        } else {
-            onUserNotLoggedIn()
-        }
-        // El código de navegación original se elimina de aquí,
-        // porque se manejará mediante los callbacks en KalisNavGraph
-        // navController.navigate(Routes.LOGIN) {
-        //    popUpTo(Routes.SPLASH) { inclusive = true }
-        // }
+        if (currentUser != null) onUserLoggedIn() else onUserNotLoggedIn()
     }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp)
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             AnimatedVisibility(
-                visible = showText,
-                enter = fadeIn(animationSpec = tween(800)) + scaleIn(initialScale = 0.8f)
+                visible = startAnimation,
+                enter = fadeIn(tween(1000)) + expandVertically(tween(1000))
+            ) {
+                LottieAnimation(
+                    composition = composition,
+                    progress = { progress },
+                    modifier = Modifier.size(280.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            AnimatedVisibility(
+                visible = startAnimation,
+                enter = fadeIn(tween(1500, delayMillis = 500)) + slideInVertically(initialOffsetY = { 50 })
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Bienvenido a",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground
+                        text = "KALISFIT",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 4.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "KalisFit",
-                        style = MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        text = "Domina tu cuerpo",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            LottieAnimation(
-                composition = composition,
-                progress = { progress },
-                modifier = Modifier
-                    .size(220.dp)
-                    .padding(bottom = 24.dp) // Ajusta si es necesario con el texto
-            )
         }
     }
 }

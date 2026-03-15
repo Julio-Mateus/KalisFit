@@ -8,5 +8,6 @@ object SettingsKeys {
     val APP_THEME = stringPreferencesKey("app_theme") // "light", "dark", "system"
     val WEIGHT_UNIT = stringPreferencesKey("weight_unit") // "kg", "lbs"
     val VOICE_COACH_ENABLED = booleanPreferencesKey("voice_coach_enabled")
+    val VOICE_GENDER = stringPreferencesKey("voice_gender") // "male" o "female"
     val VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
 }

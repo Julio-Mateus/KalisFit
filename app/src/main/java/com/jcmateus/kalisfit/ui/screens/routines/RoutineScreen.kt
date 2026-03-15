@@ -90,6 +90,23 @@ fun RoutineScreen(
                     }
                 },
                 actions = {
+                    // Botón de Voz del Coach
+                    IconButton(onClick = { viewModel.toggleVoiceCoach() }){
+                        Icon(
+                            imageVector = if (uiState.isVoiceEnabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                            contentDescription = "Voz Coach",
+                            tint = if (uiState.isVoiceEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    // Botón de Vibración
+                    IconButton(onClick = { viewModel.toggleVibration() }){
+                        Icon(
+                            imageVector = if (uiState.isVibrationEnabled) Icons.Filled.Vibration else Icons.Filled.Smartphone,
+                            contentDescription = "Vibración",
+                            tint = if (uiState.isVibrationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    // Botón de Pausa
                     IconButton(onClick = { viewModel.togglePausa() }) {
                         Icon(if (uiState.estado == RoutineExecutionState.PAUSED) Icons.Filled.PlayArrow else Icons.Filled.Pause, null)
                     }
@@ -103,24 +120,14 @@ fun RoutineScreen(
                 RoutineExecutionState.INITIAL_COUNTDOWN -> CountdownView(uiState.tiempoRestante)
                 RoutineExecutionState.EXERCISE_ACTIVE -> {
                     uiState.ejercicioActual?.let { exercise ->
-                        if (exercise.esTipoComplejo()) {
-                            ComplexExerciseView(
-                                exercise = exercise,
-                                componenteActivo = uiState.componenteEjercicioActual,
-                                set = uiState.serieActualEjercicio,
-                                timeLeft = uiState.tiempoRestante,
-                                onNext = { viewModel.saltarSiguientePaso() },
-                                imageLoader = imageLoader
-                            )
-                        } else {
-                            SimpleExerciseView(
-                                exercise = exercise,
-                                set = uiState.serieActualEjercicio,
-                                timeLeft = uiState.tiempoRestante,
-                                onNext = { viewModel.saltarSiguientePaso() },
-                                imageLoader = imageLoader
-                            )
-                        }
+                        ExerciseFocusMode(
+                            exercise = exercise,
+                            componenteActivo = uiState.componenteEjercicioActual, // Esto es vital para Supersets
+                            set = uiState.serieActualEjercicio,
+                            timeLeft = uiState.tiempoRestante,
+                            onNext = { viewModel.saltarSiguientePaso() },
+                            imageLoader = imageLoader
+                        )
                     }
                 }
                 RoutineExecutionState.REST_BETWEEN_SETS, 
@@ -147,6 +154,99 @@ fun RoutineScreen(
     }
 }
 
+@Composable
+fun ExerciseFocusMode(    exercise: Ejercicio,
+                          componenteActivo: ComponenteEjercicio?,
+                          set: Int,
+                          timeLeft: Int,
+                          onNext: () -> Unit,
+                          imageLoader: ImageLoader
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 1. Imagen Dinámica (Componente o Ejercicio Padre)
+        Card(
+            modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(32.dp)),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            AsyncImage(
+                model = componenteActivo?.imagenUrl ?: exercise.imagenUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+                imageLoader = imageLoader
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 2. Títulos y Tipo
+        Text(
+            text = componenteActivo?.nombreEspecifico ?: exercise.nombre,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        )
+
+        if (exercise.esTipoComplejo()) {
+            Text(
+                text = "${exercise.tipoEjercicio.displayName} - Serie $set",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            // Lista de componentes si es Superset/Circuito
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 150.dp).padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(exercise.componentes) { comp ->
+                    val isActive = comp.id == componenteActivo?.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = comp.nombreEspecifico ?: "Sub-ejercicio",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                        )
+                        Text(
+                            text = if (comp.repeticiones != null) "${comp.repeticiones} reps" else "${comp.duracionSegundos}s",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        } else {
+            Text("SERIE $set DE ${exercise.numeroDeSeries}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 3. Temporizador o Repeticiones
+        val timeToShow = componenteActivo?.duracionSegundos ?: exercise.duracionSegundosOriginal
+        if (timeToShow > 0) {
+            TimerDisplay(timeLeft)
+        } else {
+            RepsDisplay(componenteActivo?.repeticiones ?: exercise.repeticionesOriginal)
+        }
+
+        Spacer(modifier = Modifier.weight(0.2f))
+
+        Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(64.dp), shape = RoundedCornerShape(20.dp)) {
+            Text("SIGUIENTE", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Icon(Icons.Filled.SkipNext, null, modifier = Modifier.padding(start = 8.dp))
+        }
+    }
+}
 @Composable
 fun SimpleExerciseView(exercise: Ejercicio, set: Int, timeLeft: Int, onNext: () -> Unit, imageLoader: ImageLoader) {
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -2,6 +2,7 @@ package com.jcmateus.kalisfit.viewmodel
 
 import android.app.Application
 import android.util.Log
+import androidx.compose.ui.geometry.isEmpty
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +12,7 @@ import com.jcmateus.kalisfit.R
 import com.jcmateus.kalisfit.data.AlarmRepository
 import com.jcmateus.kalisfit.data.SharedPreferencesAlarmRepository
 import com.jcmateus.kalisfit.data.obtenerRutinas
+import com.jcmateus.kalisfit.data.obtenerRutinasFlow
 import com.jcmateus.kalisfit.model.AlarmItem
 import com.jcmateus.kalisfit.model.GrupoMuscular
 import com.jcmateus.kalisfit.model.LugarEntrenamiento
@@ -126,7 +128,25 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
         const val ROUTINE_ALARM_ID_PREFIX = 20000
     }
     init {
-        loadAllRutinas()
+        observeRutinas()
+    }
+    private fun observeRutinas() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            obtenerRutinasFlow()
+                .collect { rutinasList ->
+                    _rutinasCompletas.value = rutinasList
+                    _isLoading.value = false
+                    if (rutinasList.isEmpty()) {
+                        _errorMessage.value = "No se encontraron rutinas."
+                    } else {
+                        _errorMessage.value = null
+                    }
+                }
+        }
+    }
+    fun refreshRutinas(){
+        observeRutinas()
     }
     fun scheduleRoutineReminder(
         rutina: Rutina,
@@ -249,7 +269,4 @@ class RoutineExplorerViewModel(application: Application) : AndroidViewModel(appl
         _selectedGrupoMuscular.value = null
     }
 
-    fun refreshRutinas() {
-        loadAllRutinas()
-    }
 }

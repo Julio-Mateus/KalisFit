@@ -1,6 +1,8 @@
 package com.jcmateus.kalisfit.ui.screens.routines
 
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +42,7 @@ import com.jcmateus.kalisfit.model.UserCustomRoutine
 import com.jcmateus.kalisfit.model.esTipoComplejo
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.ui.screens.NavigationKeys
+import com.jcmateus.kalisfit.viewmodel.EditRoutineUiState
 import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModel
 import com.jcmateus.kalisfit.viewmodel.EditRoutineViewModelFactory
 
@@ -51,6 +54,9 @@ fun EditRoutineScreen(navController: NavHostController) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        viewModel.onCoverImageSelected(uri)
+    }
 
     LaunchedEffect(lifecycleOwner, navController) {
         navController.currentBackStackEntry?.savedStateHandle?.let { savedStateHandle ->
@@ -97,7 +103,14 @@ fun EditRoutineScreen(navController: NavHostController) {
                     contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 100.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    item { RoutineHeaderSection(routine, viewModel, uiState) }
+                    item {
+                        RoutineHeaderSection(
+                            routine,
+                            viewModel,
+                            uiState,
+                            onAddPhotoClick = { launcher.launch("image/*") }
+                        )
+                    }
                     
                     item { 
                         Text("EJERCICIOS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
@@ -124,6 +137,19 @@ fun EditRoutineScreen(navController: NavHostController) {
                 }
             }
             if (uiState.isLoading) Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+
+            if (uiState.errorMessages.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.clearError() }, // Necesitas crear esta función en el VM
+                    title = { Text("Ups!") },
+                    text = { Text(uiState.errorMessages.first()) },
+                    confirmButton = {
+                        Button(onClick = { navController.popBackStack() }) {
+                            Text("Regresar")
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -137,7 +163,12 @@ fun EditRoutineScreen(navController: NavHostController) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RoutineHeaderSection(routine: UserCustomRoutine, viewModel: EditRoutineViewModel, uiState: com.jcmateus.kalisfit.viewmodel.EditRoutineUiState) {
+fun RoutineHeaderSection(
+    routine: UserCustomRoutine,
+    viewModel: EditRoutineViewModel,
+    uiState: EditRoutineUiState,
+    onAddPhotoClick: () -> Unit
+) {
     Card(shape = RoundedCornerShape(24.dp)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(
@@ -183,6 +214,31 @@ fun RoutineHeaderSection(routine: UserCustomRoutine, viewModel: EditRoutineViewM
                         onClick = { viewModel.onNivelRutinaChanged(nivel, !uiState.editableNivelRutina.contains(nivel)) },
                         label = { Text(nivel) }
                     )
+                }
+            }
+        }
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)){
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { onAddPhotoClick() },
+            contentAlignment = Alignment.Center
+        ){
+            if (uiState.selectedCoverImageUri != null || uiState.currentCoverImageUrl != null){
+               AsyncImage(
+                   model = uiState.selectedCoverImageUri ?: routine.imagenUrl,
+                   contentDescription = null,
+                   modifier = Modifier.fillMaxSize(),
+                   contentScale = ContentScale.Crop
+               )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally){
+                    Icon(Icons.Default.AddAPhoto, null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Añadir portada", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -282,9 +338,17 @@ fun DetailedExerciseCard(exercise: Ejercicio, index: Int, viewModel: EditRoutine
                     }
 
                     if (exercise.esTipoComplejo()) {
+                        Spacer(Modifier.height(8.dp))
                         Text("COMPONENTES DEL CIRCUITO", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        exercise.componentes.forEach { comp ->
-                            ComponentReadOnlyItem(comp)
+
+                        // Aquí es donde se hace la magia:
+                        exercise.componentes.forEachIndexed { compIndex, comp ->
+                            EditableComponentItem(
+                                exerciseIndex = index, // El 'index' que ya recibe DetailedExerciseCard
+                                componentIndex = compIndex,
+                                comp = comp,
+                                viewModel = viewModel
+                            )
                         }
                     }
                 }
@@ -302,6 +366,39 @@ fun ComponentReadOnlyItem(comp: ComponenteEjercicio) {
         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(comp.nombreEspecifico ?: "Ejercicio", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
             Text(if (!comp.repeticiones.isNullOrBlank()) "${comp.repeticiones} r" else "${comp.duracionSegundos} s", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+@Composable
+fun EditableComponentItem(
+    exerciseIndex: Int,
+    componentIndex: Int,
+    comp: ComponenteEjercicio,
+    viewModel: EditRoutineViewModel
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(comp.nombreEspecifico ?: "Sub-ejercicio", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                OutlinedTextField(
+                    value = comp.repeticiones ?: "",
+                    onValueChange = { viewModel.onExerciseComponentRepsChanged(exerciseIndex, componentIndex, it) },
+                    label = { Text("Reps") },
+                    modifier = Modifier.weight(1f),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = comp.duracionSegundos?.toString() ?: "",
+                    onValueChange = { viewModel.onExerciseComponentDurationChanged(exerciseIndex, componentIndex, it) },
+                    label = { Text("Tiempo") },
+                    modifier = Modifier.weight(1f),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }

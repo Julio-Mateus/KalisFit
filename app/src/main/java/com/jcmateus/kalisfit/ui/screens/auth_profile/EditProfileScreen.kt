@@ -54,6 +54,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -143,19 +144,19 @@ fun EditProfileScreen(
     var newImageUri by remember { mutableStateOf<Uri?>(null) }
     val imagePickerLauncher =
         //rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-                if (uri != null) {
-                    try {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: SecurityException) {
-                        // En algunos proveedores (u OEMs) no se concede permiso persistible.
-                        // Aun así conservamos el URI para intentar la subida en esta sesión.
-                    }
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // En algunos proveedores (u OEMs) no se concede permiso persistible.
+                    // Aun así conservamos el URI para intentar la subida en esta sesión.
                 }
-                newImageUri = uri
+            }
+            newImageUri = uri
         }
     // --- Estado para el proceso de guardado ---
     val updateState by viewModel.updateState.collectAsState()
@@ -231,7 +232,7 @@ fun EditProfileScreen(
                 currentImageUrl = fotoUrlActualDelPerfil,
                 newImageUri = newImageUri,
                 //onImageClick = { if (!isLoading) imagePickerLauncher.launch("image/*") }
-                        onImageClick = { if (!isLoading) imagePickerLauncher.launch(arrayOf("image/*")) }
+                onImageClick = { if (!isLoading) imagePickerLauncher.launch(arrayOf("image/*")) }
             )
 
             ProfileSection(title = personalInfoLabel) {
@@ -554,7 +555,12 @@ fun EditProfileScreen(
     if (showNivelPickerDialog) {
         OptionsPickerDialog(
             title = selectLevelTitle,
-            options = listOf("Principiante", "Intermedio", "Avanzado", "Experto"), // Define tus niveles
+            options = listOf(
+                "Principiante",
+                "Intermedio",
+                "Avanzado",
+                "Experto"
+            ), // Define tus niveles
             selectedOption = nivel.ifEmpty { "Principiante" }, // Opción por defecto
             onDismissRequest = { showNivelPickerDialog = false },
             onConfirm = { selectedNivel ->
@@ -564,6 +570,7 @@ fun EditProfileScreen(
         )
     }
 }
+
 /**
  * Un Composable para la sección de la imagen de perfil con un estilo más moderno.
  */
@@ -571,30 +578,13 @@ fun EditProfileScreen(
 fun ProfileImageSection(
     currentImageUrl: String?,
     newImageUri: Uri?,
-    onImageClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onImageClick: () -> Unit
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp),
+    Box(modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(140.dp) // Tamaño generoso
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)) // Fondo sutil
-                .clickable(onClick = onImageClick)
-                .border(
-                    2.dp,
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                    CircleShape
-                ), // Borde de acento
-            contentAlignment = Alignment.Center
-        ) {
-            val imageToDisplay = newImageUri
-                ?: if (currentImageUrl?.isNotBlank() == true) currentImageUrl else R.drawable.ic_default_avatar
+        Box(modifier = Modifier.size(150.dp)) {
+            val imageToDisplay = newImageUri ?: if (currentImageUrl?.isNotBlank() == true) currentImageUrl else R.drawable.ic_default_avatar
             Image(
                 painter = rememberAsyncImagePainter(
                     model = imageToDisplay,
@@ -602,26 +592,23 @@ fun ProfileImageSection(
                     error = painterResource(R.drawable.ic_default_avatar)
                 ),
                 contentDescription = stringResource(R.string.profile_picture_desc),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape ),
                 contentScale = ContentScale.Crop
             )
-            // Icono de cámara superpuesto
-            Box(
+            // Botón flotante de edición sobre la imagen
+            IconButton(
+                onClick = onImageClick,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(8.dp) // Ajusta el padding para la posición
-                    .size(40.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.CameraAlt,
-                    contentDescription = stringResource(R.string.tap_to_change_photo_label),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp)
-                )
+                    .padding(8.dp)
+            ){
+                Icon(Icons.Filled.CameraAlt, null, tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -677,41 +664,25 @@ fun ProfileSection(
 fun ModernEditableField(
     label: String,
     value: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onClick: () -> Unit
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) // Bordes redondeados para el área clickeable
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp, horizontal = 4.dp), // Padding interno generoso
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
-                color = if (value == stringResource(R.string.not_set_placeholder)) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-            )
+        Row(
+            modifier = Modifier
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(text = value, style = MaterialTheme.typography.bodyLarge,fontWeight = FontWeight.SemiBold)
+            }
+            Icon(Icons.Outlined.Edit, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
         }
-        Icon(
-            imageVector = Icons.Outlined.Edit, // Icono más sutil
-            contentDescription = stringResource(R.string.desc_edit_field), // Necesitarás este string
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
-        )
     }
 }
 

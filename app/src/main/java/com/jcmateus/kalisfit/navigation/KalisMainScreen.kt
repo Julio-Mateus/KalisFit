@@ -187,7 +187,8 @@ fun KalisDrawerContent(
     userProfileViewModel: UserProfileViewModel
 ) {
     val userProfile by userProfileViewModel.user.collectAsState()
-
+    // Obtenemos la rache real calculada
+    val rachaActual by userProfileViewModel.rachaActual.collectAsState()
     ModalDrawerSheet(
         modifier = Modifier.width(300.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -287,7 +288,7 @@ fun KalisDrawerContent(
                     // Aquí manejamos la racha (Daily Streak)
                     HeaderStat(
                         icon = Icons.Default.Whatshot, // Icono de fuego para racha
-                        value = "${userProfile?.progresoActual ?: 0}",
+                        value = "$rachaActual",
                         label = "Días Racha",
                         color = Color(0xFFFF5722) // Naranja intenso para el fuego
                     )

@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
 import com.jcmateus.kalisfit.data.getRutinaByIdFromFirestore
 import com.jcmateus.kalisfit.data.getUserCustomRoutineById
 import com.jcmateus.kalisfit.model.Ejercicio
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 // Define una clase para el estado de la UI de esta pantalla
@@ -53,6 +55,31 @@ class RoutineDetailViewModel(
             Log.e(TAG, errorMsg)
             _uiState.value = RoutineDetailUiState(isLoading = false, errorMessage = "ID de rutina no válido.")
             throw IllegalArgumentException(errorMsg)
+        }
+    }
+    fun addGlobalToMyRoutines(userId: String) {
+        val globalRoutine = _uiState.value.rutina ?: return
+        viewModelScope.launch {
+            try {val myNewRoutine = UserCustomRoutine(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                nombrePersonalizado = globalRoutine.nombre,
+                descripcion = globalRoutine.descripcion,
+                imagenUrl = globalRoutine.imagenUrl,
+                ejercicios = globalRoutine.ejercicios,
+                numeroDeRondas = globalRoutine.numeroDeRondas,
+                descansoEntreRondasSegundos = globalRoutine.descansoEntreRondasSegundos,
+                originalTemplateId = globalRoutine.id
+            )
+
+                FirebaseFirestore.getInstance().collection("users").document(userId)
+                    .collection("customRoutines").document(myNewRoutine.id)
+                    .set(myNewRoutine).await()
+
+                // Aquí puedes actualizar un estado para mostrar un Toast de éxito
+            } catch (e: Exception) {
+                Log.e("Detail", "Error al clonar rutina", e)
+            }
         }
     }
     private fun loadRoutineDetails(idRutina: String, currentUserId: String?) {

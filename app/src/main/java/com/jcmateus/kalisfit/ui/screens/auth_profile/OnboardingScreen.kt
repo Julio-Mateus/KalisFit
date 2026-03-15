@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +46,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -62,6 +66,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -115,7 +121,6 @@ data class QuickProfilePreset(
 )
 
 
-@RequiresApi(Build.VERSION_CODES.O) // Requerido por alguna parte de tu código original, verifica si aún es necesario
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
@@ -188,22 +193,114 @@ fun OnboardingScreen(
         1 -> objetivosSeleccionados.isNotEmpty() && lugaresSeleccionados.isNotEmpty()
         else -> true
     }
-    Box(modifier = Modifier.fillMaxSize()) {
+
+    Scaffold(
+        bottomBar = {
+            Surface(
+                tonalElevation = 8.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (currentStep > 0) {
+                        OutlinedButton(
+                            onClick = { if (!isLoading) currentStep -= 1 },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Atras")
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            if (!stepIsValid) {
+                                Toast.makeText(
+                                    context,
+                                    "Complete este paso para continiar",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                return@Button
+                            }
+                            if (currentStep < 2) {
+                                currentStep += 1
+                            } else {
+                                // Lógica de guardado..
+                                isLoading = true
+                                authViewModel.updateProfileAfterRegister(
+                                    nivel = nivelSeleccionado!!.displayName,
+                                    objetivos = objetivosSeleccionados.map { it.displayName },
+                                    peso = pesoState,
+                                    altura = alturaState,
+                                    edad = edadState.toInt(),
+                                    sexo = sexoSeleccionado!!.displayName,
+                                    frecuenciaSemanal = frecuenciaState.toInt(),
+                                    lugarEntrenamiento = lugaresSeleccionados.map { it.displayName },
+                                    onResult = { success, message ->
+                                        isLoading = false
+                                        if (success) {
+                                            Toast.makeText(
+                                                context,
+                                                "Perfil actualizado con éxito",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            onFinish()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "Error al actualizar: ${message ?: "Desconocido"}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                                )
+                            }
+                        },
+                        enabled = !isLoading && stepIsValid,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(if (currentStep < 2) "Siguiente" else "Comenzar")
+                        }
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp)
-                .padding(16.dp, bottom = 90.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Indicador de Progreso Moderno
+            StepProgressIndicator(currentStep = currentStep, totalSteps = 3)
+
+            Spacer(modifier = Modifier.height(24.dp))
+            // Lottie y Títulos
             val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.onboarding_animation))
             LottieAnimation(
                 composition = composition,
                 iterations = Int.MAX_VALUE,
-                modifier = Modifier
-                    .fillMaxWidth(0.65f)
-                    .height(180.dp)
+                modifier = Modifier.height(160.dp)
             )
 
             Text(
@@ -222,12 +319,6 @@ fun OnboardingScreen(
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-            LinearProgressIndicator(
-                progress = { (currentStep + 1) / 3f },
-                modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 text = "Paso ${currentStep + 1} de 3",
@@ -462,104 +553,13 @@ fun OnboardingScreen(
                             Text("Objetivos: ${objetivosSeleccionados.joinToString { it.displayName }}")
                             Text("Lugares: ${lugaresSeleccionados.joinToString { it.displayName }}")
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
-        }
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            tonalElevation = 8.dp,
-            shadowElevation = 8.dp
-        ){
-            Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .navigationBarsPadding(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (currentStep > 0) {
-                    Button(
-                        onClick = { if (!isLoading) currentStep -= 1 },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Atrás")
-                    }
-
-                }
-                Button(
-                    onClick = {
-                        if (!stepIsValid) {
-                            Toast.makeText(
-                                context,
-                                "Completa este paso para continuar",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@Button
-                        }
-                        if (currentStep < 2) {
-                            currentStep += 1
-                            return@Button
-                        }
-
-                        isLoading = true
-                        authViewModel.updateProfileAfterRegister(
-                            nivel = nivelSeleccionado!!.displayName,
-                            objetivos = objetivosSeleccionados.map { it.displayName },
-                            peso = pesoState,
-                            altura = alturaState,
-                            edad = edadState.toInt(),
-                            sexo = sexoSeleccionado!!.displayName,
-                            frecuenciaSemanal = frecuenciaState.toInt(),
-                            lugarEntrenamiento = lugaresSeleccionados.map { it.displayName },
-                            onResult = { success, message ->
-                                isLoading = false
-                                if (success) {
-                                    Toast.makeText(
-                                        context,
-                                        "Perfil actualizado con éxito",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    onFinish()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Error al actualizar: ${message ?: "Desconocido"}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            }
-                        )
-                    },
-                    enabled = !isLoading && stepIsValid,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            if (currentStep < 2) "Siguente" else "Guardar y Continuar",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
-
 @Composable
 fun OnboardingSectionCard(
     title: String,
@@ -702,4 +702,37 @@ fun StyledFilterChip(
     )
 }
 
+@Composable
+fun StepProgressIndicator(currentStep: Int, totalSteps: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(totalSteps) { index ->
+            val isCompleted = index < currentStep
+            val isCurrent = index == currentStep
+
+            val color = when {
+                isCurrent -> MaterialTheme.colorScheme.primary
+                isCompleted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.outlineVariant
+            }
+
+            // El paso actual es un poco más ancho para dar jerarquía
+            val weight = if (isCurrent) 1.5f else 1f
+
+            Box(
+                modifier = Modifier
+                    .weight(weight)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(color)
+                    .animateContentSize()
+            )
+        }
+    }
+}
 

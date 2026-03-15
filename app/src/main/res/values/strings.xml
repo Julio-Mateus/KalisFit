@@ -106,6 +106,8 @@
     <string name="detail_label_reps_duration">Repeticiones/Duración</string>
     <string name="detail_label_hold_time">Tiempo de Aguante</string>
     <string name="detail_label_notes_tips">Notas/Consejos:</string>
+    <string name="header_form_cues">Técnica Correcta</string>
+    <string name="header_common_mistakes">Evita estos Errores</string>
     <!-- Mensaje cuando no hay información disponible para un nivel -->
     <string name="info_no_data_available">No hay información disponible para este nivel.</string>
     <!-- El string "desc_navigate_back" ya existe, se reutilizará. -->
@@ -413,9 +415,3 @@
     <string name="running_location_needed_for_map_active">Se necesita permiso de ubicación para mostrar el mapa mientras la actividad está en curso. Por favor, actívalo en los ajustes.</string>
     <string name="google_maps_key" translatable="false">AIzaSyCsAhMTRVbOVP7J7eUmnPYbnyDVA_jmDnU</string>
 </resources>
-
-
-
-
-
-

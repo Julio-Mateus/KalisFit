@@ -1,54 +1,43 @@
 package com.jcmateus.kalisfit.ui.screens.auth_profile
 
+import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.jcmateus.kalisfit.R
@@ -57,13 +46,11 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun RegisterScreen(
+    authViewModel: AuthViewModel = viewModel(),
     onRegisterSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
-    // Es mejor instanciar ViewModels usando los constructores de Hilt o androidx.lifecycle.viewmodel.compose.viewModel()
-    // val viewModel: AuthViewModel = viewModel() // Si estás usando Hilt o la librería de ViewModel de Compose
-    val viewModel = remember { AuthViewModel() } // Tu forma actual
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -71,214 +58,266 @@ fun RegisterScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
-    val showFields = remember { mutableStateOf(true) }
-
-    // Estado para manejar el error del campo email
+    
     var emailError by remember { mutableStateOf<String?>(null) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
 
-    val launcher = rememberLauncherForActivityResult(
+    val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        loading = true // Indicar carga para el flujo de Google Sign-In también
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
-            val account = task.result // Puede lanzar una excepción si la tarea falló
+            val account = task.getResult(ApiException::class.java)
             val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+            loading = true
             FirebaseAuth.getInstance().signInWithCredential(credential)
                 .addOnCompleteListener { authResult ->
                     if (authResult.isSuccessful) {
-                        viewModel.saveUserIfNew(
+                        authViewModel.saveUserIfNew(
                             nombre = account.displayName ?: "",
-                            email = account.email ?: "" // El email de Google se asume válido
+                            email = account.email ?: ""
                         ) {
                             loading = false
                             showSuccessDialog = true
                         }
                     } else {
                         loading = false
-                        Toast.makeText(context, "Error de inicio de sesión con Google: ${authResult.exception?.message}", Toast.LENGTH_LONG).show()
+                        val errorMsg = authResult.exception?.message ?: "Error desconocido"
+                        Toast.makeText(context, "Error: $errorMsg", Toast.LENGTH_LONG).show()
                     }
                 }
+        } catch (e: ApiException) {
+            loading = false
+            Log.e("RegisterScreen", "Google Sign In Failed. Status Code: ${e.statusCode}")
+            val message = when (e.statusCode) {
+                10 -> "Error de configuración (Developer Error). Verifica el SHA-1 en Firebase."
+                7 -> "Error de red."
+                else -> "Error de Google (${e.statusCode})"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             loading = false
-            Toast.makeText(context, "Google Sign In cancelado o falló: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error inesperado: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
     if (showSuccessDialog) {
         AlertDialog(
-            onDismissRequest = { /* No permitir cerrar por clic fuera */ },
-            title = { Text("¡Registro exitoso!") },
-            text = { Text("Tu cuenta ha sido creada correctamente. Serás redirigido...") },
+            onDismissRequest = {},
+            title = { Text("¡Bienvenido a la comunidad!") },
+            text = { Text("Tu cuenta ha sido creada con éxito. Vamos a configurar tu perfil.") },
             confirmButton = {
-                TextButton(onClick = {
-                    showSuccessDialog = false // Ocultar diálogo
-                    onRegisterSuccess()
-                }) {
-                    Text("Continuar")
+                Button(onClick = onRegisterSuccess) {
+                    Text("Empezar")
                 }
             }
         )
-        // La navegación ya se maneja en el LaunchedEffect o podría ser solo con el botón
         LaunchedEffect(Unit) {
-            delay(2000) // Un poco más de tiempo para leer el mensaje
-            if (showSuccessDialog) { // Solo navegar si el diálogo todavía está visible (el usuario no hizo clic en continuar)
-                onRegisterSuccess()
-            }
+            delay(2000)
+            onRegisterSuccess()
         }
     }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colorScheme.background)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
+                .statusBarsPadding()
+                .padding(horizontal = 30.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AnimatedVisibility(visible = showFields.value, enter = fadeIn() + expandVertically()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(180.dp)
-                    )
+            Spacer(modifier = Modifier.height(40.dp))
 
-                    Text("Crear cuenta", style = MaterialTheme.typography.displayLarge)
+            Image(
+                painter = painterResource(id = R.drawable.ic_logo),
+                contentDescription = "Logo",
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(20.dp)),
+                contentScale = ContentScale.Fit
+            )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Nombre completo") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = {
-                            email = it
-                            emailError = null // Limpiar error al escribir
-                        },
-                        label = { Text("Correo electrónico") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email),
-                        isError = emailError != null, // Indicar si hay error
-                        supportingText = { // Mostrar mensaje de error debajo del campo
-                            if (emailError != null) {
-                                Text(emailError!!, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Contraseña") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            val icon = if (passwordVisible)
-                                Icons.Filled.Visibility
-                            else Icons.Filled.VisibilityOff
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(imageVector = icon, contentDescription = "Mostrar contraseña")
-                            }
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = {
-                            // --- VALIDACIÓN DEL EMAIL AQUÍ ---
-                            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                                emailError = "Formato de correo inválido"
-                                return@Button // No continuar si el email no es válido
-                            }
-                            // Opcional: Validar que la contraseña no esté vacía, etc.
-                            if (password.length < 6) { // Firebase requiere mínimo 6 caracteres
-                                Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_LONG).show()
-                                return@Button
-                            }
-                            if (name.isBlank()){
-                                Toast.makeText(context, "El nombre no puede estar vacío", Toast.LENGTH_LONG).show()
-                                return@Button
-                            }
-                            loading = true
-                            emailError = null // Limpiar error si la validación pasó
-                            viewModel.register(email, password, name, "", listOf()) { success, message ->
-                                loading = false
-                                if (success) {
-                                    showSuccessDialog = true
-                                } else {
-                                    Toast.makeText(context, "Error: $message", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        enabled = !loading,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (loading && !showSuccessDialog) { // Mostrar indicador de carga solo para el botón de email/pass
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text("Registrarse")
-                        }
+            Text(
+                text = "Crea tu cuenta",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-1).sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Text(
+                text = "Únete a KalisFit y domina tu cuerpo",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Campo Nombre
+            OutlinedTextField(
+                value = name,
+                onValueChange = { 
+                    name = it
+                    nameError = null
+                },
+                label = { Text("Nombre completo") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true,
+                isError = nameError != null,
+                supportingText = { if (nameError != null) Text(nameError!!) },
+                enabled = !loading
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Campo Email
+            OutlinedTextField(
+                value = email,
+                onValueChange = { 
+                    email = it.trim()
+                    emailError = null
+                },
+                label = { Text("Correo electrónico") },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                isError = emailError != null,
+                supportingText = { if (emailError != null) Text(emailError!!) },
+                enabled = !loading
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Campo Contraseña
+            OutlinedTextField(
+                value = password,
+                onValueChange = { 
+                    password = it
+                    passwordError = null
+                },
+                label = { Text("Contraseña") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                trailingIcon = {
+                    val icon = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = icon, contentDescription = null)
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true,
+                isError = passwordError != null,
+                supportingText = { if (passwordError != null) Text(passwordError!!) },
+                enabled = !loading
+            )
 
-                    Button(
-                        onClick = {
-                            // No es necesario validar el email aquí ya que Google lo proporciona
-                            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestIdToken(context.getString(R.string.default_web_client_id)) // Asegúrate que este string existe en tu R.string
-                                .requestEmail()
-                                .build()
-                            val client = GoogleSignIn.getClient(context, gso)
-                            launcher.launch(client.signInIntent)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !loading // Deshabilitar si cualquier operación de carga está en curso
-                    ) {
-                        // Podrías mostrar un indicador de carga aquí también si 'loading' es true
-                        // debido a un intento de registro con Google.
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_google), // Asegúrate que este drawable existe
-                            contentDescription = "Google",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Registrarse con Google")
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = {
+                    var hasError = false
+                    if (name.isBlank()) {
+                        nameError = "El nombre es obligatorio"
+                        hasError = true
+                    }
+                    if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                        emailError = "Formato de correo inválido"
+                        hasError = true
+                    }
+                    if (password.length < 6) {
+                        passwordError = "Mínimo 6 caracteres"
+                        hasError = true
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    TextButton(onClick = onNavigateToLogin, enabled = !loading) {
-                        Text("¿Ya tienes cuenta? Inicia sesión")
+                    if (!hasError) {
+                        loading = true
+                        authViewModel.register(email, password, name, "", listOf()) { success, message ->
+                            loading = false
+                            if (success) {
+                                showSuccessDialog = true
+                            } else {
+                                Toast.makeText(context, "Error: $message", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = !loading
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Registrarse", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
             }
-        }
-        // Indicador de carga general centrado (opcional si ya tienes en botones)
-        if (loading && !showSuccessDialog) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedButton(
+                onClick = {
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(context.getString(R.string.default_web_client_id))
+                        .requestEmail()
+                        .build()
+                    val client = GoogleSignIn.getClient(context, gso)
+                    googleSignInLauncher.launch(client.signInIntent)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = !loading
             ) {
-                // CircularProgressIndicator() // Podrías tener un overlay de carga más general
+                Image(
+                    painter = painterResource(id = R.drawable.ic_google),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Registrarse con Google", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("¿Ya tienes cuenta?", style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = onNavigateToLogin, enabled = !loading) {
+                    Text(
+                        "Inicia sesión",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

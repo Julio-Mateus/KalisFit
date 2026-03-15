@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "536221531880-kgvhp543uca8441buhro3i05hsejn442.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.jcmateus.kalisfit",
+            "certificate_hash": "51afbceee2598a666385bcd240da3041664f39f9"
+          }
+        },
+        {
           "client_id": "536221531880-vh8tg8c756b3m8grui9mql33f43ritul.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

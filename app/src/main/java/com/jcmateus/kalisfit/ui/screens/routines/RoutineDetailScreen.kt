@@ -28,8 +28,10 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.jcmateus.kalisfit.model.Ejercicio
 import com.jcmateus.kalisfit.model.Rutina
+import com.jcmateus.kalisfit.model.esTipoComplejo
 import com.jcmateus.kalisfit.navigation.Routes
 import com.jcmateus.kalisfit.viewmodel.RoutineDetailViewModel
+import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.P)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,8 +43,11 @@ fun RoutineDetailScreen(
     val viewModel: RoutineDetailViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState)},
         topBar = {
             LargeTopAppBar(
                 title = { Text(uiState.rutina?.nombre ?: "", fontWeight = FontWeight.Black) },
@@ -52,6 +57,24 @@ fun RoutineDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        currentUserId?.let { uid ->
+                            viewModel.addGlobalToMyRoutines(uid)
+
+                            scope.launch{
+                                snackbarHostState.showSnackbar(
+                                    message = "Rutina añadida a tu biblioteca 🏆",
+                                    duration = SnackbarDuration.Short,
+                                    withDismissAction = true
+                                )
+                            }
+                        }
+                    }){
+                        Icon(
+                            imageVector = Icons.Default.BookmarkAdd,
+                            contentDescription = "Guardar en mis rutinas"
+                        )
+                    }
                     IconButton(onClick = {
                         val uid = currentUserId ?: ""
                         uiState.rutina?.id?.let { id ->
@@ -138,13 +161,49 @@ fun ExerciseDetailItem(ej: Ejercicio, isLast: Boolean) {
             Box(Modifier.size(12.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
             if (!isLast) Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
         }
-        Card(modifier = Modifier.padding(start = 16.dp, bottom = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(model = ej.imagenUrl, contentDescription = null, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(ej.nombre, fontWeight = FontWeight.Bold)
-                    Text("${ej.numeroDeSeries} series x ${ej.repeticionesOriginal}", style = MaterialTheme.typography.bodySmall)
+        Card(
+            modifier = Modifier.padding(start = 16.dp, bottom = 16.dp).fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                // Header del Ejercicio
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AsyncImage(
+                        model = ej.imagenUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(ej.nombre, fontWeight = FontWeight.Bold)
+                        if (!ej.esTipoComplejo()) {
+                            val info = if(ej.duracionSegundosOriginal > 0) "${ej.duracionSegundosOriginal}s" else "${ej.repeticionesOriginal} reps"
+                            Text("${ej.numeroDeSeries} series x $info", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            Text(ej.tipoEjercicio.displayName, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+
+                // --- NUEVO: MOSTRAR SUB-EJERCICIOS (SUPERSSETS) ---
+                if (ej.esTipoComplejo() && ej.componentes.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    ej.componentes.forEach { comp ->
+                        Row(
+                            modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.SubdirectoryArrowRight, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            val metrica = if(!comp.repeticiones.isNullOrBlank()) "${comp.repeticiones} reps" else "${comp.duracionSegundos}s"
+                            Text(
+                                text = "${comp.nombreEspecifico}: $metrica",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }

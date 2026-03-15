@@ -132,4 +132,6 @@ dependencies {
 
     // Play Services Wearable para comunicación móvil <-> reloj
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
+
+    implementation("androidx.compose.material:material:1.7.0")
 }
